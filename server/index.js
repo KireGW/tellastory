@@ -81,6 +81,8 @@ Evaluate four things separately in your reasoning:
 Treat challenge targets as teaching aims, not a mandatory checklist. A learner does not need to use every listed form to receive a strong verdict.
 Never treat correct English as wrong just because it does not use the target structure.
 Instead, say that it is correct or understandable, then explain how to move it closer to the selected task.
+Do not force past continuous onto bounded result events. Use simple past for events such as "blew the hat off", "blew the kite away", "spilled the milk", "dropped the flowers", "snapped loose", "broke the glass", "knocked on the door", "opened the suitcase", or "fell over". Past continuous is better for the ongoing background around those events, such as "the wind was blowing", "people were waiting", or "children were building".
+Do not write "while a gust of wind was blowing the hat off..." as a correction. That stretches a completed result event into an unnatural ongoing action. Prefer "A gust of wind blew the hat off..." or "The wind was blowing while she tried to catch the hat."
 Treat past perfect and past perfect continuous as related but different tools. Do not require past perfect continuous when plain past perfect is more natural.
 Use past perfect continuous only for earlier actions that were genuinely ongoing for a period of time, such as "had been waiting", "had been cooking", or "had been looking". Do not suggest unnatural forms such as "had been forgetting", "had been leaving a suitcase", "had been dropping", "had been noticing", or "had been arriving" when a completed earlier event or resulting state is meant.
 Do not say that "had forgotten" is only an attempt, unclear, or less correct because forgetting can be momentary. "Had forgotten", "had left", "had missed", and similar forms are normal past perfect forms for completed earlier events or resulting earlier states.
@@ -110,6 +112,7 @@ Use this hierarchy:
 3. If the English is correct and the task is on target, do not invent a correction. Say to keep the sentence and add a next-level extension.
 Good extension examples: "Keep this sentence. Add what happened next.", "Keep this sentence. Add a result with so or because.", "Keep this sentence. Add what had already happened before."
 Bad Try this examples when the student's sentence already works: replacing "when an owl landed" with "while an owl was watching", changing the narrative relationship without improving it, or describing a different part of the scene.
+Another bad Try this example: changing "A gust of wind blew the hat off Mum's head, so she tried to catch it" to "While a gust of wind was blowing the hat off Mum's head, she tried to catch it." The hat coming off is a completed result event, not a natural ongoing background action.
 Another bad Try this example: changing "the cat spilled the milk" to "the milk spilled" only because the exact cause is not literally visible.
 Another bad Try this example: changing "somebody had forgotten his suitcase" to "somebody had been forgetting his suitcase". That is not a natural improvement.
 Another bad Try this example: changing "somebody had forgotten his suitcase" to "somebody had been leaving his suitcase". Use "had left" or keep "had forgotten" for a completed earlier event.
@@ -435,6 +438,10 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
       return false
     }
 
+    if (turnsBoundedResultIntoPastContinuous(correction.suggestion, answer)) {
+      return false
+    }
+
     return true
   })
 }
@@ -586,7 +593,8 @@ function normalizeRewrite(value, answer, scene, challenge, localCopy, correction
     corrections.find((correction) =>
       isUsableRewrite(correction.suggestion, answer) &&
       !changesCausalMeaning(correction.suggestion, answer) &&
-      !createsAwkwardWhilePastPerfectContinuous(correction.suggestion, answer),
+      !createsAwkwardWhilePastPerfectContinuous(correction.suggestion, answer) &&
+      !turnsBoundedResultIntoPastContinuous(correction.suggestion, answer),
     )?.suggestion,
     meaningPreservingRewrite(answer),
     makePolishedFallbackRewrite(answer),
@@ -675,12 +683,49 @@ function createsAwkwardWhilePastPerfectContinuous(value, answer) {
   )
 }
 
+function turnsBoundedResultIntoPastContinuous(value, answer = '') {
+  const suggestion = String(value ?? '').toLowerCase()
+  const original = String(answer ?? '').toLowerCase()
+
+  if (!/\b(was|were)\s+\w+ing\b/.test(suggestion)) {
+    return false
+  }
+
+  if (/\b(was|were)\s+\w+ing\b/.test(original) && sameText(value, answer)) {
+    return false
+  }
+
+  const boundedResultPatterns = [
+    /\bwas\s+blowing\s+[^.?!]*(hat|kite|cloth|tablecloth|umbrella)\s+(off|away|loose)\b/,
+    /\bwas\s+knocking\s+[^.?!]*\bdoor\b/,
+    /\bwas\s+dropping\s+[^.?!]*(flowers|oranges|eggs|glass|ticket|passport)\b/,
+    /\bwas\s+spilling\s+[^.?!]*(milk|coffee|soup)\b/,
+    /\bwas\s+breaking\s+[^.?!]*(glass|window|plate)\b/,
+    /\bwas\s+opening\s+[^.?!]*(suitcase|cooler|door|ring box)\b/,
+    /\bwas\s+falling\s+(over|off|open)\b/,
+    /\bwas\s+snapping\s+loose\b/,
+    /\bwere\s+blowing\s+[^.?!]*(hat|kite|cloth|tablecloth|umbrella)\s+(off|away|loose)\b/,
+    /\bwere\s+dropping\s+[^.?!]*(flowers|oranges|eggs|glass|ticket|passport)\b/,
+    /\bwere\s+spilling\s+[^.?!]*(milk|coffee|soup)\b/,
+    /\bwere\s+breaking\s+[^.?!]*(glass|window|plate)\b/,
+    /\bwere\s+opening\s+[^.?!]*(suitcase|cooler|door|ring box)\b/,
+    /\bwere\s+falling\s+(over|off|open)\b/,
+    /\bwere\s+snapping\s+loose\b/,
+  ]
+
+  return boundedResultPatterns.some((pattern) => pattern.test(suggestion))
+}
+
 function isUsableRewrite(value, answer) {
   if (!value || typeof value !== 'string' || sameText(value, answer)) {
     return false
   }
 
   if (isPastPerfectContinuousNitpick(value)) {
+    return false
+  }
+
+  if (turnsBoundedResultIntoPastContinuous(value, answer)) {
     return false
   }
 
