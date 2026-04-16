@@ -221,10 +221,6 @@ h1 {
   font-weight: 800;
 }
 
-.mobile-writing-scene {
-  display: none;
-}
-
 textarea {
   width: 100%;
   min-height: 0;
@@ -620,39 +616,32 @@ h2 {
   }
 
   .scene-pane {
-    padding-bottom: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    gap: 4px;
+    justify-content: flex-start;
+    padding: 10px 14px 8px;
+    box-shadow: 0 8px 18px rgba(23, 33, 29, 0.08);
   }
 
-  .scene-pane > .scene-art,
-  .scene-pane > .scene-meta {
+  .scene-pane .instruction-panel {
     display: none;
+  }
+
+  .scene-pane > .scene-art {
+    aspect-ratio: 16 / 9;
+    max-height: 28svh;
+    min-height: 130px;
+    object-fit: cover;
+  }
+
+  .scene-meta {
+    font-size: 11px;
   }
 
   .coach-pane {
     padding-top: 8px;
-  }
-
-  .mobile-writing-scene {
-    display: grid;
-    gap: 4px;
-  }
-
-  .mobile-writing-scene .scene-art {
-    aspect-ratio: 16 / 9;
-    max-height: 28svh;
-    min-height: 150px;
-    object-fit: cover;
-  }
-
-  .mobile-writing-scene-title {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    color: #33433d;
-    font-size: 11px;
-    font-weight: 800;
-    text-transform: uppercase;
   }
 
   .bank-heading {
