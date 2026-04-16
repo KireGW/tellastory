@@ -472,7 +472,7 @@ const translations = {
       verdict: 'Coach note',
       verdicts: {
         'keep-building': { label: 'Start with the timeline', detail: 'Use one clear past action' },
-        'good-start': { label: 'Good start', detail: 'One useful next step' },
+        'good-start': { label: 'Good start', detail: 'Clarify the timeline' },
         'good-work': { label: 'Good work', detail: 'A little polish' },
         excellent: { label: 'Excellent', detail: 'Ready to stretch' },
       },
@@ -571,7 +571,7 @@ const translations = {
       verdict: 'Nota del coach',
       verdicts: {
         'keep-building': { label: 'Empieza con la linea de tiempo', detail: 'Usa una accion clara en pasado' },
-        'good-start': { label: 'Buen comienzo', detail: 'Un siguiente paso útil' },
+        'good-start': { label: 'Buen comienzo', detail: 'Aclara la linea de tiempo' },
         'good-work': { label: 'Buen trabajo', detail: 'Un poco de pulido' },
         excellent: { label: 'Excelente', detail: 'Listo para avanzar' },
       },
@@ -670,7 +670,7 @@ const translations = {
       verdict: 'Coachens notat',
       verdicts: {
         'keep-building': { label: 'Start med tidslinjen', detail: 'Bruk en tydelig handling i fortid' },
-        'good-start': { label: 'God start', detail: 'Ett nyttig neste steg' },
+        'good-start': { label: 'God start', detail: 'Gjor tidslinjen tydeligere' },
         'good-work': { label: 'Godt jobbet', detail: 'Litt finpuss' },
         excellent: { label: 'Utmerket', detail: 'Klar for å strekke deg' },
       },
