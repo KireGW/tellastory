@@ -336,23 +336,6 @@ button:focus-visible {
   text-transform: capitalize;
 }
 
-.fit-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.fit-row span {
-  border: 1px solid rgba(31, 122, 92, 0.14);
-  border-radius: 8px;
-  padding: 4px 7px;
-  background: rgba(255, 255, 255, 0.74);
-  color: #52635c;
-  font-size: 11px;
-  font-weight: 800;
-}
-
 .coach-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

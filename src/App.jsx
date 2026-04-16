@@ -238,11 +238,6 @@ function App() {
                     <span className="level-pill">{feedbackTone.detail}</span>
                   </div>
                   <p>{feedback.summary}</p>
-                  <div className="fit-row" aria-label={copy.feedback.fitLabel}>
-                    <span>{copy.feedback.englishStatus}: {copy.statusLabels[feedback.englishStatus] ?? feedback.englishStatus}</span>
-                    <span>{copy.feedback.sceneFit}: {copy.statusLabels[feedback.sceneFit] ?? feedback.sceneFit}</span>
-                    <span>{copy.feedback.taskFit}: {copy.statusLabels[feedback.taskFit] ?? feedback.taskFit}</span>
-                  </div>
 
                   <div className="coach-grid">
                     <section>
@@ -482,23 +477,8 @@ const translations = {
       detected: 'Detected',
       next: 'Next step:',
       editStory: 'Edit story',
-      fitLabel: 'Feedback status',
-      englishStatus: 'English',
-      sceneFit: 'Scene',
-      taskFit: 'Task',
       waitingTitle: 'Feedback appears here',
       waitingText: 'Write your story and check your verbs to see coaching without leaving the scene.',
-    },
-    statusLabels: {
-      correct: 'correct',
-      'mostly correct': 'mostly correct',
-      unclear: 'unclear',
-      'on scene': 'on scene',
-      'partly on scene': 'partly on scene',
-      'not scene-based': 'not scene-based',
-      'on target': 'on target',
-      'partly on target': 'partly on target',
-      'different skill': 'different skill',
     },
     bank: { title: 'Select a practice scene' },
     sceneNav: {
@@ -581,23 +561,8 @@ const translations = {
       detected: 'Detectado',
       next: 'Siguiente paso:',
       editStory: 'Editar historia',
-      fitLabel: 'Estado de la retroalimentación',
-      englishStatus: 'Inglés',
-      sceneFit: 'Escena',
-      taskFit: 'Tarea',
       waitingTitle: 'Aquí aparecerá la retroalimentación',
       waitingText: 'Escribe tu historia y revisa tus verbos para ver la ayuda sin salir de la escena.',
-    },
-    statusLabels: {
-      correct: 'correcto',
-      'mostly correct': 'casi correcto',
-      unclear: 'poco claro',
-      'on scene': 'en la escena',
-      'partly on scene': 'parcialmente en la escena',
-      'not scene-based': 'no describe la escena',
-      'on target': 'en objetivo',
-      'partly on target': 'parcialmente en objetivo',
-      'different skill': 'otra habilidad',
     },
     bank: { title: 'Selecciona una escena de práctica' },
     sceneNav: {
@@ -680,23 +645,8 @@ const translations = {
       detected: 'Oppdaget',
       next: 'Neste steg:',
       editStory: 'Rediger historien',
-      fitLabel: 'Tilbakemeldingsstatus',
-      englishStatus: 'Engelsk',
-      sceneFit: 'Scene',
-      taskFit: 'Oppgave',
       waitingTitle: 'Tilbakemeldingen vises her',
       waitingText: 'Skriv historien din og sjekk verbene for å se veiledningen uten å forlate scenen.',
-    },
-    statusLabels: {
-      correct: 'riktig',
-      'mostly correct': 'stort sett riktig',
-      unclear: 'uklart',
-      'on scene': 'i scenen',
-      'partly on scene': 'delvis i scenen',
-      'not scene-based': 'ikke scenebasert',
-      'on target': 'på mål',
-      'partly on target': 'delvis på mål',
-      'different skill': 'annen ferdighet',
     },
     bank: { title: 'Velg en øvingsscene' },
     sceneNav: {
