@@ -31,9 +31,17 @@ function App() {
   const storyRows = feedback ? 3 : 8
 
   useEffect(() => {
-    if (feedback && feedbackRef.current) {
-      feedbackRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    if (!feedback || !feedbackRef.current) {
+      return undefined
     }
+
+    const firstFrame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        feedbackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    })
+
+    return () => window.cancelAnimationFrame(firstFrame)
   }, [feedback])
 
   useEffect(() => {

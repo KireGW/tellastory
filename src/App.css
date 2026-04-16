@@ -305,7 +305,7 @@ button:focus-visible {
   border: 1px solid rgba(31, 122, 92, 0.22);
   border-radius: 8px;
   background: #f3faf7;
-  scroll-margin-top: 16px;
+  scroll-margin-top: 24px;
 }
 
 .feedback-header {
@@ -642,6 +642,10 @@ h2 {
 
   .coach-pane {
     padding-top: 8px;
+  }
+
+  .feedback {
+    scroll-margin-top: calc(28svh + 72px);
   }
 
   .bank-heading {
