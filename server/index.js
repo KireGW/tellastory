@@ -164,14 +164,18 @@ Return only valid JSON with this exact shape:
 function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'English', answer = '') {
   const localCopy = localFeedbackCopy(feedbackLanguage)
   const corrections = normalizeCorrections(feedback.corrections)
-  const answerFeatures = detectAnswerFeatures(answer)
+  const analysis = analyzeAnswer(answer, scene, challenge)
+  const answerFeatures = analysis.features
   const statuses = {
     englishStatus: normalizeStatus(feedback.englishStatus, ['correct', 'mostly correct', 'unclear'], 'mostly correct'),
     sceneFit: normalizeStatus(feedback.sceneFit, ['on scene', 'partly on scene', 'not scene-based'], 'partly on scene'),
     taskFit: normalizeStatus(feedback.taskFit, ['on target', 'partly on target', 'different skill'], 'partly on target'),
   }
 
-  statuses.taskFit = strongestTaskFit(statuses.taskFit, taskFitFromFeatures(challenge, answerFeatures))
+  if (analysis.sceneFit) {
+    statuses.sceneFit = strongestSceneFit(statuses.sceneFit, analysis.sceneFit)
+  }
+  statuses.taskFit = strongestTaskFit(statuses.taskFit, analysis.taskFit)
 
   if (advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses)) {
     statuses.taskFit = 'on target'
@@ -179,9 +183,13 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
 
   const usefulCorrections = normalizeUsefulCorrections(corrections, answer, challenge, localCopy, statuses).slice(0, 4)
   const normalized = {
-    verdict: normalizeVerdict(feedback.verdict, statuses, challenge, answerFeatures),
+    verdict: normalizeVerdict(feedback.verdict, statuses, challenge, answerFeatures, analysis),
     ...statuses,
-    summary: cleanAdvancedPastPerfectNitpick(cleanFeedbackText(feedback.summary || localCopy.genericSummary), challenge, answerFeatures, localCopy),
+    summary: cleanSceneNitpick(
+      cleanAdvancedPastPerfectNitpick(cleanFeedbackText(feedback.summary || localCopy.genericSummary), challenge, answerFeatures, localCopy),
+      statuses,
+      localCopy,
+    ),
     strengths: arrayOfStrings(feedback.strengths).map(cleanFeedbackText).slice(0, 3),
     corrections: usefulCorrections,
     rewrite: cleanFeedbackText(normalizeRewrite(feedback.rewrite, answer, scene, challenge, localCopy, usefulCorrections)),
@@ -193,6 +201,11 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
       timeRelationships: arrayOfStrings(feedback.detected?.timeRelationships),
     },
   }
+
+  normalized.detected.mentionedActions = mergeDetectedValues(
+    normalized.detected.mentionedActions,
+    analysis.mentionedActions,
+  )
 
   if (!normalized.strengths.length) {
     normalized.strengths.push(localCopy.defaultStrength)
@@ -221,6 +234,33 @@ function normalizeStatus(value, allowedValues, fallback) {
 function strongestTaskFit(first, second) {
   const order = ['different skill', 'partly on target', 'on target']
   return order.indexOf(first) >= order.indexOf(second) ? first : second
+}
+
+function strongestSceneFit(first, second) {
+  const order = ['not scene-based', 'partly on scene', 'on scene']
+  return order.indexOf(first) >= order.indexOf(second) ? first : second
+}
+
+function mergeDetectedValues(first, second) {
+  return [...new Set([...arrayOfStrings(first), ...arrayOfStrings(second)])]
+}
+
+function analyzeAnswer(answer, scene, challenge) {
+  const features = detectAnswerFeatures(answer)
+  const mentionedActions = detectMentionedActions(answer, scene)
+  const sceneFit = mentionedActions.length ? 'on scene' : null
+  const taskFit = taskFitFromFeatures(challenge, features)
+  const englishStatus = features.hasAnyPastVerb ? 'mostly correct' : 'unclear'
+  const statuses = { englishStatus, sceneFit: sceneFit ?? 'partly on scene', taskFit }
+
+  return {
+    features,
+    mentionedActions,
+    sceneFit,
+    taskFit,
+    verdictFloor: verdictFromFeatures(challenge, features, statuses),
+    hasBoundedResultAsContinuous: turnsBoundedResultIntoPastContinuous(answer),
+  }
 }
 
 function taskFitFromFeatures(challenge, features) {
@@ -442,6 +482,10 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
       return false
     }
 
+    if (changesCausalMeaning(correction.suggestion, answer)) {
+      return false
+    }
+
     return true
   })
 }
@@ -506,6 +550,16 @@ function cleanAdvancedPastPerfectNitpick(value, challenge, features, localCopy) 
     (mentionsForcedPastPerfectContinuous(text) || criticizesNaturalPastPerfect(text))
   ) {
     return localCopy.pastPerfectAlreadyWorksSummary
+  }
+
+  return text
+}
+
+function cleanSceneNitpick(value, statuses, localCopy) {
+  const text = String(value ?? '')
+
+  if (statuses.sceneFit !== 'not scene-based' && isVisualNitpick(text)) {
+    return localCopy.sceneInferenceSummary
   }
 
   return text
@@ -831,9 +885,9 @@ function consequenceCorrection(localCopy) {
   }
 }
 
-function normalizeVerdict(value, statuses, challenge, features) {
+function normalizeVerdict(value, statuses, challenge, features, analysis = null) {
   const verdict = normalizeVerdictValue(value)
-  const featureVerdict = verdictFromFeatures(challenge, features, statuses)
+  const featureVerdict = analysis?.verdictFloor ?? verdictFromFeatures(challenge, features, statuses)
 
   if (statuses.englishStatus === 'correct' && statuses.sceneFit === 'on scene' && statuses.taskFit === 'on target') {
     return highestVerdict(highestVerdict(verdict, featureVerdict), 'excellent')
@@ -991,6 +1045,7 @@ function detectAnswerFeatures(answer) {
   const hasBecause = /\bbecause\b/.test(normalized)
   const hasAnyConnector = /\b(when|while|after|before|as|because|so|by the time|after which|but)\b/.test(normalized)
   const hasInterruption = hasWhen && hasPastContinuous && hasSimplePast
+  const hasAnyPastVerb = hasPastPerfectContinuous || hasPastPerfect || hasPastContinuous || hasSimplePast
 
   return {
     hasPastPerfectContinuous,
@@ -1002,6 +1057,7 @@ function detectAnswerFeatures(answer) {
     hasBecause,
     hasAnyConnector,
     hasInterruption,
+    hasAnyPastVerb,
   }
 }
 
@@ -1031,6 +1087,7 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonConnector: 'El conector muestra si las acciones ocurrieron juntas, se interrumpieron o una pasó antes.',
       reasonPastPerfect: 'El reto avanzado te pide mostrar qué pasó antes de otro momento en pasado.',
       pastPerfectAlreadyWorksSummary: 'Tu past perfect con had + past participle ya muestra claramente una acción anterior. Usa past perfect continuous solo cuando la acción anterior realmente estaba ocurriendo durante un tiempo.',
+      sceneInferenceSummary: 'Tu narración está anclada en la escena y usa una interpretación razonable. Concéntrate ahora en que la relación temporal entre los verbos sea clara.',
       reasonStretchBeginner: 'Eso mantiene la práctica dentro del nivel principiante sin exigir conectores.',
       reasonEarlierDetail: 'Eso hará que la línea de tiempo sea más rica y narrativa.',
       keepAndAddSimplePast: 'Mantén esta oración. Agrega una oración más en simple past sobre lo que pasó después.',
@@ -1076,6 +1133,7 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonConnector: 'Koblingen viser om handlingene skjedde samtidig, avbrøt hverandre, eller om én skjedde før.',
       reasonPastPerfect: 'Den avanserte oppgaven ber deg vise hva som skjedde før et annet tidspunkt i fortiden.',
       pastPerfectAlreadyWorksSummary: 'Past perfect med had + past participle viser allerede tydelig en tidligere handling. Bruk past perfect continuous bare når den tidligere handlingen faktisk pågikk over tid.',
+      sceneInferenceSummary: 'Fortellingen din er forankret i scenen og bruker en rimelig tolkning. Fokuser nå på å gjøre tidsforholdet mellom verbene tydelig.',
       reasonStretchBeginner: 'Det holder øvingen på nybegynnernivå uten å kreve koblinger.',
       reasonEarlierDetail: 'Det gjør tidslinjen rikere og mer fortellende.',
       keepAndAddSimplePast: 'Behold denne setningen. Legg til en setning til i simple past om hva som skjedde etterpå.',
@@ -1120,6 +1178,7 @@ function localFeedbackCopy(feedbackLanguage) {
     reasonConnector: 'The connector tells the reader whether actions happened together, interrupted each other, or happened earlier.',
     reasonPastPerfect: 'The advanced challenge asks you to show what happened before another past moment.',
     pastPerfectAlreadyWorksSummary: 'Your past perfect with had + past participle already shows an earlier action clearly. Use past perfect continuous only when the earlier action was genuinely ongoing for a period of time.',
+    sceneInferenceSummary: 'Your narration is anchored in the scene and uses a reasonable interpretation. Now focus on making the time relationship between the verbs clear.',
     reasonStretchBeginner: 'That keeps the practice at beginner level without requiring connectors.',
     reasonEarlierDetail: 'That will make the timeline richer and more narrative.',
     keepAndAddSimplePast: 'Keep this sentence. Add one more simple past sentence about what happened next.',
@@ -1144,6 +1203,15 @@ if (process.env.VERCEL !== '1') {
   app.listen(port, () => {
     console.log(`Story coach API listening on http://localhost:${port}`)
   })
+}
+
+export {
+  normalizeFeedback,
+  analyzeAnswer,
+  detectAnswerFeatures,
+  taskFitFromFeatures,
+  turnsBoundedResultIntoPastContinuous,
+  changesCausalMeaning,
 }
 
 export default app
