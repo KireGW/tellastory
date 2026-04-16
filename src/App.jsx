@@ -28,6 +28,7 @@ function App() {
   const scoreMax = scoreMaxByChallenge[challengeMode] ?? scoreMaxByChallenge.intermediate
   const hints = useMemo(() => buildHints(activeScene, challengeMode), [activeScene, challengeMode])
   const activeHint = hintIndex === null ? null : hints[hintIndex % hints.length]
+  const feedbackTone = feedback ? getFeedbackTone(copy, feedback) : null
   const storyRows = feedback ? 3 : 8
 
   useEffect(() => {
@@ -225,10 +226,10 @@ function App() {
                 <section className="feedback" ref={feedbackRef} aria-live="polite" tabIndex="-1">
                   <div className="feedback-header">
                     <div>
-                      <p className="score-label">{copy.feedback.score}</p>
-                      <strong>{feedback.score}/{feedback.scoreMax ?? scoreMax}</strong>
+                      <p className="score-label">{copy.feedback.verdict}</p>
+                      <strong>{feedbackTone.label}</strong>
                     </div>
-                    <span className="level-pill">{feedback.level}</span>
+                    <span className="level-pill">{feedbackTone.detail}</span>
                   </div>
                   <p>{feedback.summary}</p>
                   <div className="fit-row" aria-label={copy.feedback.fitLabel}>
@@ -434,6 +435,10 @@ function findAction(scene, actionId) {
   return scene.sceneScript?.coreActions?.find((action) => action.id === actionId)
 }
 
+function getFeedbackTone(copy, feedback) {
+  return copy.feedback.verdicts[feedback.level] ?? copy.feedback.verdicts.developing
+}
+
 const languageOptions = {
   en: { label: 'English', feedbackName: 'English' },
   es: { label: 'Español', feedbackName: 'Spanish' },
@@ -464,7 +469,13 @@ const translations = {
       hintLabel: 'Hint',
     },
     feedback: {
-      score: 'Task score',
+      verdict: 'Coach note',
+      verdicts: {
+        basic: { label: 'Keep building', detail: 'Start with one clear move' },
+        developing: { label: 'Good start', detail: 'One useful next step' },
+        strong: { label: 'Good work', detail: 'A little polish' },
+        excellent: { label: 'Excellent', detail: 'Ready to stretch' },
+      },
       worked: 'What worked',
       tryThis: 'Try this',
       betterVersion: 'Better version:',
@@ -557,7 +568,13 @@ const translations = {
       hintLabel: 'Pista',
     },
     feedback: {
-      score: 'Puntaje de la tarea',
+      verdict: 'Nota del coach',
+      verdicts: {
+        basic: { label: 'Sigue construyendo', detail: 'Empieza con una acción clara' },
+        developing: { label: 'Buen comienzo', detail: 'Un siguiente paso útil' },
+        strong: { label: 'Buen trabajo', detail: 'Un poco de pulido' },
+        excellent: { label: 'Excelente', detail: 'Listo para avanzar' },
+      },
       worked: 'Lo que funcionó',
       tryThis: 'Prueba esto',
       betterVersion: 'Mejor versión:',
@@ -650,7 +667,13 @@ const translations = {
       hintLabel: 'Hint',
     },
     feedback: {
-      score: 'Oppgavepoeng',
+      verdict: 'Coachens notat',
+      verdicts: {
+        basic: { label: 'Fortsett å bygge', detail: 'Start med én tydelig handling' },
+        developing: { label: 'God start', detail: 'Ett nyttig neste steg' },
+        strong: { label: 'Godt jobbet', detail: 'Litt finpuss' },
+        excellent: { label: 'Utmerket', detail: 'Klar for å strekke deg' },
+      },
       worked: 'Dette fungerte',
       tryThis: 'Prøv dette',
       betterVersion: 'Bedre versjon:',
