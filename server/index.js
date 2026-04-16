@@ -12,7 +12,6 @@ app.use(express.json({ limit: '1mb' }))
 
 app.post('/api/feedback', async (request, response) => {
   const { answer, scene, challenge, feedbackLanguage = 'English' } = request.body ?? {}
-  const scoreMax = scoreMaxForChallenge(challenge)
 
   if (!answer || !scene?.title) {
     response.status(400).json({ error: 'Missing answer or scene.' })
@@ -38,14 +37,11 @@ app.post('/api/feedback', async (request, response) => {
           role: 'user',
           content: JSON.stringify({
             scene,
-            challenge: {
-              ...challenge,
-              scoreMax,
-            },
+            challenge,
             feedbackLanguage,
             studentAnswer: answer,
             task:
-              `Evaluate the student answer as a past-tense narration. Write all coaching, explanations, and next-step text in ${feedbackLanguage}. Keep corrected English example sentences, verb-form names, and quoted student text in English. The maximum score for this selected challenge is ${scoreMax}.`,
+              `Evaluate the student answer as a past-tense narration. Write all coaching, explanations, and next-step text in ${feedbackLanguage}. Keep corrected English example sentences, verb-form names, and quoted student text in English. Use a qualitative coaching verdict. Do not return or mention numeric ratings.`,
           }),
         },
       ],
@@ -82,20 +78,20 @@ Evaluate four things separately in your reasoning:
 3. Narrative time: Does it show a clear relationship between actions?
 4. Task fit: Does it practice the selected difficulty task?
 
-Treat challenge targets as teaching aims, not a mandatory checklist. A learner does not need to use every listed form to receive a high score.
+Treat challenge targets as teaching aims, not a mandatory checklist. A learner does not need to use every listed form to receive a strong verdict.
 Never treat correct English as wrong just because it does not use the target structure.
 Instead, say that it is correct or understandable, then explain how to move it closer to the selected task.
 Treat past perfect and past perfect continuous as related but different tools. Do not require past perfect continuous when plain past perfect is more natural.
 Use past perfect continuous only for earlier actions that were genuinely ongoing for a period of time, such as "had been waiting", "had been cooking", or "had been looking". Do not suggest unnatural forms such as "had been forgetting", "had been leaving a suitcase", "had been dropping", "had been noticing", or "had been arriving" when a completed earlier event or resulting state is meant.
 Do not say that "had forgotten" is only an attempt, unclear, or less correct because forgetting can be momentary. "Had forgotten", "had left", "had missed", and similar forms are normal past perfect forms for completed earlier events or resulting earlier states.
-If the English is correct but the answer does not describe the scene, do not call the English wrong. Say that the English is correct, but the answer is not clearly anchored in the picture. Lower the score because the image task was not completed, then suggest using the same grammar pattern with visible actions from the scene.
-Do not lower the score for a plausible inference about something that is present in the scene. If sceneFit is "not scene-based", the score should usually be below 60% of scoreMax even when the English is correct. If sceneFit is "partly on scene", the score can be moderate when the grammar relationship is useful.
+If the English is correct but the answer does not describe the scene, do not call the English wrong. Say that the English is correct, but the answer is not clearly anchored in the picture. Use a lower coaching verdict because the image task was not completed, then suggest using the same grammar pattern with visible actions from the scene.
+Do not lower the verdict for a plausible inference about something that is present in the scene. If sceneFit is "not scene-based", the verdict should usually be "keep-building" or "good-start" even when the English is correct. If sceneFit is "partly on scene", the verdict can be encouraging when the grammar relationship is useful.
 Do not mark sceneFit as "partly on scene" only because the learner assigns a plausible cause to visible evidence. If the objects/people/animals are present and the event is reasonable, sceneFit should be "on scene".
 
-Score relative to the selected difficulty:
-- Beginner max 5: clear simple past sentences about visible actions can receive full marks. Do not require connectors, past continuous, or past perfect.
-- Intermediate max 7: reward clear relationships between actions. Accept natural relationships expressed with when, while, as, because, so, after, before, in order to, or other clear wording. Do not require only "when" or "while".
-- Advanced max 10: reward layered narration with background action, main event, earlier past, consequence, and natural connectors. A good past perfect phrase with had + past participle can fully satisfy the earlier-past part of the task; do not penalize it just because it is not past perfect continuous.
+Set the verdict relative to the selected difficulty:
+- Beginner: clear simple past sentences about visible actions can receive "excellent". Do not require connectors, past continuous, or past perfect.
+- Intermediate: reward clear relationships between actions. Accept natural relationships expressed with when, while, as, because, so, after, before, in order to, or other clear wording. Do not require only "when" or "while".
+- Advanced: reward layered narration with background action, main event, earlier past, consequence, and natural connectors. A good past perfect phrase with had + past participle can fully satisfy the earlier-past part of the task; do not penalize it just because it is not past perfect continuous.
 For advanced answers, if the learner uses past continuous for background and had + past participle for an earlier event, the task can be on target even without any past perfect continuous.
 
 Be generous with valid partial narration. Do not penalize omitted visual details unless the answer is too thin for the selected task.
@@ -133,9 +129,7 @@ Bad challenge examples: "The vendor was weighing apples when the child dropped o
 
 Return only valid JSON with this exact shape:
 {
-  "score": number from 1 to the selected challenge scoreMax,
-  "scoreMax": selected challenge scoreMax,
-  "level": "basic" | "developing" | "strong" | "excellent",
+  "verdict": "keep-building" | "good-start" | "good-work" | "excellent",
   "englishStatus": "correct | mostly correct | unclear",
   "sceneFit": "on scene | partly on scene | not scene-based",
   "taskFit": "on target | partly on target | different skill",
@@ -163,8 +157,6 @@ Return only valid JSON with this exact shape:
 
 function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'English', answer = '') {
   const localCopy = localFeedbackCopy(feedbackLanguage)
-  const scoreMax = scoreMaxForChallenge(challenge)
-  let score = clampNumber(feedback.score, 1, scoreMax, Math.ceil(scoreMax * 0.6))
   const corrections = normalizeCorrections(feedback.corrections)
   const answerFeatures = detectAnswerFeatures(answer)
   const statuses = {
@@ -175,14 +167,11 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
 
   if (advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses)) {
     statuses.taskFit = 'on target'
-    score = Math.max(score, Math.min(scoreMax, 8))
   }
 
   const usefulCorrections = normalizeUsefulCorrections(corrections, answer, challenge, localCopy, statuses).slice(0, 4)
   const normalized = {
-    score,
-    scoreMax,
-    level: levelFromScore(score, scoreMax),
+    verdict: normalizeVerdict(feedback.verdict, statuses),
     ...statuses,
     summary: cleanAdvancedPastPerfectNitpick(cleanFeedbackText(feedback.summary || localCopy.genericSummary), challenge, answerFeatures, localCopy),
     strengths: arrayOfStrings(feedback.strengths).map(cleanFeedbackText).slice(0, 3),
@@ -222,7 +211,6 @@ function cleanFeedbackText(value) {
 
 function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
   const localCopy = localFeedbackCopy(feedbackLanguage)
-  const scoreMax = scoreMaxForChallenge(challenge)
   const normalized = answer.toLowerCase()
   const hasPastContinuous = /\b(was|were)\s+\w+ing\b/.test(normalized)
   const hasSimplePast = /\b\w+(ed|ght|ought|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/.test(normalized)
@@ -291,26 +279,26 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
     })
   }
 
-  const finalScore = scoreLocalAnswer({
-    challenge,
-    hasPastContinuous,
-    hasSimplePast,
-    hasPastPerfect,
-    hasPastPerfectContinuous,
-    hasConnector,
-    mentionedActions,
-    scoreMax,
-  })
-
   const finalCorrections = corrections.length ? corrections.slice(0, 4) : [defaultStretchCorrection(challenge, localCopy)]
+  const englishStatus = hasSimplePast || hasPastContinuous || hasPastPerfect ? 'mostly correct' : 'unclear'
+  const sceneFit = mentionedActions.length ? 'on scene' : 'not scene-based'
+  const taskFit = challenge?.id === 'beginner' || hasConnector || hasPastPerfect ? 'partly on target' : 'different skill'
 
   return {
-    score: finalScore,
-    scoreMax,
-    level: levelFromScore(finalScore, scoreMax),
-    englishStatus: hasSimplePast || hasPastContinuous || hasPastPerfect ? 'mostly correct' : 'unclear',
-    sceneFit: mentionedActions.length ? 'on scene' : 'not scene-based',
-    taskFit: challenge?.id === 'beginner' || hasConnector || hasPastPerfect ? 'partly on target' : 'different skill',
+    verdict: localVerdictFor({
+      challenge,
+      englishStatus,
+      sceneFit,
+      taskFit,
+      hasPastContinuous,
+      hasSimplePast,
+      hasPastPerfect,
+      hasPastPerfectContinuous,
+      hasConnector,
+    }),
+    englishStatus,
+    sceneFit,
+    taskFit,
     summary: localCopy.summary,
     strengths: strengths.length ? strengths.slice(0, 3) : [localCopy.defaultStrength],
     corrections: finalCorrections,
@@ -438,8 +426,7 @@ function sanitizeAdvancedPastPerfectFeedback(feedback, challenge, features, loca
 
   return {
     ...feedback,
-    score: Math.max(feedback.score, Math.min(feedback.scoreMax, 8)),
-    level: levelFromScore(Math.max(feedback.score, Math.min(feedback.scoreMax, 8)), feedback.scoreMax),
+    verdict: feedback.verdict === 'excellent' ? 'excellent' : 'good-work',
     taskFit: 'on target',
     summary: mentionsPastPerfectContinuousForm(feedback.summary) || criticizesNaturalPastPerfect(feedback.summary)
       ? localCopy.pastPerfectAlreadyWorksSummary
@@ -678,74 +665,58 @@ function consequenceCorrection(localCopy) {
   }
 }
 
-function clampNumber(value, min, max, fallback) {
-  const number = Number(value)
+function normalizeVerdict(value, statuses) {
+  const allowedVerdicts = ['keep-building', 'good-start', 'good-work', 'excellent']
 
-  if (Number.isNaN(number)) {
-    return fallback
+  if (allowedVerdicts.includes(value)) {
+    return value
   }
 
-  return Math.min(max, Math.max(min, Math.round(number)))
-}
+  if (value === 'basic') return 'keep-building'
+  if (value === 'developing') return 'good-start'
+  if (value === 'strong') return 'good-work'
 
-function levelFromScore(score, scoreMax = 10) {
-  const normalized = Number(score) / Number(scoreMax)
-
-  if (normalized >= 0.9) return 'excellent'
-  if (normalized >= 0.7) return 'strong'
-  if (normalized >= 0.5) return 'developing'
-  return 'basic'
-}
-
-function scoreMaxForChallenge(challenge) {
-  if (challenge?.id === 'beginner') {
-    return 5
+  if (statuses.englishStatus === 'correct' && statuses.sceneFit === 'on scene' && statuses.taskFit === 'on target') {
+    return 'excellent'
   }
 
-  if (challenge?.id === 'advanced') {
-    return 10
+  if (statuses.englishStatus === 'unclear' || statuses.sceneFit === 'not scene-based' || statuses.taskFit === 'different skill') {
+    return 'keep-building'
   }
 
-  return 7
+  if (statuses.taskFit === 'on target') {
+    return 'good-work'
+  }
+
+  return 'good-start'
 }
 
-function scoreLocalAnswer({
+function localVerdictFor({
   challenge,
+  englishStatus,
+  sceneFit,
+  taskFit,
   hasPastContinuous,
   hasSimplePast,
   hasPastPerfect,
   hasPastPerfectContinuous,
   hasConnector,
-  mentionedActions,
-  scoreMax,
 }) {
-  if (challenge?.id === 'beginner') {
-    const score =
-      1 +
-      Number(hasSimplePast) * 3 +
-      Number(mentionedActions.length > 0 || hasSimplePast)
+  if (englishStatus === 'unclear' || sceneFit === 'not scene-based' || taskFit === 'different skill') {
+    return 'keep-building'
+  }
 
-    return Math.min(score, scoreMax)
+  if (challenge?.id === 'beginner') {
+    return hasSimplePast ? 'good-work' : 'good-start'
   }
 
   if (challenge?.id === 'advanced') {
-    const score =
-      3 +
-      Number(hasSimplePast) * 2 +
-      Number(hasPastContinuous) * 2 +
-      Number(hasConnector) +
-      Number(hasPastPerfect || hasPastPerfectContinuous) * 2
-
-    return Math.min(score, scoreMax)
+    return hasPastContinuous && hasConnector && (hasPastPerfect || hasPastPerfectContinuous)
+      ? 'good-work'
+      : 'good-start'
   }
 
-  const score =
-    2 +
-    Number(hasSimplePast) * 2 +
-    Number(hasPastContinuous) * 2 +
-    Number(hasConnector)
-
-  return Math.min(score, scoreMax)
+  return hasPastContinuous && hasSimplePast && hasConnector ? 'good-work' : 'good-start'
 }
 
 function nextChallengeFor(challenge, feedbackLanguage = 'English', answer = '') {

@@ -25,7 +25,6 @@ function App() {
   const challengeOptions = activeScene.challengeModes ?? defaultChallengeModes
   const activeChallenge = challengeOptions[challengeMode] ?? challengeOptions.intermediate ?? Object.values(challengeOptions)[0]
   const copy = translations[uiLanguage]
-  const scoreMax = scoreMaxByChallenge[challengeMode] ?? scoreMaxByChallenge.intermediate
   const hints = useMemo(() => buildHints(activeScene, challengeMode), [activeScene, challengeMode])
   const activeHint = hintIndex === null ? null : hints[hintIndex % hints.length]
   const feedbackTone = feedback ? getFeedbackTone(copy, feedback) : null
@@ -81,7 +80,6 @@ function App() {
           },
           challenge: {
             id: challengeMode,
-            scoreMax,
             ...activeChallenge,
           },
           feedbackLanguage: languageOptions[uiLanguage].feedbackName,
@@ -226,7 +224,7 @@ function App() {
                 <section className="feedback" ref={feedbackRef} aria-live="polite" tabIndex="-1">
                   <div className="feedback-header">
                     <div>
-                      <p className="score-label">{copy.feedback.verdict}</p>
+                      <p className="verdict-label">{copy.feedback.verdict}</p>
                       <strong>{feedbackTone.label}</strong>
                     </div>
                     <span className="level-pill">{feedbackTone.detail}</span>
@@ -371,12 +369,6 @@ const storageKeys = {
   challengeMode: 'pastNarrationTrainer.challengeMode',
 }
 
-const scoreMaxByChallenge = {
-  beginner: 5,
-  intermediate: 7,
-  advanced: 10,
-}
-
 function getStoredSceneId() {
   const storedSceneId = window.localStorage.getItem(storageKeys.sceneId)
 
@@ -386,7 +378,7 @@ function getStoredSceneId() {
 function getStoredChallengeMode() {
   const storedChallengeMode = window.localStorage.getItem(storageKeys.challengeMode)
 
-  return Object.hasOwn(scoreMaxByChallenge, storedChallengeMode) ? storedChallengeMode : 'intermediate'
+  return Object.hasOwn(defaultChallengeModes, storedChallengeMode) ? storedChallengeMode : 'intermediate'
 }
 
 function buildHints(scene, challengeMode) {
@@ -436,7 +428,7 @@ function findAction(scene, actionId) {
 }
 
 function getFeedbackTone(copy, feedback) {
-  return copy.feedback.verdicts[feedback.level] ?? copy.feedback.verdicts.developing
+  return copy.feedback.verdicts[feedback.verdict] ?? copy.feedback.verdicts['good-start']
 }
 
 const languageOptions = {
@@ -471,9 +463,9 @@ const translations = {
     feedback: {
       verdict: 'Coach note',
       verdicts: {
-        basic: { label: 'Keep building', detail: 'Start with one clear move' },
-        developing: { label: 'Good start', detail: 'One useful next step' },
-        strong: { label: 'Good work', detail: 'A little polish' },
+        'keep-building': { label: 'Keep building', detail: 'Start with one clear move' },
+        'good-start': { label: 'Good start', detail: 'One useful next step' },
+        'good-work': { label: 'Good work', detail: 'A little polish' },
         excellent: { label: 'Excellent', detail: 'Ready to stretch' },
       },
       worked: 'What worked',
@@ -570,9 +562,9 @@ const translations = {
     feedback: {
       verdict: 'Nota del coach',
       verdicts: {
-        basic: { label: 'Sigue construyendo', detail: 'Empieza con una acción clara' },
-        developing: { label: 'Buen comienzo', detail: 'Un siguiente paso útil' },
-        strong: { label: 'Buen trabajo', detail: 'Un poco de pulido' },
+        'keep-building': { label: 'Sigue construyendo', detail: 'Empieza con una acción clara' },
+        'good-start': { label: 'Buen comienzo', detail: 'Un siguiente paso útil' },
+        'good-work': { label: 'Buen trabajo', detail: 'Un poco de pulido' },
         excellent: { label: 'Excelente', detail: 'Listo para avanzar' },
       },
       worked: 'Lo que funcionó',
@@ -669,9 +661,9 @@ const translations = {
     feedback: {
       verdict: 'Coachens notat',
       verdicts: {
-        basic: { label: 'Fortsett å bygge', detail: 'Start med én tydelig handling' },
-        developing: { label: 'God start', detail: 'Ett nyttig neste steg' },
-        strong: { label: 'Godt jobbet', detail: 'Litt finpuss' },
+        'keep-building': { label: 'Fortsett å bygge', detail: 'Start med én tydelig handling' },
+        'good-start': { label: 'God start', detail: 'Ett nyttig neste steg' },
+        'good-work': { label: 'Godt jobbet', detail: 'Litt finpuss' },
         excellent: { label: 'Utmerket', detail: 'Klar for å strekke deg' },
       },
       worked: 'Dette fungerte',
