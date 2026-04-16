@@ -84,6 +84,8 @@ Evaluate four things separately in your reasoning:
 
 Never treat correct English as wrong just because it does not use the target structure.
 Instead, say that it is correct or understandable, then explain how to move it closer to the selected task.
+Treat past perfect and past perfect continuous as related but different tools. Do not require past perfect continuous when plain past perfect is more natural.
+Use past perfect continuous only for earlier actions that were genuinely ongoing for a period of time, such as "had been waiting", "had been cooking", or "had been looking". Do not suggest unnatural forms such as "had been forgetting", "had been dropping", "had been noticing", or "had been arriving" when a completed earlier event or resulting state is meant.
 If the English is correct but the answer does not describe the scene, do not call the English wrong. Say that the English is correct, but the answer is not clearly anchored in the picture. Lower the score because the image task was not completed, then suggest using the same grammar pattern with visible actions from the scene.
 Do not lower the score for a plausible inference about something that is present in the scene. If sceneFit is "not scene-based", the score should usually be below 60% of scoreMax even when the English is correct. If sceneFit is "partly on scene", the score can be moderate when the grammar relationship is useful.
 Do not mark sceneFit as "partly on scene" only because the learner assigns a plausible cause to visible evidence. If the objects/people/animals are present and the event is reasonable, sceneFit should be "on scene".
@@ -91,7 +93,7 @@ Do not mark sceneFit as "partly on scene" only because the learner assigns a pla
 Score relative to the selected difficulty:
 - Beginner max 5: clear simple past sentences about visible actions can receive full marks. Do not require connectors, past continuous, or past perfect.
 - Intermediate max 7: reward clear relationships between actions. Accept natural relationships expressed with when, while, as, because, so, after, before, in order to, or other clear wording. Do not require only "when" or "while".
-- Advanced max 10: reward layered narration with background action, main event, earlier past, consequence, and natural connectors.
+- Advanced max 10: reward layered narration with background action, main event, earlier past, consequence, and natural connectors. A good past perfect phrase with had + past participle can fully satisfy the earlier-past part of the task; do not penalize it just because it is not past perfect continuous.
 
 Be generous with valid partial narration. Do not penalize omitted visual details unless the answer is too thin for the selected task.
 Focus on one useful next improvement. Do not overwhelm the learner.
@@ -109,6 +111,7 @@ Use this hierarchy:
 Good extension examples: "Keep this sentence. Add what happened next.", "Keep this sentence. Add a result with so or because.", "Keep this sentence. Add what had already happened before."
 Bad Try this examples when the student's sentence already works: replacing "when an owl landed" with "while an owl was watching", changing the narrative relationship without improving it, or describing a different part of the scene.
 Another bad Try this example: changing "the cat spilled the milk" to "the milk spilled" only because the exact cause is not literally visible.
+Another bad Try this example: changing "somebody had forgotten his suitcase" to "somebody had been forgetting his suitcase". That is not a natural improvement.
 
 The "rewrite" field must be a minimally revised better version of the student's own text, not a new model answer.
 Keep the same basic events, actors, and sentence scope whenever possible.
@@ -157,20 +160,27 @@ Return only valid JSON with this exact shape:
 function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'English', answer = '') {
   const localCopy = localFeedbackCopy(feedbackLanguage)
   const scoreMax = scoreMaxForChallenge(challenge)
-  const score = clampNumber(feedback.score, 1, scoreMax, Math.ceil(scoreMax * 0.6))
+  let score = clampNumber(feedback.score, 1, scoreMax, Math.ceil(scoreMax * 0.6))
   const corrections = normalizeCorrections(feedback.corrections)
+  const answerFeatures = detectAnswerFeatures(answer)
   const statuses = {
     englishStatus: normalizeStatus(feedback.englishStatus, ['correct', 'mostly correct', 'unclear'], 'mostly correct'),
     sceneFit: normalizeStatus(feedback.sceneFit, ['on scene', 'partly on scene', 'not scene-based'], 'partly on scene'),
     taskFit: normalizeStatus(feedback.taskFit, ['on target', 'partly on target', 'different skill'], 'partly on target'),
   }
+
+  if (advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses)) {
+    statuses.taskFit = 'on target'
+    score = Math.max(score, Math.min(scoreMax, 8))
+  }
+
   const usefulCorrections = normalizeUsefulCorrections(corrections, answer, challenge, localCopy, statuses).slice(0, 4)
   const normalized = {
     score,
     scoreMax,
     level: levelFromScore(score, scoreMax),
     ...statuses,
-    summary: cleanFeedbackText(feedback.summary || localCopy.genericSummary),
+    summary: cleanAdvancedPastPerfectNitpick(cleanFeedbackText(feedback.summary || localCopy.genericSummary), challenge, answerFeatures, localCopy),
     strengths: arrayOfStrings(feedback.strengths).map(cleanFeedbackText).slice(0, 3),
     corrections: usefulCorrections,
     rewrite: cleanFeedbackText(normalizeRewrite(feedback.rewrite, answer, scene, challenge, localCopy, usefulCorrections)),
@@ -188,7 +198,11 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
   }
 
   if (!normalized.corrections.length) {
-    normalized.corrections.push(defaultStretchCorrection(challenge, localCopy))
+    normalized.corrections.push(
+      advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses)
+        ? consequenceCorrection(localCopy)
+        : defaultStretchCorrection(challenge, localCopy),
+    )
   }
 
   return normalized
@@ -352,10 +366,15 @@ function normalizeCorrections(value) {
 }
 
 function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, statuses) {
+  const answerFeatures = detectAnswerFeatures(answer)
   const answerWorks =
     statuses.englishStatus === 'correct' &&
     statuses.sceneFit === 'on scene' &&
     statuses.taskFit === 'on target'
+
+  if (answerWorks && advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses)) {
+    return [consequenceCorrection(localCopy)]
+  }
 
   if (answerWorks) {
     return [nextLevelCorrection(challenge, localCopy)]
@@ -371,6 +390,13 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
     }
 
     if (
+      advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses) &&
+      isPastPerfectContinuousNitpick(correction.suggestion, correction.reason)
+    ) {
+      return false
+    }
+
+    if (
       statuses.sceneFit !== 'not scene-based' &&
       isVisualNitpick(correction.suggestion, correction.reason)
     ) {
@@ -379,6 +405,39 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
 
     return true
   })
+}
+
+function advancedPastPerfectAlreadyWorks(challenge, features, statuses) {
+  return (
+    challenge?.id === 'advanced' &&
+    features.hasPastPerfect &&
+    features.hasAnyConnector &&
+    statuses.sceneFit === 'on scene' &&
+    statuses.taskFit !== 'different skill'
+  )
+}
+
+function cleanAdvancedPastPerfectNitpick(value, challenge, features, localCopy) {
+  const text = String(value ?? '')
+
+  if (
+    challenge?.id === 'advanced' &&
+    features.hasPastPerfect &&
+    /past perfect continuous.*missing|missing.*past perfect continuous/i.test(text)
+  ) {
+    return localCopy.pastPerfectAlreadyWorksSummary
+  }
+
+  return text
+}
+
+function isPastPerfectContinuousNitpick(...values) {
+  const text = values.join(' ').toLowerCase()
+
+  return (
+    /past perfect continuous/.test(text) ||
+    /\bhad been\s+(forgetting|dropping|noticing|arriving|leaving|finding|losing|opening)\b/.test(text)
+  )
 }
 
 function isVisualNitpick(...values) {
@@ -438,6 +497,10 @@ function normalizeRewrite(value, answer, scene, challenge, localCopy, correction
 
 function isUsableRewrite(value, answer) {
   if (!value || typeof value !== 'string' || sameText(value, answer)) {
+    return false
+  }
+
+  if (isPastPerfectContinuousNitpick(value)) {
     return false
   }
 
@@ -531,6 +594,15 @@ function defaultStretchCorrection(challenge, localCopy) {
     suggestion: localCopy.useConnector,
     reason: localCopy.reasonConnector,
     grammarFocus: 'connector',
+  }
+}
+
+function consequenceCorrection(localCopy) {
+  return {
+    original: localCopy.yourStory,
+    suggestion: localCopy.keepAndAddResult,
+    reason: localCopy.reasonKeepAndAddResult,
+    grammarFocus: 'narrative coherence',
   }
 }
 
@@ -665,6 +737,7 @@ function detectAnswerFeatures(answer) {
   const hasWhen = /\bwhen\b/.test(normalized)
   const hasWhile = /\bwhile\b/.test(normalized)
   const hasBecause = /\bbecause\b/.test(normalized)
+  const hasAnyConnector = /\b(when|while|after|before|as|because|so|by the time|after which|but)\b/.test(normalized)
   const hasInterruption = hasWhen && hasPastContinuous && hasSimplePast
 
   return {
@@ -675,6 +748,7 @@ function detectAnswerFeatures(answer) {
     hasWhen,
     hasWhile,
     hasBecause,
+    hasAnyConnector,
     hasInterruption,
   }
 }
@@ -703,6 +777,7 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonSimplePast: 'Simple past hace avanzar la historia.',
       reasonConnector: 'El conector muestra si las acciones ocurrieron juntas, se interrumpieron o una pasó antes.',
       reasonPastPerfect: 'El reto avanzado te pide mostrar qué pasó antes de otro momento en pasado.',
+      pastPerfectAlreadyWorksSummary: 'Tu past perfect con had + past participle ya muestra claramente una acción anterior. Usa past perfect continuous solo cuando la acción anterior realmente estaba ocurriendo durante un tiempo.',
       reasonStretchBeginner: 'Eso mantiene la práctica dentro del nivel principiante sin exigir conectores.',
       reasonEarlierDetail: 'Eso hará que la línea de tiempo sea más rica y narrativa.',
       keepAndAddSimplePast: 'Mantén esta oración. Agrega una oración más en simple past sobre lo que pasó después.',
@@ -746,6 +821,7 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonSimplePast: 'Simple past driver historien fremover.',
       reasonConnector: 'Koblingen viser om handlingene skjedde samtidig, avbrøt hverandre, eller om én skjedde før.',
       reasonPastPerfect: 'Den avanserte oppgaven ber deg vise hva som skjedde før et annet tidspunkt i fortiden.',
+      pastPerfectAlreadyWorksSummary: 'Past perfect med had + past participle viser allerede tydelig en tidligere handling. Bruk past perfect continuous bare når den tidligere handlingen faktisk pågikk over tid.',
       reasonStretchBeginner: 'Det holder øvingen på nybegynnernivå uten å kreve koblinger.',
       reasonEarlierDetail: 'Det gjør tidslinjen rikere og mer fortellende.',
       keepAndAddSimplePast: 'Behold denne setningen. Legg til en setning til i simple past om hva som skjedde etterpå.',
@@ -788,6 +864,7 @@ function localFeedbackCopy(feedbackLanguage) {
     reasonSimplePast: 'Simple past moves the story forward.',
     reasonConnector: 'The connector tells the reader whether actions happened together, interrupted each other, or happened earlier.',
     reasonPastPerfect: 'The advanced challenge asks you to show what happened before another past moment.',
+    pastPerfectAlreadyWorksSummary: 'Your past perfect with had + past participle already shows an earlier action clearly. Use past perfect continuous only when the earlier action was genuinely ongoing for a period of time.',
     reasonStretchBeginner: 'That keeps the practice at beginner level without requiring connectors.',
     reasonEarlierDetail: 'That will make the timeline richer and more narrative.',
     keepAndAddSimplePast: 'Keep this sentence. Add one more simple past sentence about what happened next.',
