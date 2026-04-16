@@ -787,6 +787,10 @@ function localFeedbackCopy(feedbackLanguage) {
   }
 }
 
-app.listen(port, () => {
-  console.log(`Story coach API listening on http://localhost:${port}`)
-})
+if (process.env.VERCEL !== '1') {
+  app.listen(port, () => {
+    console.log(`Story coach API listening on http://localhost:${port}`)
+  })
+}
+
+export default app
