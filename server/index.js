@@ -466,7 +466,8 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
     if (
       advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses) &&
       (isPastPerfectContinuousNitpick(correction.suggestion, correction.reason) ||
-        mentionsPastPerfectContinuousForm(correction.suggestion, correction.reason))
+        mentionsPastPerfectContinuousForm(correction.suggestion, correction.reason) ||
+        isOverSpecificAdvancedTaskNitpick(correction.suggestion, correction.reason))
     ) {
       return false
     }
@@ -547,7 +548,9 @@ function cleanAdvancedPastPerfectNitpick(value, challenge, features, localCopy) 
   if (
     challenge?.id === 'advanced' &&
     features.hasPastPerfect &&
-    (mentionsForcedPastPerfectContinuous(text) || criticizesNaturalPastPerfect(text))
+    (mentionsForcedPastPerfectContinuous(text) ||
+      criticizesNaturalPastPerfect(text) ||
+      isOverSpecificAdvancedTaskNitpick(text))
   ) {
     return localCopy.pastPerfectAlreadyWorksSummary
   }
@@ -590,6 +593,16 @@ function isPastPerfectContinuousNitpick(...values) {
     mentionsForcedPastPerfectContinuous(text) ||
     /\bhad been\s+(forgetting|dropping|noticing|arriving|leaving|finding|losing|opening)\b/.test(text) ||
     /\bhad been\s+\w+ing\b.*\b(suitcase|luggage|bag|milk|alarm|ticket|passport)\b/.test(text)
+  )
+}
+
+function isOverSpecificAdvancedTaskNitpick(...values) {
+  const text = values.join(' ').toLowerCase()
+
+  return (
+    /\btask\b[^.?!]*(asks|requires|specifically|focus)\b[^.?!]*(before|by the time|noticed)/.test(text) ||
+    /\b(show what happened before somebody noticed|show what happened before anyone noticed)\b/.test(text) ||
+    /\b(before|by the time)\b[^.?!]*\b(fits|matching|better fulfill|task focus|selected task)\b/.test(text)
   )
 }
 
@@ -893,6 +906,10 @@ function normalizeVerdict(value, statuses, challenge, features, analysis = null)
     return highestVerdict(highestVerdict(verdict, featureVerdict), 'excellent')
   }
 
+  if (isExcellentFromFeatures(challenge, features, statuses)) {
+    return highestVerdict(highestVerdict(verdict, featureVerdict), 'excellent')
+  }
+
   if (statuses.englishStatus === 'unclear' || statuses.sceneFit === 'not scene-based' || statuses.taskFit === 'different skill') {
     return lowestVerdict(verdict, 'good-start')
   }
@@ -902,6 +919,31 @@ function normalizeVerdict(value, statuses, challenge, features, analysis = null)
   }
 
   return highestVerdict(verdict, featureVerdict)
+}
+
+function isExcellentFromFeatures(challenge, features, statuses) {
+  if (statuses.sceneFit !== 'on scene' || statuses.taskFit !== 'on target') {
+    return false
+  }
+
+  if (challenge?.id === 'advanced') {
+    return (
+      features.hasSimplePast &&
+      features.hasPastContinuous &&
+      (features.hasPastPerfect || features.hasPastPerfectContinuous) &&
+      features.hasAnyConnector
+    )
+  }
+
+  if (challenge?.id === 'intermediate') {
+    return features.hasSimplePast && features.hasPastContinuous && features.hasAnyConnector
+  }
+
+  if (challenge?.id === 'beginner') {
+    return features.hasSimplePast
+  }
+
+  return false
 }
 
 function verdictFromFeatures(challenge, features, statuses) {

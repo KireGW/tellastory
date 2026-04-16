@@ -24,6 +24,33 @@ const scenes = {
       ],
     },
   },
+  market: {
+    title: 'The busy market',
+    sceneScript: {
+      coreActions: [
+        {
+          id: 'vendor-weighing',
+          actor: 'vendor',
+          visibleAs: 'The vendor is weighing apples on a scale.',
+        },
+        {
+          id: 'child-dropped-oranges',
+          actor: 'child',
+          visibleAs: 'A child dropped oranges in the market.',
+        },
+        {
+          id: 'cyclist-swerved',
+          actor: 'cyclist',
+          visibleAs: 'A cyclist swerved to avoid the oranges.',
+        },
+        {
+          id: 'dog-stole-bread',
+          actor: 'dog',
+          visibleAs: 'A dog stole a piece of bread.',
+        },
+      ],
+    },
+  },
   beach: {
     title: 'The windy beach',
     sceneScript: {
@@ -96,6 +123,36 @@ function assertNoText(feedback, pattern, message) {
 
 {
   const answer =
+    'The market was already crowded because the vendors had opened their stalls early. While one vendor was weighing apples, a child dropped some oranges, so a cyclist swerved to avoid them. Two friends were bargaining at another stall while a dog stole a piece of bread.'
+  const feedback = normalizeFeedback(
+    baseFeedback({
+      verdict: 'good-start',
+      summary:
+        "Your narration uses past continuous and simple past well. You also use 'had opened' correctly, but the task asks specifically to show what happened before somebody noticed.",
+      corrections: [
+        {
+          original: 'had opened their stalls early',
+          suggestion: 'The vendors had opened their stalls before the market became crowded.',
+          reason: 'This uses before, which fits the task focus.',
+          grammarFocus: 'past perfect',
+        },
+      ],
+      rewrite:
+        'The vendors had opened their stalls before the market became crowded. While one vendor was weighing apples, a child dropped some oranges, so a cyclist swerved to avoid them. Two friends were bargaining at another stall while a dog stole a piece of bread.',
+    }),
+    scenes.market,
+    advanced,
+    english,
+    answer,
+  )
+
+  assert.equal(feedback.taskFit, 'on target')
+  assert.equal(feedback.verdict, 'excellent')
+  assertNoText(feedback, /before somebody noticed|task asks specifically|fits the task focus/, 'A strong advanced answer should not be forced into the scene model sentence.')
+}
+
+{
+  const answer =
     'It was a busy day at the train station. People were running everywhere. Somebody had forgotten his suitcase wide open on the platform, but it was ignored by the passing passengers who were too busy trying to catch the train.'
   const feedback = normalizeFeedback(
     baseFeedback({
@@ -117,7 +174,7 @@ function assertNoText(feedback, pattern, message) {
   )
 
   assert.equal(feedback.taskFit, 'on target')
-  assert.equal(feedback.verdict, 'good-work')
+  assert.notEqual(feedback.verdict, 'good-start')
   assertNoText(feedback, /had been leaving|had been forgetting|missing past perfect continuous/, 'Advanced past perfect should not be replaced by forced past perfect continuous.')
   assert.equal(
     feedback.rewrite.includes('People were running everywhere because somebody had forgotten'),

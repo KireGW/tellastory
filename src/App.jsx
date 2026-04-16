@@ -24,6 +24,7 @@ function App() {
   const activeSceneIndex = scenes.findIndex((scene) => scene.id === activeScene.id)
   const challengeOptions = activeScene.challengeModes ?? defaultChallengeModes
   const activeChallenge = challengeOptions[challengeMode] ?? challengeOptions.intermediate ?? Object.values(challengeOptions)[0]
+  const submittedChallenge = defaultChallengeModes[challengeMode] ?? activeChallenge
   const copy = translations[uiLanguage]
   const hints = useMemo(() => buildHints(activeScene, challengeMode), [activeScene, challengeMode])
   const activeHint = hintIndex === null ? null : hints[hintIndex % hints.length]
@@ -88,7 +89,8 @@ function App() {
           },
           challenge: {
             id: challengeMode,
-            ...activeChallenge,
+            ...submittedChallenge,
+            label: activeChallenge.label ?? submittedChallenge.label,
           },
           feedbackLanguage: languageOptions[uiLanguage].feedbackName,
         }),
