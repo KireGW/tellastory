@@ -176,7 +176,7 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
 
   const usefulCorrections = normalizeUsefulCorrections(corrections, answer, challenge, localCopy, statuses).slice(0, 4)
   const normalized = {
-    verdict: normalizeVerdict(feedback.verdict, statuses),
+    verdict: normalizeVerdict(feedback.verdict, statuses, challenge, answerFeatures),
     ...statuses,
     summary: cleanAdvancedPastPerfectNitpick(cleanFeedbackText(feedback.summary || localCopy.genericSummary), challenge, answerFeatures, localCopy),
     strengths: arrayOfStrings(feedback.strengths).map(cleanFeedbackText).slice(0, 3),
@@ -203,7 +203,12 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
     )
   }
 
-  return sanitizeAdvancedPastPerfectFeedback(normalized, challenge, answerFeatures, localCopy, answer)
+  return ensureDistinctRewrite(
+    sanitizeAdvancedPastPerfectFeedback(normalized, challenge, answerFeatures, localCopy, answer),
+    answer,
+    challenge,
+    localCopy,
+  )
 }
 
 function normalizeStatus(value, allowedValues, fallback) {
@@ -577,9 +582,14 @@ function normalizeRewrite(value, answer, scene, challenge, localCopy, correction
   }
 
   const candidates = [
-    isUsableRewrite(value, answer) && !changesCausalMeaning(value, answer) ? value : '',
-    corrections.find((correction) => isUsableRewrite(correction.suggestion, answer) && !changesCausalMeaning(correction.suggestion, answer))?.suggestion,
+    isUsableRewrite(value, answer) && !changesCausalMeaning(value, answer) && !createsAwkwardWhilePastPerfectContinuous(value, answer) ? value : '',
+    corrections.find((correction) =>
+      isUsableRewrite(correction.suggestion, answer) &&
+      !changesCausalMeaning(correction.suggestion, answer) &&
+      !createsAwkwardWhilePastPerfectContinuous(correction.suggestion, answer),
+    )?.suggestion,
     meaningPreservingRewrite(answer),
+    makePolishedFallbackRewrite(answer),
     makeMinimalFallbackRewrite(answer, challenge),
     fallbackRewriteFor(challenge, localCopy),
   ]
@@ -587,6 +597,39 @@ function normalizeRewrite(value, answer, scene, challenge, localCopy, correction
   const rewrite = candidates.find((candidate) => candidate && !sameText(candidate, answer))
 
   return rewrite || fallbackRewriteFor(challenge, localCopy)
+}
+
+function ensureDistinctRewrite(feedback, answer, challenge, localCopy) {
+  if (!sameText(feedback.rewrite, answer)) {
+    return feedback
+  }
+
+  const fallback =
+    meaningPreservingRewrite(answer) ||
+    makePolishedFallbackRewrite(answer) ||
+    makeMinimalFallbackRewrite(answer, challenge) ||
+    fallbackRewriteFor(challenge, localCopy)
+
+  return {
+    ...feedback,
+    rewrite: sameText(fallback, answer) ? fallbackRewriteFor(challenge, localCopy) : fallback,
+  }
+}
+
+function makePolishedFallbackRewrite(answer) {
+  const text = String(answer ?? '').trim()
+
+  if (!text) {
+    return ''
+  }
+
+  const polished = text
+    .replace(/\bhad blown the hat off of mum's head\b/i, "had already blown the hat off Mum's head")
+    .replace(/\bmum's\b/g, "Mum's")
+    .replace(/\bmum\b/g, 'Mum')
+    .replace(/\boff of\b/g, 'off')
+
+  return sameText(polished, text) ? '' : polished
 }
 
 function meaningPreservingRewrite(answer) {
@@ -617,6 +660,18 @@ function changesCausalMeaning(value, answer) {
     (rewrite.includes('people were running') && rewrite.includes('because') && rewrite.includes('suitcase')) ||
     (rewrite.includes('passengers were running') && rewrite.includes('because') && rewrite.includes('suitcase')) ||
     (rewrite.includes('everyone was running') && rewrite.includes('because') && rewrite.includes('suitcase'))
+  )
+}
+
+function createsAwkwardWhilePastPerfectContinuous(value, answer) {
+  const rewrite = String(value ?? '').toLowerCase()
+  const original = String(answer ?? '').toLowerCase()
+
+  return (
+    original.includes('while') &&
+    rewrite.includes('while') &&
+    /\bwhile\b[^.?!]*\bhad been\s+\w+ing\b/.test(rewrite) &&
+    !/\bwhile\b[^.?!]*\bhad been\s+\w+ing\b/.test(original)
   )
 }
 
@@ -731,11 +786,12 @@ function consequenceCorrection(localCopy) {
   }
 }
 
-function normalizeVerdict(value, statuses) {
+function normalizeVerdict(value, statuses, challenge, features) {
   const verdict = normalizeVerdictValue(value)
+  const featureVerdict = verdictFromFeatures(challenge, features, statuses)
 
   if (statuses.englishStatus === 'correct' && statuses.sceneFit === 'on scene' && statuses.taskFit === 'on target') {
-    return highestVerdict(verdict, 'excellent')
+    return highestVerdict(highestVerdict(verdict, featureVerdict), 'excellent')
   }
 
   if (statuses.englishStatus === 'unclear' || statuses.sceneFit === 'not scene-based' || statuses.taskFit === 'different skill') {
@@ -743,10 +799,39 @@ function normalizeVerdict(value, statuses) {
   }
 
   if (statuses.taskFit === 'on target') {
-    return highestVerdict(verdict, 'good-work')
+    return highestVerdict(highestVerdict(verdict, featureVerdict), 'good-work')
   }
 
-  return verdict
+  return highestVerdict(verdict, featureVerdict)
+}
+
+function verdictFromFeatures(challenge, features, statuses) {
+  if (statuses.englishStatus === 'unclear' || statuses.sceneFit === 'not scene-based') {
+    return 'keep-building'
+  }
+
+  const hasClearRelationship =
+    (features.hasPastContinuous && features.hasSimplePast && features.hasAnyConnector) ||
+    features.hasBecause ||
+    features.hasInterruption
+
+  if (
+    challenge?.id === 'advanced' &&
+    hasClearRelationship &&
+    (features.hasPastPerfect || features.hasPastPerfectContinuous)
+  ) {
+    return 'good-work'
+  }
+
+  if (hasClearRelationship) {
+    return 'good-work'
+  }
+
+  if (features.hasSimplePast || features.hasPastContinuous || features.hasPastPerfect || features.hasPastPerfectContinuous) {
+    return 'good-start'
+  }
+
+  return 'keep-building'
 }
 
 function normalizeVerdictValue(value) {
