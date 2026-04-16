@@ -361,7 +361,7 @@ const defaultChallengeModes = {
   advanced: {
     label: 'Advanced',
     prompt: 'Use had for an earlier event, or had been for an earlier action that continued for some time.',
-    targets: ['past perfect', 'past perfect continuous'],
+    targets: ['earlier past', 'past perfect when natural', 'past perfect continuous only for ongoing earlier actions'],
   },
 }
 

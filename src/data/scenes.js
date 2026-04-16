@@ -159,8 +159,8 @@ export const scenes = [
       },
       advanced: {
         label: 'Advanced',
-        prompt: 'Use had or had been to explain what happened before another past action.',
-        targets: ['past perfect', 'past perfect continuous', 'before', 'after'],
+        prompt: 'Use had for an earlier event, or had been for an earlier action that continued for some time.',
+        targets: ['earlier past', 'past perfect when natural', 'past perfect continuous only for ongoing earlier actions', 'before', 'after'],
       },
     },
   },

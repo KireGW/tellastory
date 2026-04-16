@@ -82,6 +82,7 @@ Evaluate four things separately in your reasoning:
 3. Narrative time: Does it show a clear relationship between actions?
 4. Task fit: Does it practice the selected difficulty task?
 
+Treat challenge targets as teaching aims, not a mandatory checklist. A learner does not need to use every listed form to receive a high score.
 Never treat correct English as wrong just because it does not use the target structure.
 Instead, say that it is correct or understandable, then explain how to move it closer to the selected task.
 Treat past perfect and past perfect continuous as related but different tools. Do not require past perfect continuous when plain past perfect is more natural.
@@ -95,6 +96,7 @@ Score relative to the selected difficulty:
 - Beginner max 5: clear simple past sentences about visible actions can receive full marks. Do not require connectors, past continuous, or past perfect.
 - Intermediate max 7: reward clear relationships between actions. Accept natural relationships expressed with when, while, as, because, so, after, before, in order to, or other clear wording. Do not require only "when" or "while".
 - Advanced max 10: reward layered narration with background action, main event, earlier past, consequence, and natural connectors. A good past perfect phrase with had + past participle can fully satisfy the earlier-past part of the task; do not penalize it just because it is not past perfect continuous.
+For advanced answers, if the learner uses past continuous for background and had + past participle for an earlier event, the task can be on target even without any past perfect continuous.
 
 Be generous with valid partial narration. Do not penalize omitted visual details unless the answer is too thin for the selected task.
 Focus on one useful next improvement. Do not overwhelm the learner.
@@ -439,7 +441,7 @@ function mentionsForcedPastPerfectContinuous(value) {
 
   return (
     text.includes('past perfect continuous') &&
-    /\b(missing|lacks?|without|does not include|doesn't include|not using|needs?|would better fulfill|required|use|adding|add|show|fully meet|fit|fits|better)\b/.test(text)
+    /\b(missing|lacks?|without|does not include|doesn't include|does not use|doesn't use|not using|needs?|would better fulfill|required|use|adding|add|show|fully meet|fit|fits|better|part of the advanced task|matching the advanced task)\b/.test(text)
   )
 }
 
