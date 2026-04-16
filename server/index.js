@@ -93,6 +93,7 @@ Set the verdict relative to the selected difficulty:
 - Intermediate: reward clear relationships between actions. Accept natural relationships expressed with when, while, as, because, so, after, before, in order to, or other clear wording. Do not require only "when" or "while".
 - Advanced: reward layered narration with background action, main event, earlier past, consequence, and natural connectors. A good past perfect phrase with had + past participle can fully satisfy the earlier-past part of the task; do not penalize it just because it is not past perfect continuous.
 For advanced answers, if the learner uses past continuous for background and had + past participle for an earlier event, the task can be on target even without any past perfect continuous.
+Use "good-start" only when a core timeline relationship still needs work. If the answer is on scene and on target, use "good-work" or "excellent".
 
 Be generous with valid partial narration. Do not penalize omitted visual details unless the answer is too thin for the selected task.
 Focus on one useful next improvement. Do not overwhelm the learner.
@@ -700,29 +701,42 @@ function consequenceCorrection(localCopy) {
 }
 
 function normalizeVerdict(value, statuses) {
-  const allowedVerdicts = ['keep-building', 'good-start', 'good-work', 'excellent']
+  const verdict = normalizeVerdictValue(value)
 
-  if (allowedVerdicts.includes(value)) {
-    return value
+  if (statuses.englishStatus === 'correct' && statuses.sceneFit === 'on scene' && statuses.taskFit === 'on target') {
+    return highestVerdict(verdict, 'excellent')
   }
 
+  if (statuses.englishStatus === 'unclear' || statuses.sceneFit === 'not scene-based' || statuses.taskFit === 'different skill') {
+    return lowestVerdict(verdict, 'good-start')
+  }
+
+  if (statuses.taskFit === 'on target') {
+    return highestVerdict(verdict, 'good-work')
+  }
+
+  return verdict
+}
+
+function normalizeVerdictValue(value) {
+  const allowedVerdicts = ['keep-building', 'good-start', 'good-work', 'excellent']
+
+  if (allowedVerdicts.includes(value)) return value
   if (value === 'basic') return 'keep-building'
   if (value === 'developing') return 'good-start'
   if (value === 'strong') return 'good-work'
 
-  if (statuses.englishStatus === 'correct' && statuses.sceneFit === 'on scene' && statuses.taskFit === 'on target') {
-    return 'excellent'
-  }
-
-  if (statuses.englishStatus === 'unclear' || statuses.sceneFit === 'not scene-based' || statuses.taskFit === 'different skill') {
-    return 'keep-building'
-  }
-
-  if (statuses.taskFit === 'on target') {
-    return 'good-work'
-  }
-
   return 'good-start'
+}
+
+function highestVerdict(first, second) {
+  const order = ['keep-building', 'good-start', 'good-work', 'excellent']
+  return order.indexOf(first) >= order.indexOf(second) ? first : second
+}
+
+function lowestVerdict(first, second) {
+  const order = ['keep-building', 'good-start', 'good-work', 'excellent']
+  return order.indexOf(first) <= order.indexOf(second) ? first : second
 }
 
 function localVerdictFor({
