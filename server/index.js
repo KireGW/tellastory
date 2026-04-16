@@ -168,6 +168,8 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
     taskFit: normalizeStatus(feedback.taskFit, ['on target', 'partly on target', 'different skill'], 'partly on target'),
   }
 
+  statuses.taskFit = strongestTaskFit(statuses.taskFit, taskFitFromFeatures(challenge, answerFeatures))
+
   if (advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses)) {
     statuses.taskFit = 'on target'
   }
@@ -206,6 +208,32 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
 
 function normalizeStatus(value, allowedValues, fallback) {
   return allowedValues.includes(value) ? value : fallback
+}
+
+function strongestTaskFit(first, second) {
+  const order = ['different skill', 'partly on target', 'on target']
+  return order.indexOf(first) >= order.indexOf(second) ? first : second
+}
+
+function taskFitFromFeatures(challenge, features) {
+  if (challenge?.id === 'beginner') {
+    return features.hasSimplePast ? 'on target' : 'partly on target'
+  }
+
+  if (challenge?.id === 'advanced') {
+    return (features.hasPastPerfect || features.hasPastPerfectContinuous) && features.hasAnyConnector
+      ? 'on target'
+      : 'partly on target'
+  }
+
+  if (
+    (features.hasPastContinuous && features.hasSimplePast && (features.hasWhen || features.hasWhile || features.hasAnyConnector)) ||
+    features.hasBecause
+  ) {
+    return 'on target'
+  }
+
+  return 'partly on target'
 }
 
 function cleanFeedbackText(value) {
@@ -285,7 +313,10 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
   const finalCorrections = corrections.length ? corrections.slice(0, 4) : [defaultStretchCorrection(challenge, localCopy)]
   const englishStatus = hasSimplePast || hasPastContinuous || hasPastPerfect ? 'mostly correct' : 'unclear'
   const sceneFit = mentionedActions.length ? 'on scene' : 'not scene-based'
-  const taskFit = challenge?.id === 'beginner' || hasConnector || hasPastPerfect ? 'partly on target' : 'different skill'
+  const taskFit = strongestTaskFit(
+    challenge?.id === 'beginner' || hasConnector || hasPastPerfect ? 'partly on target' : 'different skill',
+    taskFitFromFeatures(challenge, detectAnswerFeatures(answer)),
+  )
 
   return {
     verdict: localVerdictFor({
