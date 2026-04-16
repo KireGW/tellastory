@@ -73,6 +73,7 @@ You are not checking for one correct answer. The learner may describe any visibl
 Accept any reasonable interpretation of the image. Use the provided sceneScript as a semantic map when available, but do not force model sentences.
 Do not be a visual nitpicker. The sceneScript is there to anchor the task, not to police whether a plausible event is literally visible at the exact moment.
 If the learner mentions a person, animal, object, or setting that belongs in the scene, treat reasonable actions involving it as scene-based. For example, if an owl is visible in the campfire scene, "an owl landed nearby" is acceptable; do not comment that the landing itself is not visible.
+Accept reasonable cause-and-effect inferences between visible scene elements. For example, if a cat is beside spilled milk, "the cat spilled the milk" is scene-based; do not change it to "the milk spilled" unless the student's grammar actually needs that change.
 Only comment on scene fit when there is a clear mismatch: the answer describes a different setting, or it depends on important people, animals, or objects that are clearly not part of the scene.
 
 Evaluate four things separately in your reasoning:
@@ -85,6 +86,7 @@ Never treat correct English as wrong just because it does not use the target str
 Instead, say that it is correct or understandable, then explain how to move it closer to the selected task.
 If the English is correct but the answer does not describe the scene, do not call the English wrong. Say that the English is correct, but the answer is not clearly anchored in the picture. Lower the score because the image task was not completed, then suggest using the same grammar pattern with visible actions from the scene.
 Do not lower the score for a plausible inference about something that is present in the scene. If sceneFit is "not scene-based", the score should usually be below 60% of scoreMax even when the English is correct. If sceneFit is "partly on scene", the score can be moderate when the grammar relationship is useful.
+Do not mark sceneFit as "partly on scene" only because the learner assigns a plausible cause to visible evidence. If the objects/people/animals are present and the event is reasonable, sceneFit should be "on scene".
 
 Score relative to the selected difficulty:
 - Beginner max 5: clear simple past sentences about visible actions can receive full marks. Do not require connectors, past continuous, or past perfect.
@@ -106,6 +108,7 @@ Use this hierarchy:
 3. If the English is correct and the task is on target, do not invent a correction. Say to keep the sentence and add a next-level extension.
 Good extension examples: "Keep this sentence. Add what happened next.", "Keep this sentence. Add a result with so or because.", "Keep this sentence. Add what had already happened before."
 Bad Try this examples when the student's sentence already works: replacing "when an owl landed" with "while an owl was watching", changing the narrative relationship without improving it, or describing a different part of the scene.
+Another bad Try this example: changing "the cat spilled the milk" to "the milk spilled" only because the exact cause is not literally visible.
 
 The "rewrite" field must be a minimally revised better version of the student's own text, not a new model answer.
 Keep the same basic events, actors, and sentence scope whenever possible.
@@ -367,8 +370,26 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
       return false
     }
 
+    if (
+      statuses.sceneFit !== 'not scene-based' &&
+      isVisualNitpick(correction.suggestion, correction.reason)
+    ) {
+      return false
+    }
+
     return true
   })
+}
+
+function isVisualNitpick(...values) {
+  const text = values.join(' ').toLowerCase()
+
+  return (
+    /not (clearly )?(visible|shown|seen)/.test(text) ||
+    /does not (show|clearly show)/.test(text) ||
+    /exact cause/.test(text) ||
+    /who caused/.test(text)
+  )
 }
 
 function nextLevelCorrection(challenge, localCopy) {
