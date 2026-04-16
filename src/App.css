@@ -221,6 +221,10 @@ h1 {
   font-weight: 800;
 }
 
+.mobile-writing-scene {
+  display: none;
+}
+
 textarea {
   width: 100%;
   min-height: 0;
@@ -611,6 +615,46 @@ h2 {
 }
 
 @media (max-width: 560px) {
+  .practice {
+    border-bottom: 0;
+  }
+
+  .scene-pane {
+    padding-bottom: 8px;
+  }
+
+  .scene-pane > .scene-art,
+  .scene-pane > .scene-meta {
+    display: none;
+  }
+
+  .coach-pane {
+    padding-top: 8px;
+  }
+
+  .mobile-writing-scene {
+    display: grid;
+    gap: 4px;
+  }
+
+  .mobile-writing-scene .scene-art {
+    aspect-ratio: 16 / 9;
+    max-height: 28svh;
+    min-height: 150px;
+    object-fit: cover;
+  }
+
+  .mobile-writing-scene-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: #33433d;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
   .bank-heading {
     align-items: flex-start;
     flex-direction: column;

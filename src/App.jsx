@@ -203,6 +203,13 @@ function App() {
 
           <form onSubmit={submitStory} className="story-form">
             <label htmlFor="story-answer">{copy.form.label}</label>
+            <div className="mobile-writing-scene" aria-label={activeScene.title}>
+              <SceneIllustration scene={activeScene} />
+              <div className="mobile-writing-scene-title">
+                <span>{activeScene.title}</span>
+                <span>{activeSceneIndex + 1} / {scenes.length}</span>
+              </div>
+            </div>
             <textarea
               id="story-answer"
               ref={storyInputRef}
