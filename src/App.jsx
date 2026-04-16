@@ -360,7 +360,7 @@ const defaultChallengeModes = {
   },
   advanced: {
     label: 'Advanced',
-    prompt: 'Use had or had been to show what happened before another past moment.',
+    prompt: 'Use had for an earlier event, or had been for an earlier action that continued for some time.',
     targets: ['past perfect', 'past perfect continuous'],
   },
 }
@@ -454,7 +454,7 @@ const translations = {
     challengePrompts: {
       beginner: 'Write two or three simple past sentences about the scene.',
       intermediate: 'Use when or while to connect an action in progress with a completed event.',
-      advanced: 'Use had or had been to show what happened before another past moment.',
+      advanced: 'Use had for an earlier event, or had been for an earlier action that continued for some time.',
     },
     form: {
       label: 'Your story',
@@ -547,7 +547,7 @@ const translations = {
     challengePrompts: {
       beginner: 'Escribe dos o tres oraciones en simple past sobre la escena.',
       intermediate: 'Usa when o while para conectar una acción en progreso con un evento terminado.',
-      advanced: 'Usa had o had been para mostrar qué pasó antes de otro momento en el pasado.',
+      advanced: 'Usa had para un evento anterior, o had been para una acción anterior que continuó durante un tiempo.',
     },
     form: {
       label: 'Tu historia',
@@ -640,7 +640,7 @@ const translations = {
     challengePrompts: {
       beginner: 'Skriv to eller tre setninger i simple past om scenen.',
       intermediate: 'Bruk when eller while for å koble en pågående handling til en avsluttet hendelse.',
-      advanced: 'Bruk had eller had been for å vise hva som skjedde før et annet tidspunkt i fortiden.',
+      advanced: 'Bruk had for en tidligere hendelse, eller had been for en tidligere handling som varte en stund.',
     },
     form: {
       label: 'Historien din',

@@ -85,7 +85,7 @@ Evaluate four things separately in your reasoning:
 Never treat correct English as wrong just because it does not use the target structure.
 Instead, say that it is correct or understandable, then explain how to move it closer to the selected task.
 Treat past perfect and past perfect continuous as related but different tools. Do not require past perfect continuous when plain past perfect is more natural.
-Use past perfect continuous only for earlier actions that were genuinely ongoing for a period of time, such as "had been waiting", "had been cooking", or "had been looking". Do not suggest unnatural forms such as "had been forgetting", "had been dropping", "had been noticing", or "had been arriving" when a completed earlier event or resulting state is meant.
+Use past perfect continuous only for earlier actions that were genuinely ongoing for a period of time, such as "had been waiting", "had been cooking", or "had been looking". Do not suggest unnatural forms such as "had been forgetting", "had been leaving a suitcase", "had been dropping", "had been noticing", or "had been arriving" when a completed earlier event or resulting state is meant.
 If the English is correct but the answer does not describe the scene, do not call the English wrong. Say that the English is correct, but the answer is not clearly anchored in the picture. Lower the score because the image task was not completed, then suggest using the same grammar pattern with visible actions from the scene.
 Do not lower the score for a plausible inference about something that is present in the scene. If sceneFit is "not scene-based", the score should usually be below 60% of scoreMax even when the English is correct. If sceneFit is "partly on scene", the score can be moderate when the grammar relationship is useful.
 Do not mark sceneFit as "partly on scene" only because the learner assigns a plausible cause to visible evidence. If the objects/people/animals are present and the event is reasonable, sceneFit should be "on scene".
@@ -112,6 +112,7 @@ Good extension examples: "Keep this sentence. Add what happened next.", "Keep th
 Bad Try this examples when the student's sentence already works: replacing "when an owl landed" with "while an owl was watching", changing the narrative relationship without improving it, or describing a different part of the scene.
 Another bad Try this example: changing "the cat spilled the milk" to "the milk spilled" only because the exact cause is not literally visible.
 Another bad Try this example: changing "somebody had forgotten his suitcase" to "somebody had been forgetting his suitcase". That is not a natural improvement.
+Another bad Try this example: changing "somebody had forgotten his suitcase" to "somebody had been leaving his suitcase". Use "had left" or keep "had forgotten" for a completed earlier event.
 
 The "rewrite" field must be a minimally revised better version of the student's own text, not a new model answer.
 Keep the same basic events, actors, and sentence scope whenever possible.
@@ -423,7 +424,7 @@ function cleanAdvancedPastPerfectNitpick(value, challenge, features, localCopy) 
   if (
     challenge?.id === 'advanced' &&
     features.hasPastPerfect &&
-    /past perfect continuous.*missing|missing.*past perfect continuous/i.test(text)
+    mentionsMissingPastPerfectContinuous(text)
   ) {
     return localCopy.pastPerfectAlreadyWorksSummary
   }
@@ -431,12 +432,22 @@ function cleanAdvancedPastPerfectNitpick(value, challenge, features, localCopy) 
   return text
 }
 
+function mentionsMissingPastPerfectContinuous(value) {
+  const text = String(value ?? '').toLowerCase()
+
+  return (
+    text.includes('past perfect continuous') &&
+    /\b(missing|lacks?|without|does not include|doesn't include|not using|needs?|would better fulfill|required)\b/.test(text)
+  )
+}
+
 function isPastPerfectContinuousNitpick(...values) {
   const text = values.join(' ').toLowerCase()
 
   return (
-    /past perfect continuous/.test(text) ||
-    /\bhad been\s+(forgetting|dropping|noticing|arriving|leaving|finding|losing|opening)\b/.test(text)
+    mentionsMissingPastPerfectContinuous(text) ||
+    /\bhad been\s+(forgetting|dropping|noticing|arriving|leaving|finding|losing|opening)\b/.test(text) ||
+    /\bhad been\s+\w+ing\b.*\b(suitcase|luggage|bag|milk|alarm|ticket|passport)\b/.test(text)
   )
 }
 
