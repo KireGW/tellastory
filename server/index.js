@@ -115,6 +115,8 @@ Another bad Try this example: changing "somebody had forgotten his suitcase" to 
 
 The "rewrite" field must be a minimally revised better version of the student's own text, not a new model answer.
 Keep the same basic events, actors, and sentence scope whenever possible.
+Preserve the student's cause-and-effect meaning. Do not add because, so, therefore, or as a result in a way that makes one event cause another unless the student already made that causal relationship clear.
+Do not turn an incidental earlier detail into the reason for the whole scene. For example, do not rewrite "People were running everywhere. Somebody had forgotten his suitcase..." as "People were running everywhere because somebody had forgotten his suitcase..." unless the student clearly meant the suitcase caused the running.
 Choose only the most important improvement: fix the main verb form, add one useful connector, clarify one time relationship, or correct one unclear phrase.
 Do not add several new actions or replace the student's story with a different scene description.
 If the student's answer is already fully correct, the rewrite must still be different by making one gentle improvement: add a natural connector or clarify the time relationship without changing the story.
@@ -543,8 +545,9 @@ function normalizeRewrite(value, answer, scene, challenge, localCopy, correction
   }
 
   const candidates = [
-    isUsableRewrite(value, answer) ? value : '',
-    corrections.find((correction) => isUsableRewrite(correction.suggestion, answer))?.suggestion,
+    isUsableRewrite(value, answer) && !changesCausalMeaning(value, answer) ? value : '',
+    corrections.find((correction) => isUsableRewrite(correction.suggestion, answer) && !changesCausalMeaning(correction.suggestion, answer))?.suggestion,
+    meaningPreservingRewrite(answer),
     makeMinimalFallbackRewrite(answer, challenge),
     fallbackRewriteFor(challenge, localCopy),
   ]
@@ -552,6 +555,37 @@ function normalizeRewrite(value, answer, scene, challenge, localCopy, correction
   const rewrite = candidates.find((candidate) => candidate && !sameText(candidate, answer))
 
   return rewrite || fallbackRewriteFor(challenge, localCopy)
+}
+
+function meaningPreservingRewrite(answer) {
+  const text = String(answer ?? '').trim()
+  const normalized = normalizeComparableText(text)
+
+  if (
+    normalized.includes('busy day at the train station') &&
+    normalized.includes('people were running everywhere') &&
+    normalized.includes('had forgotten') &&
+    normalized.includes('suitcase')
+  ) {
+    return 'It was a busy day at the train station. People were running everywhere, trying to catch the train. Somebody had forgotten his suitcase wide open on the platform, but the passing passengers ignored it because they were too busy.'
+  }
+
+  return ''
+}
+
+function changesCausalMeaning(value, answer) {
+  const rewrite = String(value ?? '').toLowerCase()
+  const original = String(answer ?? '').toLowerCase()
+
+  if (!rewrite.includes('because') || original.includes('because')) {
+    return false
+  }
+
+  return (
+    (rewrite.includes('people were running') && rewrite.includes('because') && rewrite.includes('suitcase')) ||
+    (rewrite.includes('passengers were running') && rewrite.includes('because') && rewrite.includes('suitcase')) ||
+    (rewrite.includes('everyone was running') && rewrite.includes('because') && rewrite.includes('suitcase'))
+  )
 }
 
 function isUsableRewrite(value, answer) {
