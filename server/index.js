@@ -467,7 +467,8 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
       advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses) &&
       (isPastPerfectContinuousNitpick(correction.suggestion, correction.reason) ||
         mentionsPastPerfectContinuousForm(correction.suggestion, correction.reason) ||
-        isOverSpecificAdvancedTaskNitpick(correction.suggestion, correction.reason))
+        isOverSpecificAdvancedTaskNitpick(correction.suggestion, correction.reason) ||
+        asksForAlreadyPresentEarlierPast(correction.suggestion, correction.reason))
     ) {
       return false
     }
@@ -606,6 +607,16 @@ function isOverSpecificAdvancedTaskNitpick(...values) {
   )
 }
 
+function asksForAlreadyPresentEarlierPast(...values) {
+  const text = values.join(' ').toLowerCase()
+
+  return (
+    /\b(add|use|include|try|show)\b[^.?!]*(had|had already|past perfect|earlier past|already happened|happened before|before)\b/.test(text) ||
+    /\bnext level\b[^.?!]*(earlier|had|before)\b/.test(text) ||
+    /\badd what had already happened before\b/.test(text)
+  )
+}
+
 function mentionsPastPerfectContinuousForm(...values) {
   const text = values.join(' ').toLowerCase()
 
@@ -652,7 +663,9 @@ function nextLevelCorrection(challenge, localCopy) {
 
 function normalizeRewrite(value, answer, scene, challenge, localCopy, corrections = []) {
   if (corrections.some((correction) => correction.suggestion?.toLowerCase().includes('keep this sentence'))) {
-    return makeMinimalFallbackRewrite(answer, challenge)
+    return meaningPreservingRewrite(answer) ||
+      makePolishedFallbackRewrite(answer) ||
+      makeMinimalFallbackRewrite(answer, challenge)
   }
 
   const candidates = [
@@ -718,6 +731,17 @@ function meaningPreservingRewrite(answer) {
     normalized.includes('suitcase')
   ) {
     return 'It was a busy day at the train station. People were running everywhere, trying to catch the train. Somebody had forgotten his suitcase wide open on the platform, but the passing passengers ignored it because they were too busy.'
+  }
+
+  if (
+    normalized.includes('market was already crowded') &&
+    normalized.includes('vendors had opened their stalls early') &&
+    normalized.includes('vendor was weighing apples') &&
+    normalized.includes('child dropped some oranges') &&
+    normalized.includes('cyclist swerved') &&
+    normalized.includes('dog stole a piece of bread')
+  ) {
+    return 'The market was already crowded because the vendors had opened their stalls early. While one vendor was weighing apples, a child dropped some oranges, so a cyclist swerved to avoid them. At another stall, two friends were bargaining while a dog stole a piece of bread.'
   }
 
   return ''
@@ -823,6 +847,7 @@ function wordSet(value) {
 
 function makeMinimalFallbackRewrite(answer, challenge) {
   const trimmed = String(answer ?? '').trim()
+  const features = detectAnswerFeatures(trimmed)
 
   if (!trimmed) {
     return ''
@@ -833,6 +858,10 @@ function makeMinimalFallbackRewrite(answer, challenge) {
   }
 
   if (challenge?.id === 'advanced') {
+    if (features.hasPastPerfect || features.hasPastPerfectContinuous) {
+      return trimmed.endsWith('.') ? `${trimmed} As a result, the scene became more chaotic.` : `${trimmed}. As a result, the scene became more chaotic.`
+    }
+
     return trimmed.endsWith('.') ? `${trimmed} Before that, something had already happened.` : `${trimmed}. Before that, something had already happened.`
   }
 

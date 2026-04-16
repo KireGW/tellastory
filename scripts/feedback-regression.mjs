@@ -149,6 +149,7 @@ function assertNoText(feedback, pattern, message) {
   assert.equal(feedback.taskFit, 'on target')
   assert.equal(feedback.verdict, 'excellent')
   assertNoText(feedback, /before somebody noticed|task asks specifically|fits the task focus/, 'A strong advanced answer should not be forced into the scene model sentence.')
+  assertNoText(feedback, /add what had already happened|something had already happened/, 'A strong answer that already uses had should not be told to add had again.')
 }
 
 {
