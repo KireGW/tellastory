@@ -209,7 +209,7 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
     )
   }
 
-  return normalized
+  return sanitizeAdvancedPastPerfectFeedback(normalized, challenge, answerFeatures, localCopy, answer)
 }
 
 function normalizeStatus(value, allowedValues, fallback) {
@@ -416,10 +416,52 @@ function advancedPastPerfectAlreadyWorks(challenge, features, statuses) {
   return (
     challenge?.id === 'advanced' &&
     features.hasPastPerfect &&
-    features.hasAnyConnector &&
     statuses.sceneFit === 'on scene' &&
     statuses.taskFit !== 'different skill'
   )
+}
+
+function sanitizeAdvancedPastPerfectFeedback(feedback, challenge, features, localCopy, answer) {
+  if (!advancedPastPerfectAlreadyWorks(challenge, features, feedback)) {
+    return feedback
+  }
+
+  const sanitizedCorrections = feedback.corrections.filter(
+    (correction) =>
+      !mentionsPastPerfectContinuousForm(correction.suggestion, correction.reason) &&
+      !isPastPerfectContinuousNitpick(correction.suggestion, correction.reason),
+  )
+
+  const sanitizedDetectedVerbForms = features.hasPastPerfectContinuous
+    ? feedback.detected.verbForms
+    : feedback.detected.verbForms.filter((form) => form !== 'past perfect continuous')
+
+  return {
+    ...feedback,
+    score: Math.max(feedback.score, Math.min(feedback.scoreMax, 8)),
+    level: levelFromScore(Math.max(feedback.score, Math.min(feedback.scoreMax, 8)), feedback.scoreMax),
+    taskFit: 'on target',
+    summary: mentionsPastPerfectContinuousForm(feedback.summary) || criticizesNaturalPastPerfect(feedback.summary)
+      ? localCopy.pastPerfectAlreadyWorksSummary
+      : feedback.summary,
+    strengths: ensureStrength(feedback.strengths, localCopy.strengthPastPerfect),
+    corrections: sanitizedCorrections.length ? sanitizedCorrections : [consequenceCorrection(localCopy)],
+    rewrite: mentionsPastPerfectContinuousForm(feedback.rewrite) || isPastPerfectContinuousNitpick(feedback.rewrite)
+      ? makeMinimalFallbackRewrite(answer, challenge) || localCopy.advancedRewriteFallback
+      : feedback.rewrite,
+    detected: {
+      ...feedback.detected,
+      verbForms: sanitizedDetectedVerbForms,
+    },
+  }
+}
+
+function ensureStrength(strengths, strength) {
+  if (!strength || strengths.some((item) => normalizeComparableText(item) === normalizeComparableText(strength))) {
+    return strengths
+  }
+
+  return [...strengths, strength].slice(0, 3)
 }
 
 function cleanAdvancedPastPerfectNitpick(value, challenge, features, localCopy) {
@@ -791,6 +833,7 @@ function localFeedbackCopy(feedbackLanguage) {
       defaultStrength: 'Escribiste una respuesta en pasado sobre la escena.',
       strengthPastContinuous: 'Usaste past continuous para una acción que ya estaba en progreso.',
       strengthSimplePast: 'Usaste simple past para eventos terminados de la historia.',
+      strengthPastPerfect: 'Usaste past perfect para mostrar una acción anterior.',
       strengthConnector: 'Usaste un conector para mostrar cómo dos acciones se relacionan en el tiempo.',
       backgroundAction: 'una acción de fondo',
       mainEvent: 'un evento principal',
@@ -835,6 +878,7 @@ function localFeedbackCopy(feedbackLanguage) {
       defaultStrength: 'Du skrev et svar i fortid basert på scenen.',
       strengthPastContinuous: 'Du brukte past continuous for en handling som allerede var i gang.',
       strengthSimplePast: 'Du brukte simple past for avsluttede hendelser i historien.',
+      strengthPastPerfect: 'Du brukte past perfect for å vise en tidligere handling.',
       strengthConnector: 'Du brukte en kobling for å vise hvordan to handlinger henger sammen i tid.',
       backgroundAction: 'en bakgrunnshandling',
       mainEvent: 'en hovedhendelse',
@@ -878,6 +922,7 @@ function localFeedbackCopy(feedbackLanguage) {
     defaultStrength: 'You wrote a past-tense response to the scene.',
     strengthPastContinuous: 'You used past continuous for an action that was already in progress.',
     strengthSimplePast: 'You used simple past for completed story events.',
+    strengthPastPerfect: 'You used past perfect to show an earlier event.',
     strengthConnector: 'You used a connector to show how two actions relate in time.',
     backgroundAction: 'a background action',
     mainEvent: 'a main event',
