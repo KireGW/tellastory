@@ -392,23 +392,25 @@ function scrollFeedbackOnlyIfNeeded(element) {
   }
 
   const viewportHeight = window.innerHeight
-  const margin = 16
   const rect = element.getBoundingClientRect()
-  const visibleTop = margin
-  const visibleBottom = viewportHeight - margin
+  const tolerance = 2
+  const clippedTop = Math.max(0, -rect.top)
+  const clippedBottom = Math.max(0, rect.bottom - viewportHeight)
 
-  if (rect.top >= visibleTop && rect.bottom <= visibleBottom) {
+  if (clippedTop <= tolerance && clippedBottom <= tolerance) {
     return
   }
 
-  if (rect.height > visibleBottom - visibleTop) {
-    element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  if (rect.height > viewportHeight) {
+    if (clippedTop > tolerance) {
+      window.scrollBy({ top: -clippedTop, behavior: 'smooth' })
+    }
     return
   }
 
-  const delta = rect.bottom > visibleBottom
-    ? rect.bottom - visibleBottom
-    : rect.top - visibleTop
+  const delta = clippedBottom > tolerance
+    ? clippedBottom
+    : -clippedTop
 
   window.scrollBy({ top: delta, behavior: 'smooth' })
 }
