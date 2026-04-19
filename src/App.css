@@ -237,6 +237,7 @@ textarea {
   color: #1d2b26;
   background: #ffffff;
   font: inherit;
+  font-size: 16px;
   line-height: 1.5;
 }
 
@@ -697,28 +698,28 @@ h2 {
     grid-template-columns: 1fr;
   }
 
-  .practice:has(#story-answer:focus) .scene-pane {
+  .practice:has(#storyText:focus) .scene-pane {
     padding: 6px 12px;
   }
 
-  .practice:has(#story-answer:focus) .scene-pane > .scene-art {
+  .practice:has(#storyText:focus) .scene-pane > .scene-art {
     max-height: 16dvh;
     min-height: 78px;
   }
 
-  .practice:has(#story-answer:focus) .scene-meta {
+  .practice:has(#storyText:focus) .scene-meta {
     display: none;
   }
 
-  .practice:has(#story-answer:focus) .coach-pane {
+  .practice:has(#storyText:focus) .coach-pane {
     padding-top: 8px;
   }
 
-  .practice:has(#story-answer:focus) .story-form {
+  .practice:has(#storyText:focus) .story-form {
     gap: 6px;
   }
 
-  .practice:has(#story-answer:focus) textarea {
+  .practice:has(#storyText:focus) textarea {
     min-height: 96px;
     max-height: 24dvh;
     overflow: auto;

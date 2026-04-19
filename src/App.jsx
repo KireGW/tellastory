@@ -251,19 +251,19 @@ function App() {
           </section>
 
           <form onSubmit={submitStory} className="story-form" autoComplete="off">
-            <label htmlFor="story-answer">{copy.form.label}</label>
+            <label htmlFor="storyText">{copy.form.label}</label>
             <textarea
-              id="story-answer"
-              name="past-narration-story"
+              id="storyText"
+              name="storyText"
               ref={storyInputRef}
               value={answer}
               onChange={(event) => setAnswer(event.target.value)}
               placeholder=""
               rows={storyRows}
               autoComplete="off"
-              autoCorrect="on"
-              autoCapitalize="sentences"
-              spellCheck="true"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               inputMode="text"
               enterKeyHint="done"
               data-form-type="other"
