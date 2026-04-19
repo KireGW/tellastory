@@ -179,6 +179,132 @@ function assertNoText(feedback, pattern, message) {
 }
 
 {
+  const answer = 'Dad had been making pancakes for an hour when the smoke alarm started ringing.'
+  const feedback = normalizeFeedback(
+    baseFeedback({
+      verdict: 'excellent',
+      taskFit: 'on target',
+      summary: 'The answer uses past perfect continuous to show an earlier ongoing action.',
+      corrections: [
+        {
+          original: 'your story',
+          suggestion: 'Keep this sentence. Add what had already happened before.',
+          reason: 'The sentence works. The next level is to add an earlier layer of the story with had.',
+          grammarFocus: 'past perfect',
+        },
+      ],
+      rewrite: `${answer} Before that, something had already happened.`,
+      detected: {
+        verbForms: ['past perfect continuous', 'simple past'],
+      },
+    }),
+    {
+      title: 'Smoke in the kitchen',
+      sceneScript: {
+        coreActions: [
+          {
+            id: 'dad-cooking',
+            actor: 'Dad',
+            visibleAs: 'Dad is making pancakes.',
+          },
+          {
+            id: 'alarm-ringing',
+            actor: 'alarm',
+            visibleAs: 'The smoke alarm is ringing.',
+          },
+        ],
+      },
+    },
+    advanced,
+    english,
+    answer,
+  )
+
+  assert.equal(feedback.verdict, 'excellent')
+  assertNoText(feedback, /add what had already happened|something had already happened/, 'Past perfect continuous already satisfies the earlier-past layer.')
+}
+
+{
+  const answer = 'The nurse was pushing the wheelchair when the papers fell.'
+  const feedback = normalizeFeedback(
+    baseFeedback({
+      verdict: 'excellent',
+      taskFit: 'on target',
+      summary: 'The sentence uses past continuous and simple past, but the narrative time relationship could be clearer.',
+      corrections: [
+        {
+          original: 'your sentence',
+          suggestion: 'Keep the sentence and clarify the timing.',
+          reason: 'The connection could be clearer.',
+          grammarFocus: 'narrative coherence',
+        },
+      ],
+      rewrite: answer,
+    }),
+    {
+      title: 'The hospital hallway',
+      sceneScript: {
+        coreActions: [
+          {
+            id: 'nurse-pushing',
+            actor: 'nurse',
+            visibleAs: 'A nurse is pushing a wheelchair.',
+          },
+          {
+            id: 'papers-fell',
+            actor: 'papers',
+            visibleAs: 'Papers are falling in the hallway.',
+          },
+        ],
+      },
+    },
+    intermediate,
+    english,
+    answer,
+  )
+
+  assert.equal(feedback.verdict, 'good-work')
+}
+
+{
+  const answer = 'The people were waiting for the bus when a child dropped a mitten.'
+  const feedback = normalizeFeedback(
+    baseFeedback({
+      verdict: 'excellent',
+      taskFit: 'on target',
+      summary: 'The sentence clearly uses past continuous and simple past. The mitten dropping is not clearly visible in the scene.',
+      corrections: [],
+      rewrite: answer,
+    }),
+    {
+      title: 'Snow at the bus stop',
+      sceneScript: {
+        coreActions: [
+          {
+            id: 'people-waiting',
+            actor: 'people',
+            visibleAs: 'People are waiting at a snowy bus stop.',
+          },
+        ],
+      },
+    },
+    intermediate,
+    english,
+    answer,
+  )
+
+  assert.equal(feedback.summary, 'The sentence clearly uses past continuous and simple past.')
+}
+
+{
+  assert.equal(
+    turnsBoundedResultIntoPastContinuous('The people were hiking while the backpack was opening.'),
+    true,
+    'Backpack opening should be treated as a bounded/result event in this app context.',
+  )
+}
+
+{
   const answer =
     'The market was already crowded because the vendors had opened their stalls early. While one vendor was weighing apples, a child dropped some oranges, so a cyclist swerved to avoid them. Two friends were bargaining at another stall while a dog stole a piece of bread.'
   const feedback = normalizeFeedback(

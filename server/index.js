@@ -227,8 +227,10 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
     )
   }
 
+  const sanitized = sanitizeAdvancedPastPerfectFeedback(normalized, challenge, answerFeatures, localCopy, answer)
+
   return ensureDistinctRewrite(
-    sanitizeAdvancedPastPerfectFeedback(normalized, challenge, answerFeatures, localCopy, answer),
+    applyFeedbackConsistencyCaps(sanitized),
     answer,
     challenge,
     localCopy,
@@ -301,7 +303,9 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
   const normalized = answer.toLowerCase()
   const hasPastContinuous = /\b(was|were)\s+\w+ing\b/.test(normalized)
   const simplePastCandidates = normalized.match(/\b\w+(ed|ght|ought|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/g) ?? []
-  const hasSimplePast = simplePastCandidates.some(isLikelySimplePastVerb)
+  const hasSimplePast =
+    simplePastCandidates.some(isLikelySimplePastVerb) ||
+    (normalized.match(/\b[a-z]+\b/g) ?? []).some(isKnownSimplePastVerb)
   const hasPastPerfect = /\bhad\s+\w+(ed|en|ne|wn|t)\b/.test(normalized)
   const hasPastPerfectContinuous = /\bhad\s+been\s+\w+ing\b/.test(normalized)
   const hasConnector = /\b(when|while|after|before|as|because)\b/.test(normalized)
@@ -504,7 +508,7 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
 function advancedPastPerfectAlreadyWorks(challenge, features, statuses) {
   return (
     challenge?.id === 'advanced' &&
-    features.hasPastPerfect &&
+    (features.hasPastPerfect || features.hasPastPerfectContinuous) &&
     statuses.sceneFit === 'on scene' &&
     statuses.taskFit !== 'different skill'
   )
@@ -557,7 +561,7 @@ function cleanAdvancedPastPerfectNitpick(value, challenge, features, localCopy) 
 
   if (
     challenge?.id === 'advanced' &&
-    features.hasPastPerfect &&
+    (features.hasPastPerfect || features.hasPastPerfectContinuous) &&
     (mentionsForcedPastPerfectContinuous(text) ||
       criticizesNaturalPastPerfect(text) ||
       isOverSpecificAdvancedTaskNitpick(text))
@@ -572,10 +576,50 @@ function cleanSceneNitpick(value, statuses, localCopy) {
   const text = String(value ?? '')
 
   if (statuses.sceneFit !== 'not scene-based' && isVisualNitpick(text)) {
-    return localCopy.sceneInferenceSummary
+    return removeVisualNitpickSentences(text) || localCopy.sceneInferenceSummary
   }
 
   return text
+}
+
+function removeVisualNitpickSentences(value) {
+  const sentences = String(value ?? '').match(/[^.!?]+[.!?]?/g) ?? []
+  const cleaned = sentences
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence && !isVisualNitpick(sentence) && !mentionsSceneMismatch(sentence))
+    .join(' ')
+
+  return cleaned.trim()
+}
+
+function applyFeedbackConsistencyCaps(feedback) {
+  if (feedback.verdict !== 'excellent') {
+    return feedback
+  }
+
+  if (containsExcellentContradiction(feedback)) {
+    return {
+      ...feedback,
+      verdict: 'good-work',
+    }
+  }
+
+  return feedback
+}
+
+function containsExcellentContradiction(feedback) {
+  const text = [
+    feedback.summary,
+    ...(feedback.corrections ?? []).flatMap((correction) => [correction?.suggestion, correction?.reason]),
+  ]
+    .join(' ')
+    .toLowerCase()
+
+  return (
+    /\b(lacks?|missing|unclear|not clear|could be clearer|could be more explicit|could better|needs? clearer|partly on target)\b/.test(text) ||
+    /\b(does not match|doesn't match|not (clearly )?part of the scene|different scene|not scene-based)\b/.test(text) ||
+    /\bbut\b[^.?!]*\b(lacks?|missing|unclear|not clear|could|does not|doesn't|not part)\b/.test(text)
+  )
 }
 
 function mentionsForcedPastPerfectContinuous(value) {
@@ -638,9 +682,16 @@ function isVisualNitpick(...values) {
   return (
     /not (clearly )?(visible|shown|seen)/.test(text) ||
     /does not (show|clearly show)/.test(text) ||
+    /not (clearly )?part of the scene/.test(text) ||
     /exact cause/.test(text) ||
     /who caused/.test(text)
   )
+}
+
+function mentionsSceneMismatch(...values) {
+  const text = values.join(' ').toLowerCase()
+
+  return /\b(does not match|doesn't match|not (clearly )?part of the scene|different scene|not scene-based)\b/.test(text)
 }
 
 function nextLevelCorrection(challenge, localCopy) {
@@ -801,14 +852,16 @@ function turnsBoundedResultIntoPastContinuous(value, answer = '') {
     /\bwas\s+dropping\s+[^.?!]*(flowers|oranges|eggs|glass|ticket|passport)\b/,
     /\bwas\s+spilling\s+[^.?!]*(milk|coffee|soup)\b/,
     /\bwas\s+breaking\s+[^.?!]*(glass|window|plate)\b/,
-    /\bwas\s+opening\s+[^.?!]*(suitcase|cooler|door|ring box)\b/,
+    /\bwas\s+opening\s+[^.?!]*(suitcase|cooler|door|ring box|bag|backpack)\b/,
+    /\b(suitcase|cooler|door|ring box|bag|backpack)\s+was\s+opening\b/,
     /\bwas\s+falling\s+(over|off|open)\b/,
     /\bwas\s+snapping\s+loose\b/,
     /\bwere\s+blowing\s+[^.?!]*(hat|kite|cloth|tablecloth|umbrella)\s+(off|away|loose)\b/,
     /\bwere\s+dropping\s+[^.?!]*(flowers|oranges|eggs|glass|ticket|passport)\b/,
     /\bwere\s+spilling\s+[^.?!]*(milk|coffee|soup)\b/,
     /\bwere\s+breaking\s+[^.?!]*(glass|window|plate)\b/,
-    /\bwere\s+opening\s+[^.?!]*(suitcase|cooler|door|ring box)\b/,
+    /\bwere\s+opening\s+[^.?!]*(suitcase|cooler|door|ring box|bag|backpack)\b/,
+    /\b(suitcases|coolers|doors|ring boxes|bags|backpacks)\s+were\s+opening\b/,
     /\bwere\s+falling\s+(over|off|open)\b/,
     /\bwere\s+snapping\s+loose\b/,
   ]
@@ -1129,7 +1182,9 @@ function detectAnswerFeatures(answer) {
   const hasPastPerfect = /\bhad\s+(?!been\b)\w+(ed|en|ne|wn|t)\b/.test(normalized) || /\bhad\s+already\b/.test(normalized)
   const hasPastContinuous = /\b(was|were)\s+\w+ing\b/.test(normalized) || /\bwas\s+about\s+to\b/.test(normalized)
   const simplePastCandidates = normalized.match(/\b\w+(ed|ght|ought|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/g) ?? []
-  const hasSimplePast = simplePastCandidates.some(isLikelySimplePastVerb)
+  const hasSimplePast =
+    simplePastCandidates.some(isLikelySimplePastVerb) ||
+    (normalized.match(/\b[a-z]+\b/g) ?? []).some(isKnownSimplePastVerb)
   const hasWhen = /\bwhen\b/.test(normalized)
   const hasWhile = /\bwhile\b/.test(normalized)
   const hasBecause = /\bbecause\b/.test(normalized)
@@ -1173,6 +1228,51 @@ function isLikelySimplePastVerb(candidate) {
   return !nonPastWords.has(candidate)
 }
 
+function isKnownSimplePastVerb(candidate) {
+  const knownPastVerbs = new Set([
+    'began',
+    'broke',
+    'blew',
+    'brought',
+    'built',
+    'burned',
+    'bought',
+    'caught',
+    'came',
+    'drove',
+    'fell',
+    'felt',
+    'flew',
+    'found',
+    'gave',
+    'held',
+    'heard',
+    'left',
+    'lit',
+    'lost',
+    'made',
+    'met',
+    'ran',
+    'rang',
+    'rose',
+    'said',
+    'saw',
+    'sent',
+    'sat',
+    'spilled',
+    'spoke',
+    'started',
+    'stole',
+    'stood',
+    'took',
+    'turned',
+    'went',
+    'wrote',
+  ])
+
+  return knownPastVerbs.has(candidate)
+}
+
 function localFeedbackCopy(feedbackLanguage) {
   if (feedbackLanguage === 'Spanish') {
     return {
@@ -1198,7 +1298,7 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonSimplePast: 'Simple past hace avanzar la historia.',
       reasonConnector: 'El conector muestra si las acciones ocurrieron juntas, se interrumpieron o una pasó antes.',
       reasonPastPerfect: 'El reto avanzado te pide mostrar qué pasó antes de otro momento en pasado.',
-      pastPerfectAlreadyWorksSummary: 'Tu past perfect con had + past participle ya muestra claramente una acción anterior. Usa past perfect continuous solo cuando la acción anterior realmente estaba ocurriendo durante un tiempo.',
+      pastPerfectAlreadyWorksSummary: 'Tu forma con had ya muestra claramente una capa anterior de la historia. Usa past perfect continuous solo cuando la acción anterior realmente estaba ocurriendo durante un tiempo.',
       sceneInferenceSummary: 'Tu narración está anclada en la escena y usa una interpretación razonable. Concéntrate ahora en que la relación temporal entre los verbos sea clara.',
       reasonStretchBeginner: 'Eso mantiene la práctica dentro del nivel principiante sin exigir conectores.',
       reasonEarlierDetail: 'Eso hará que la línea de tiempo sea más rica y narrativa.',
@@ -1244,7 +1344,7 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonSimplePast: 'Simple past driver historien fremover.',
       reasonConnector: 'Koblingen viser om handlingene skjedde samtidig, avbrøt hverandre, eller om én skjedde før.',
       reasonPastPerfect: 'Den avanserte oppgaven ber deg vise hva som skjedde før et annet tidspunkt i fortiden.',
-      pastPerfectAlreadyWorksSummary: 'Past perfect med had + past participle viser allerede tydelig en tidligere handling. Bruk past perfect continuous bare når den tidligere handlingen faktisk pågikk over tid.',
+      pastPerfectAlreadyWorksSummary: 'Formen med had viser allerede tydelig et tidligere lag i historien. Bruk past perfect continuous bare når den tidligere handlingen faktisk pågikk over tid.',
       sceneInferenceSummary: 'Fortellingen din er forankret i scenen og bruker en rimelig tolkning. Fokuser nå på å gjøre tidsforholdet mellom verbene tydelig.',
       reasonStretchBeginner: 'Det holder øvingen på nybegynnernivå uten å kreve koblinger.',
       reasonEarlierDetail: 'Det gjør tidslinjen rikere og mer fortellende.',
@@ -1289,7 +1389,7 @@ function localFeedbackCopy(feedbackLanguage) {
     reasonSimplePast: 'Simple past moves the story forward.',
     reasonConnector: 'The connector tells the reader whether actions happened together, interrupted each other, or happened earlier.',
     reasonPastPerfect: 'The advanced challenge asks you to show what happened before another past moment.',
-    pastPerfectAlreadyWorksSummary: 'Your past perfect with had + past participle already shows an earlier action clearly. Use past perfect continuous only when the earlier action was genuinely ongoing for a period of time.',
+    pastPerfectAlreadyWorksSummary: 'Your form with had already shows an earlier layer of the story clearly. Use past perfect continuous only when the earlier action was genuinely ongoing for a period of time.',
     sceneInferenceSummary: 'Your narration is anchored in the scene and uses a reasonable interpretation. Now focus on making the time relationship between the verbs clear.',
     reasonStretchBeginner: 'That keeps the practice at beginner level without requiring connectors.',
     reasonEarlierDetail: 'That will make the timeline richer and more narrative.',

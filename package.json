@@ -10,7 +10,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:feedback": "VERCEL=1 node scripts/feedback-regression.mjs"
+    "test:feedback": "VERCEL=1 node scripts/feedback-regression.mjs",
+    "qc:feedback": "node scripts/feedback-qc.mjs"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
