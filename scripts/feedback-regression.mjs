@@ -263,6 +263,65 @@ function assertNoText(feedback, pattern, message) {
 }
 
 {
+  const answer = 'Lisa fell because of bad shoes. a Friend helped her up.'
+  const feedback = normalizeFeedback(
+    baseFeedback({
+      verdict: 'good-work',
+      englishStatus: 'mostly correct',
+      sceneFit: 'on scene',
+      taskFit: 'on target',
+      summary:
+        "The answer uses simple past to describe completed events and includes a cause-and-effect relationship with 'because'.",
+      strengths: [
+        'Uses simple past tense correctly',
+        'Describes visible actions involving people',
+        'Includes a cause-and-effect idea',
+      ],
+      corrections: [
+        {
+          original: 'Lisa fell because of bad shoes. a Friend helped her up.',
+          suggestion: 'Lisa fell. A friend helped her up.',
+          reason: 'Capitalize A and simplify the cause to focus on clear simple past sentences as the task requests.',
+          grammarFocus: 'simple past',
+        },
+      ],
+      rewrite: 'Lisa fell. A friend helped her up.',
+      challenge: "Add one sentence using 'when' to show an interruption or simultaneous action.",
+      detected: {
+        verbForms: ['simple past'],
+        connectors: ['because'],
+        timeRelationships: ['cause + result'],
+      },
+    }),
+    {
+      title: 'Snow at the bus stop',
+      sceneScript: {
+        coreActions: [
+          {
+            id: 'lisa-fell',
+            actor: 'Lisa',
+            visibleAs: 'Lisa fell in the snow near the bus stop.',
+          },
+          {
+            id: 'friend-helped',
+            actor: 'friend',
+            visibleAs: 'A friend is helping Lisa up.',
+          },
+        ],
+      },
+    },
+    { id: 'beginner' },
+    english,
+    answer,
+  )
+
+  assert.equal(feedback.taskFit, 'on target')
+  assert.match(feedback.corrections[0].suggestion, /because/i)
+  assert.match(feedback.rewrite, /because/i)
+  assertNoText(feedback, /Lisa fell\. A friend helped her up\./, 'Beginner feedback should not simplify away a successful cause relationship.')
+}
+
+{
   const answer =
     'In the museum we were, but suddenly a strong sound. The boy was holding his ears and the alarm glows red.'
   const feedback = normalizeFeedback(

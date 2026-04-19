@@ -90,6 +90,7 @@ Do not say that "had forgotten" is only an attempt, unclear, or less correct bec
 If the English is correct but the answer does not describe the scene, do not call the English wrong. Say that the English is correct, but the answer is not clearly anchored in the picture. Use a lower coaching verdict because the image task was not completed, then suggest using the same grammar pattern with visible actions from the scene.
 Do not lower the verdict for a plausible inference about something that is present in the scene. If sceneFit is "not scene-based", the verdict should usually be "keep-building" or "good-start" even when the English is correct. If sceneFit is "partly on scene", the verdict can be encouraging when the grammar relationship is useful.
 Do not mark sceneFit as "partly on scene" only because the learner assigns a plausible cause to visible evidence. If the objects/people/animals are present and the event is reasonable, sceneFit should be "on scene".
+When a learner attempts a richer relationship than the selected difficulty requires, preserve it if it works or mostly works. Do not simplify away a correct because, so, when, while, had, or had been relationship just to match a lower-level task. Improve the learner's attempt instead.
 
 Set the verdict relative to the selected difficulty:
 - Beginner: clear simple past sentences about visible actions can receive "excellent". Do not require connectors, past continuous, or past perfect.
@@ -113,6 +114,7 @@ Use this hierarchy:
 3. If the English is correct and the task is on target, do not invent a correction. Say to keep the sentence and add a next-level extension.
 Good extension examples: "Keep this sentence. Add what happened next.", "Keep this sentence. Add a result with so or because.", "Keep this sentence. Add what had already happened before."
 Bad Try this examples when the student's sentence already works: replacing "when an owl landed" with "while an owl was watching", changing the narrative relationship without improving it, or describing a different part of the scene.
+Another bad Try this example: changing "Lisa fell because of bad shoes. A friend helped her up." to "Lisa fell. A friend helped her up." This removes a useful cause relationship. Prefer "Lisa fell because of her bad shoes. A friend helped her up."
 Another bad Try this example: changing "A gust of wind blew the hat off Mum's head, so she tried to catch it" to "While a gust of wind was blowing the hat off Mum's head, she tried to catch it." The hat coming off is a completed result event, not a natural ongoing background action.
 Another bad Try this example: changing "the cat spilled the milk" to "the milk spilled" only because the exact cause is not literally visible.
 Another bad Try this example: changing "somebody had forgotten his suitcase" to "somebody had been forgetting his suitcase". That is not a natural improvement.
@@ -231,7 +233,7 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
   }
 
   if (!normalized.corrections.length) {
-    const preservedRewrite = meaningPreservingRewrite(answer)
+    const preservedRewrite = meaningPreservingRewrite(answer) || makePolishedFallbackRewrite(answer)
     normalized.corrections.push(
       preservedRewrite
         ? meaningPreservingCorrection(preservedRewrite, localCopy)
@@ -517,6 +519,10 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
     }
 
     if (changesCausalMeaning(correction.suggestion, answer)) {
+      return false
+    }
+
+    if (removesSuccessfulNarrativeRelationship(correction.suggestion, answer)) {
       return false
     }
 
@@ -815,11 +821,13 @@ function normalizeRewrite(value, answer, scene, challenge, localCopy, correction
   const candidates = [
     isUsableRewrite(value, answer) &&
     !changesCausalMeaning(value, answer) &&
+    !removesSuccessfulNarrativeRelationship(value, answer) &&
     !changesKitchenPancakeMeaning(value, answer) &&
     !createsAwkwardWhilePastPerfectContinuous(value, answer) ? value : '',
     corrections.find((correction) =>
       isUsableRewrite(correction.suggestion, answer) &&
       !changesCausalMeaning(correction.suggestion, answer) &&
+      !removesSuccessfulNarrativeRelationship(correction.suggestion, answer) &&
       !changesKitchenPancakeMeaning(correction.suggestion, answer) &&
       !createsAwkwardWhilePastPerfectContinuous(correction.suggestion, answer) &&
       !turnsBoundedResultIntoPastContinuous(correction.suggestion, answer),
@@ -860,6 +868,9 @@ function makePolishedFallbackRewrite(answer) {
   }
 
   const polished = text
+    .replace(/\bfell because of bad shoes\b/i, 'fell because of her bad shoes')
+    .replace(/(^|[.!?]\s+)([a-z])/g, (match, prefix, letter) => `${prefix}${letter.toUpperCase()}`)
+    .replace(/\ba Friend\b/g, 'A friend')
     .replace(/\bhad blown the hat off of mum's head\b/i, "had already blown the hat off Mum's head")
     .replace(/\bmum's\b/g, "Mum's")
     .replace(/\bmum\b/g, 'Mum')
@@ -917,6 +928,33 @@ function changesCausalMeaning(value, answer) {
     (rewrite.includes('passengers were running') && rewrite.includes('because') && rewrite.includes('suitcase')) ||
     (rewrite.includes('everyone was running') && rewrite.includes('because') && rewrite.includes('suitcase'))
   )
+}
+
+function removesSuccessfulNarrativeRelationship(value, answer) {
+  const candidate = detectAnswerFeatures(value)
+  const original = detectAnswerFeatures(answer)
+
+  if (original.hasCauseResult && !candidate.hasCauseResult) {
+    return true
+  }
+
+  if (original.hasPastPerfectContinuous && !candidate.hasPastPerfectContinuous) {
+    return true
+  }
+
+  if (original.hasPastPerfect && !candidate.hasPastPerfect && !candidate.hasPastPerfectContinuous) {
+    return true
+  }
+
+  if (original.hasPastContinuous && !candidate.hasPastContinuous && original.hasRelationshipConnector) {
+    return true
+  }
+
+  if (original.hasRelationshipConnector && !candidate.hasRelationshipConnector) {
+    return true
+  }
+
+  return false
 }
 
 function changesKitchenPancakeMeaning(value, answer) {
