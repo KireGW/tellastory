@@ -32,8 +32,8 @@ function App() {
   const hints = useMemo(() => buildHints(activeScene, challengeMode), [activeScene, challengeMode])
   const activeHint = hintIndex === null ? null : hints[hintIndex % hints.length]
   const feedbackTone = feedback ? getFeedbackTone(copy, feedback) : null
-  const storyRows = feedback ? 3 : 8
   const isMobileFocusMode = isStoryFocused && isMobileViewport && isKeyboardOpen
+  const storyRows = isMobileFocusMode ? 2 : feedback ? 3 : 8
 
   useEffect(() => {
     if (!feedback || !feedbackRef.current) {

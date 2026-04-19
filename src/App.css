@@ -739,10 +739,11 @@ h2 {
   .mobile-focus-mode .scene-pane {
     position: static;
     display: grid;
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr);
     gap: 4px;
     min-height: 0;
-    padding: 8px 12px 4px;
+    overflow: hidden;
+    padding: 8px 12px 8px;
     box-shadow: none;
   }
 
@@ -751,6 +752,7 @@ h2 {
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
   }
 
   .mobile-focus-mode .scene-pane > .scene-visual > .scene-art {
@@ -768,8 +770,11 @@ h2 {
 
   .mobile-focus-mode .coach-pane {
     display: block;
-    align-self: end;
-    padding: 4px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    align-self: stretch;
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    padding: 0 12px calc(8px + env(safe-area-inset-bottom, 0px));
     background: #ffffff;
   }
 
@@ -777,16 +782,18 @@ h2 {
     display: grid;
     gap: 4px;
     margin: 0;
+    background: #ffffff;
   }
 
   .mobile-focus-mode textarea {
-    min-height: 0;
+    min-height: calc(1.5em * 2 + 26px);
     max-height: none;
     overflow-y: auto;
   }
 
   .mobile-focus-mode .form-actions {
     gap: 6px;
+    margin-top: 2px;
     padding: 0;
     background: #ffffff;
   }
