@@ -46,6 +46,24 @@ function App() {
   }, [feedback])
 
   useEffect(() => {
+    const updateVisualViewportHeight = () => {
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+      document.documentElement.style.setProperty('--visual-viewport-height', `${viewportHeight}px`)
+    }
+
+    updateVisualViewportHeight()
+    window.visualViewport?.addEventListener('resize', updateVisualViewportHeight)
+    window.visualViewport?.addEventListener('scroll', updateVisualViewportHeight)
+    window.addEventListener('resize', updateVisualViewportHeight)
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateVisualViewportHeight)
+      window.visualViewport?.removeEventListener('scroll', updateVisualViewportHeight)
+      window.removeEventListener('resize', updateVisualViewportHeight)
+    }
+  }, [])
+
+  useEffect(() => {
     window.localStorage.setItem(storageKeys.sceneId, activeScene.id)
   }, [activeScene.id])
 
@@ -55,6 +73,11 @@ function App() {
 
   useEffect(() => {
     if (!storyInputRef.current) {
+      return
+    }
+
+    if (window.matchMedia('(max-width: 560px)').matches) {
+      storyInputRef.current.style.height = ''
       return
     }
 

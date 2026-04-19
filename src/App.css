@@ -617,8 +617,14 @@ h2 {
 }
 
 @media (max-width: 560px) {
+  .app-shell {
+    min-height: 100dvh;
+    min-height: var(--visual-viewport-height, 100dvh);
+  }
+
   .practice {
     border-bottom: 0;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }
 
   .mobile-settings {
@@ -659,7 +665,7 @@ h2 {
 
   .scene-pane > .scene-art {
     aspect-ratio: 16 / 9;
-    max-height: 28svh;
+    max-height: min(28dvh, calc(var(--visual-viewport-height, 100dvh) * 0.32));
     min-height: 130px;
     object-fit: cover;
   }
@@ -675,6 +681,14 @@ h2 {
 
   .coach-pane {
     padding-top: 8px;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  textarea {
+    height: 7rem;
+    min-height: 7rem;
+    max-height: 7rem;
+    overflow: auto;
   }
 
   .feedback {
@@ -703,7 +717,7 @@ h2 {
   }
 
   .practice:has(#storyText:focus) .scene-pane > .scene-art {
-    max-height: 16dvh;
+    max-height: min(16dvh, calc(var(--visual-viewport-height, 100dvh) * 0.2));
     min-height: 78px;
   }
 
@@ -717,11 +731,13 @@ h2 {
 
   .practice:has(#storyText:focus) .story-form {
     gap: 6px;
+    scroll-margin-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   }
 
   .practice:has(#storyText:focus) textarea {
-    min-height: 96px;
-    max-height: 24dvh;
+    height: 6.5rem;
+    min-height: 6.5rem;
+    max-height: min(6.5rem, calc(var(--visual-viewport-height, 100dvh) * 0.26));
     overflow: auto;
   }
 }
