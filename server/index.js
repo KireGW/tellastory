@@ -81,6 +81,7 @@ Evaluate four things separately in your reasoning:
 Treat challenge targets as teaching aims, not a mandatory checklist. A learner does not need to use every listed form to receive a strong verdict.
 Never treat correct English as wrong just because it does not use the target structure.
 Instead, say that it is correct or understandable, then explain how to move it closer to the selected task.
+Treat ordinary synonyms for scene actions as the same scene anchor. For example, "making pancakes", "cooking pancakes", and "preparing pancakes" all describe the same kitchen action. Do not say the learner failed to describe cooking pancakes if they wrote that someone was making pancakes.
 Do not force past continuous onto bounded result events. Use simple past for events such as "blew the hat off", "blew the kite away", "spilled the milk", "dropped the flowers", "snapped loose", "broke the glass", "knocked on the door", "opened the suitcase", or "fell over". Past continuous is better for the ongoing background around those events, such as "the wind was blowing", "people were waiting", or "children were building".
 Do not write "while a gust of wind was blowing the hat off..." as a correction. That stretches a completed result event into an unnatural ongoing action. Prefer "A gust of wind blew the hat off..." or "The wind was blowing while she tried to catch the hat."
 Treat past perfect and past perfect continuous as related but different tools. Do not require past perfect continuous when plain past perfect is more natural.
@@ -190,9 +191,13 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
   }
 
   const usefulCorrections = normalizeUsefulCorrections(corrections, answer, challenge, localCopy, statuses).slice(0, 4)
-  const summary = cleanSceneNitpick(
-    cleanAdvancedPastPerfectNitpick(cleanFeedbackText(feedback.summary || localCopy.genericSummary), challenge, answerFeatures, localCopy),
-    statuses,
+  const summary = cleanSceneSynonymNitpick(
+    cleanSceneNitpick(
+      cleanAdvancedPastPerfectNitpick(cleanFeedbackText(feedback.summary || localCopy.genericSummary), challenge, answerFeatures, localCopy),
+      statuses,
+      localCopy,
+    ),
+    answer,
     localCopy,
   )
 
@@ -588,6 +593,16 @@ function cleanSceneNitpick(value, statuses, localCopy) {
   return text
 }
 
+function cleanSceneSynonymNitpick(value, answer, localCopy) {
+  const text = String(value ?? '')
+
+  if (mentionsPancakeAction(answer) && criticizesMissingPancakeAction(text)) {
+    return localCopy.sceneSynonymSummary
+  }
+
+  return text
+}
+
 function removeVisualNitpickSentences(value) {
   const sentences = String(value ?? '').match(/[^.!?]+[.!?]?/g) ?? []
   const cleaned = sentences
@@ -597,6 +612,25 @@ function removeVisualNitpickSentences(value) {
 
   return cleaned.trim()
 }
+
+function mentionsPancakeAction(value) {
+  const text = String(value ?? '').toLowerCase()
+
+  return (
+    /\b(mak(?:e|ing|es|ed)|cook(?:s|ing|ed)?|prepar(?:e|ing|es|ed))\b[^.?!]*\bpancakes?\b/.test(text) ||
+    /\bpancakes?\b[^.?!]*\b(mak(?:e|ing|es|ed)|cook(?:s|ing|ed)?|prepar(?:e|ing|es|ed))\b/.test(text)
+  )
+}
+
+function criticizesMissingPancakeAction(value) {
+  const text = String(value ?? '').toLowerCase()
+
+  return (
+    /\b(does not|doesn't|did not|didn't|fails? to|needs? to)\b[^.?!]*\b(describe|mention|include|focus on)\b[^.?!]*\b(cooking|making|preparing)?\s*pancakes?\b/.test(text) ||
+    /\bvisible actions?\b[^.?!]*\b(cooking|making|preparing)?\s*pancakes?\b/.test(text)
+  )
+}
+
 
 function applyFeedbackConsistencyCaps(feedback) {
   if (feedback.sceneFit === 'not scene-based') {
@@ -1331,6 +1365,7 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonPastPerfect: 'El reto avanzado te pide mostrar qué pasó antes de otro momento en pasado.',
       pastPerfectAlreadyWorksSummary: 'Tu forma con had ya muestra claramente una capa anterior de la historia. Usa past perfect continuous solo cuando la acción anterior realmente estaba ocurriendo durante un tiempo.',
       sceneInferenceSummary: 'Tu narración está anclada en la escena y usa una interpretación razonable. Concéntrate ahora en que la relación temporal entre los verbos sea clara.',
+      sceneSynonymSummary: 'Tu narración está anclada en la escena. Making pancakes y cooking pancakes describen la misma acción; ahora concéntrate en aclarar la relación temporal entre los verbos.',
       reasonStretchBeginner: 'Eso mantiene la práctica dentro del nivel principiante sin exigir conectores.',
       reasonEarlierDetail: 'Eso hará que la línea de tiempo sea más rica y narrativa.',
       keepAndAddSimplePast: 'Mantén esta oración. Agrega una oración más en simple past sobre lo que pasó después.',
@@ -1377,6 +1412,7 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonPastPerfect: 'Den avanserte oppgaven ber deg vise hva som skjedde før et annet tidspunkt i fortiden.',
       pastPerfectAlreadyWorksSummary: 'Formen med had viser allerede tydelig et tidligere lag i historien. Bruk past perfect continuous bare når den tidligere handlingen faktisk pågikk over tid.',
       sceneInferenceSummary: 'Fortellingen din er forankret i scenen og bruker en rimelig tolkning. Fokuser nå på å gjøre tidsforholdet mellom verbene tydelig.',
+      sceneSynonymSummary: 'Fortellingen din er forankret i scenen. Making pancakes og cooking pancakes beskriver samme handling; fokuser nå på å gjøre tidsforholdet mellom verbene tydelig.',
       reasonStretchBeginner: 'Det holder øvingen på nybegynnernivå uten å kreve koblinger.',
       reasonEarlierDetail: 'Det gjør tidslinjen rikere og mer fortellende.',
       keepAndAddSimplePast: 'Behold denne setningen. Legg til en setning til i simple past om hva som skjedde etterpå.',
@@ -1422,6 +1458,7 @@ function localFeedbackCopy(feedbackLanguage) {
     reasonPastPerfect: 'The advanced challenge asks you to show what happened before another past moment.',
     pastPerfectAlreadyWorksSummary: 'Your form with had already shows an earlier layer of the story clearly. Use past perfect continuous only when the earlier action was genuinely ongoing for a period of time.',
     sceneInferenceSummary: 'Your narration is anchored in the scene and uses a reasonable interpretation. Now focus on making the time relationship between the verbs clear.',
+    sceneSynonymSummary: 'Your narration is anchored in the scene. Making pancakes and cooking pancakes describe the same action; now focus on making the time relationship between the verbs clear.',
     reasonStretchBeginner: 'That keeps the practice at beginner level without requiring connectors.',
     reasonEarlierDetail: 'That will make the timeline richer and more narrative.',
     keepAndAddSimplePast: 'Keep this sentence. Add one more simple past sentence about what happened next.',

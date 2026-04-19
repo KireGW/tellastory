@@ -383,7 +383,7 @@ export const scenes = [
     setting: 'Family kitchen',
     image: '/scenes/smoke-in-the-kitchen.png',
     prompt:
-      'A father cooks pancakes, smoke rises from a pan, children set the table, milk spills, and grandmother opens a window.',
+      'A father cooks or makes pancakes, smoke rises from a pan, children set the table, milk spills, and grandmother opens a window.',
     focus: ['past continuous', 'cause and result', 'as'],
     sample:
       'As the father was cooking pancakes, smoke began to rise and the grandmother opened the window.',
@@ -393,7 +393,7 @@ export const scenes = [
     sceneScript: sceneScript({
       premise: 'A family kitchen becomes chaotic while breakfast is being prepared.',
       coreActions: [
-        action('father-cooking', 'father', 'A father is cooking pancakes at the stove.', ['was cooking'], 'background ongoing action', ['past continuous']),
+        action('father-cooking', 'father', 'A father is cooking or making pancakes at the stove.', ['was cooking', 'was making'], 'background ongoing action', ['past continuous']),
         action('smoke-rising', 'smoke', 'Smoke is rising from a pan.', ['began to rise', 'was rising'], 'sudden result or ongoing background', ['simple past', 'past continuous']),
         action('children-setting-table', 'children', 'Children are setting the table.', ['were setting'], 'simultaneous background action', ['past continuous']),
         action('milk-spilled', 'milk', 'Milk has spilled on the table or floor.', ['spilled', 'had spilled'], 'completed event or earlier past clue', ['simple past', 'past perfect']),
@@ -406,7 +406,7 @@ export const scenes = [
         relation('milk-before-pet', 'earlier-past', { earlierAction: 'milk-spilled', laterAction: 'pet-noticed', usefulConnectors: ['before', 'already'], modelSentence: 'The milk had already spilled before the pet noticed it.' }),
       ],
       targetRelationships: [
-        'The father was cooking pancakes when smoke began to rise.',
+        'The father was cooking or making pancakes when smoke began to rise.',
         'The children were setting the table while the milk spilled.',
         'The grandmother opened the window because smoke was filling the kitchen.',
         'The milk had already spilled before anyone noticed.',

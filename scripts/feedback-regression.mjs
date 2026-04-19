@@ -139,6 +139,64 @@ function assertNoText(feedback, pattern, message) {
 }
 
 {
+  const answer =
+    'Dad had been up all morning making pancakes when he suddenly got distracted by the cat and burned the pancakes so that the alarm went off.'
+  const feedback = normalizeFeedback(
+    baseFeedback({
+      verdict: 'good-start',
+      englishStatus: 'mostly correct',
+      sceneFit: 'partly on scene',
+      taskFit: 'partly on target',
+      summary:
+        "The sentence shows a clear time relationship with 'when' but does not describe the visible actions like cooking pancakes or smoke rising. To better fit the task, focus on the visible actions and use past continuous for ongoing background actions with simple past for interruptions.",
+      strengths: [
+        'Good use of past perfect continuous to show earlier ongoing action',
+        "Clear use of 'when' to connect actions",
+        'Correct simple past for completed events',
+      ],
+      corrections: [
+        {
+          original: 'Dad had been up all morning making pancakes',
+          suggestion: 'Dad had been making pancakes all morning',
+          reason: 'This keeps the same meaning and makes the phrase more natural.',
+          grammarFocus: 'past perfect continuous',
+        },
+      ],
+      rewrite:
+        'Dad had been making pancakes all morning when he suddenly got distracted by the cat and burned the pancakes, so the alarm went off.',
+      challenge: 'Add one sentence using while to describe what the children were doing during the cooking.',
+      detected: {
+        verbForms: ['past perfect continuous', 'simple past'],
+        connectors: ['when', 'so'],
+      },
+    }),
+    {
+      title: 'Smoke in the kitchen',
+      sceneScript: {
+        coreActions: [
+          {
+            id: 'father-cooking',
+            actor: 'father',
+            visibleAs: 'A father is cooking or making pancakes at the stove.',
+          },
+          {
+            id: 'smoke-rising',
+            actor: 'smoke',
+            visibleAs: 'Smoke is rising from a pan.',
+          },
+        ],
+      },
+    },
+    intermediate,
+    english,
+    answer,
+  )
+
+  assert.equal(feedback.sceneFit, 'on scene')
+  assertNoText(feedback, /does not describe[^.?!]*cooking pancakes|visible actions like cooking pancakes/, 'Making pancakes should be treated as the same scene action as cooking pancakes.')
+}
+
+{
   const answer = 'The lion chased its pray in the forest while the moose eat his breakfast.'
   const feedback = normalizeFeedback(
     baseFeedback({
