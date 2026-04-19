@@ -139,6 +139,67 @@ function assertNoText(feedback, pattern, message) {
 }
 
 {
+  const answer = 'The lion chased its pray in the forest while the moose eat his breakfast.'
+  const feedback = normalizeFeedback(
+    baseFeedback({
+      verdict: 'good-start',
+      englishStatus: 'mostly correct',
+      sceneFit: 'partly on scene',
+      taskFit: 'on target',
+      summary:
+        'The sentence uses past continuous and simple past with while to show simultaneous actions, which fits the task. However, the verb forms need consistent past tense, and the scene described does not match the picture of a woman sleeping in an apartment bedroom.',
+      strengths: [
+        "Uses 'while' to connect two actions",
+        'Attempts past continuous and simple past verb forms',
+      ],
+      corrections: [
+        {
+          original: 'while the moose eat his breakfast',
+          suggestion: 'while the moose was eating its breakfast',
+          reason: "Use past continuous for the ongoing action and correct 'pray' to 'prey'.",
+          grammarFocus: 'past continuous',
+        },
+      ],
+      rewrite: 'The lion was chasing its prey in the forest while the moose was eating its breakfast.',
+      challenge: 'Use the same pattern with the bedroom scene.',
+      detected: {
+        verbForms: ['past continuous', 'simple past'],
+        connectors: ['while'],
+        timeRelationships: ['simultaneous actions'],
+      },
+    }),
+    {
+      title: 'The midnight knock',
+      sceneScript: {
+        coreActions: [
+          {
+            id: 'woman-sleeping',
+            actor: 'woman',
+            visibleAs: 'The woman is asleep under the blanket.',
+          },
+          {
+            id: 'stranger-knocked',
+            actor: 'stranger',
+            visibleAs: 'A shadowy person is knocking on the closed door.',
+          },
+          {
+            id: 'cat-jumped',
+            actor: 'cat',
+            visibleAs: 'The startled cat is jumping near the bed.',
+          },
+        ],
+      },
+    },
+    intermediate,
+    english,
+    answer,
+  )
+
+  assert.equal(feedback.sceneFit, 'not scene-based')
+  assert.equal(feedback.verdict, 'keep-building')
+}
+
+{
   const answer =
     'In the museum we were, but suddenly a strong sound. The boy was holding his ears and the alarm glows red.'
   const feedback = normalizeFeedback(

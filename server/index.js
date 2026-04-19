@@ -190,14 +190,20 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
   }
 
   const usefulCorrections = normalizeUsefulCorrections(corrections, answer, challenge, localCopy, statuses).slice(0, 4)
+  const summary = cleanSceneNitpick(
+    cleanAdvancedPastPerfectNitpick(cleanFeedbackText(feedback.summary || localCopy.genericSummary), challenge, answerFeatures, localCopy),
+    statuses,
+    localCopy,
+  )
+
+  if (isClearDifferentSceneFeedback(summary, usefulCorrections)) {
+    statuses.sceneFit = 'not scene-based'
+  }
+
   const normalized = {
     verdict: normalizeVerdict(feedback.verdict, statuses, challenge, answerFeatures, analysis),
     ...statuses,
-    summary: cleanSceneNitpick(
-      cleanAdvancedPastPerfectNitpick(cleanFeedbackText(feedback.summary || localCopy.genericSummary), challenge, answerFeatures, localCopy),
-      statuses,
-      localCopy,
-    ),
+    summary,
     strengths: arrayOfStrings(feedback.strengths).map(cleanFeedbackText).slice(0, 3),
     corrections: usefulCorrections,
     rewrite: cleanFeedbackText(normalizeRewrite(feedback.rewrite, answer, scene, challenge, localCopy, usefulCorrections)),
@@ -593,6 +599,13 @@ function removeVisualNitpickSentences(value) {
 }
 
 function applyFeedbackConsistencyCaps(feedback) {
+  if (feedback.sceneFit === 'not scene-based') {
+    return {
+      ...feedback,
+      verdict: 'keep-building',
+    }
+  }
+
   if (feedback.verdict !== 'excellent') {
     return feedback
   }
@@ -692,6 +705,21 @@ function mentionsSceneMismatch(...values) {
   const text = values.join(' ').toLowerCase()
 
   return /\b(does not match|doesn't match|not (clearly )?part of the scene|different scene|not scene-based)\b/.test(text)
+}
+
+function isClearDifferentSceneFeedback(summary, corrections = []) {
+  const text = [
+    summary,
+    ...(corrections ?? []).flatMap((correction) => [correction?.suggestion, correction?.reason]),
+  ]
+    .join(' ')
+    .toLowerCase()
+
+  return (
+    /\b(does not match|doesn't match)\s+(the\s+)?(picture|image|scene)\b/.test(text) ||
+    /\bdescribes?\s+(a\s+)?(different|other)\s+(scene|picture|image|setting)\b/.test(text) ||
+    /\bnot\s+(from|in|part of)\s+(this|the)\s+(scene|picture|image)\b/.test(text)
+  )
 }
 
 function nextLevelCorrection(challenge, localCopy) {
