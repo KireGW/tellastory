@@ -79,6 +79,7 @@
 
 .scene-visual {
   display: block;
+  touch-action: pan-y;
 }
 
 .coach-pane {
@@ -717,8 +718,7 @@ h2 {
   }
 
   .mobile-focus-mode .scene-bank,
-  .mobile-focus-mode .mobile-settings,
-  .mobile-focus-mode .hint-slot {
+  .mobile-focus-mode .mobile-settings {
     display: none;
   }
 
@@ -796,6 +796,23 @@ h2 {
     margin-top: 2px;
     padding: 0;
     background: #ffffff;
+  }
+
+  .mobile-focus-mode .hint-slot {
+    min-height: 0;
+  }
+
+  .mobile-focus-mode .hint-panel {
+    margin-top: 2px;
+    padding: 8px 10px;
+  }
+
+  .mobile-focus-mode .hint-panel p {
+    margin: 0;
+  }
+
+  .mobile-focus-mode .hint-panel .section-kicker {
+    margin-bottom: 4px;
   }
 
   .mobile-focus-mode .story-form label {

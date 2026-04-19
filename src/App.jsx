@@ -19,6 +19,7 @@ function App() {
   const feedbackRef = useRef(null)
   const practiceRef = useRef(null)
   const storyInputRef = useRef(null)
+  const sceneSwipeRef = useRef({ startX: 0, startY: 0, tracking: false })
 
   const activeScene = useMemo(
     () => scenes.find((scene) => scene.id === activeId) ?? scenes[0],
@@ -175,6 +176,41 @@ function App() {
     chooseScene(scenes[nextIndex].id)
   }
 
+  function handleSceneTouchStart(event) {
+    if (!isMobileViewport || isStoryFocused) {
+      sceneSwipeRef.current.tracking = false
+      return
+    }
+
+    const touch = event.touches[0]
+    sceneSwipeRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      tracking: true,
+    }
+  }
+
+  function handleSceneTouchEnd(event) {
+    if (!sceneSwipeRef.current.tracking || !isMobileViewport || isStoryFocused) {
+      sceneSwipeRef.current.tracking = false
+      return
+    }
+
+    const touch = event.changedTouches[0]
+    const deltaX = touch.clientX - sceneSwipeRef.current.startX
+    const deltaY = touch.clientY - sceneSwipeRef.current.startY
+    const absX = Math.abs(deltaX)
+    const absY = Math.abs(deltaY)
+
+    sceneSwipeRef.current.tracking = false
+
+    if (absX < 48 || absX <= absY * 1.2) {
+      return
+    }
+
+    chooseSceneByOffset(deltaX < 0 ? 1 : -1)
+  }
+
   function addHint() {
     if (!hints.length) {
       return
@@ -247,7 +283,11 @@ function App() {
             <h1>{copy.app.title}</h1>
             <p className="scene-prompt">{copy.app.scenePrompt}</p>
           </section>
-          <div className="scene-visual">
+          <div
+            className="scene-visual"
+            onTouchStart={handleSceneTouchStart}
+            onTouchEnd={handleSceneTouchEnd}
+          >
             <SceneIllustration scene={activeScene} />
           </div>
           <div className="scene-meta">
@@ -597,7 +637,7 @@ const translations = {
     },
     form: {
       label: 'Your story',
-      submit: 'Check my verbs',
+      submit: 'Check my story',
       checking: 'Checking...',
       hint: 'Give me a hint',
       hintLabel: 'Hint',
