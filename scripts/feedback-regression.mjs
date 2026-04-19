@@ -90,6 +90,23 @@ const scenes = {
       ],
     },
   },
+  museum: {
+    title: 'The museum alarm',
+    sceneScript: {
+      coreActions: [
+        {
+          id: 'boy-holding-ears',
+          actor: 'boy',
+          visibleAs: 'A boy is holding his ears near the statue.',
+        },
+        {
+          id: 'alarm-glowing',
+          actor: 'alarm',
+          visibleAs: 'A red alarm light is glowing on the wall.',
+        },
+      ],
+    },
+  },
 }
 
 const advanced = { id: 'advanced' }
@@ -119,6 +136,46 @@ function baseFeedback(overrides = {}) {
 function assertNoText(feedback, pattern, message) {
   const combined = JSON.stringify(feedback).toLowerCase()
   assert.equal(pattern.test(combined), false, message)
+}
+
+{
+  const answer =
+    'In the museum we were, but suddenly a strong sound. The boy was holding his ears and the alarm glows red.'
+  const feedback = normalizeFeedback(
+    baseFeedback({
+      verdict: 'excellent',
+      englishStatus: 'correct',
+      taskFit: 'on target',
+      summary:
+        "The answer uses past continuous and simple past forms but lacks clear connectors like 'when' or 'while' to show the relationship.",
+      strengths: [
+        "Uses past continuous for background action ('was holding')",
+        "Includes a completed event ('alarm glows red')",
+      ],
+      corrections: [
+        {
+          original: 'In the museum we were, but suddenly a strong sound.',
+          suggestion: 'We were in the museum when suddenly a loud alarm sounded.',
+          reason: "Using 'when' clearly connects the background action with the interrupting event.",
+          grammarFocus: 'connector',
+        },
+      ],
+      rewrite:
+        'We were in the museum when suddenly a loud alarm sounded. The boy was holding his ears while the alarm glowed red.',
+      detected: {
+        verbForms: ['past continuous', 'simple past'],
+        connectors: ['but'],
+        timeRelationships: ['background + event'],
+      },
+    }),
+    scenes.museum,
+    intermediate,
+    english,
+    answer,
+  )
+
+  assert.notEqual(feedback.verdict, 'excellent')
+  assert.notEqual(feedback.taskFit, 'on target')
 }
 
 {

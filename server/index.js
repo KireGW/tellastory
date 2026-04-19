@@ -177,6 +177,14 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
   }
   statuses.taskFit = strongestTaskFit(statuses.taskFit, analysis.taskFit)
 
+  if (
+    challenge?.id === 'intermediate' &&
+    analysis.taskFit === 'partly on target' &&
+    (!answerFeatures.hasSimplePast || !answerFeatures.hasRelationshipConnector)
+  ) {
+    statuses.taskFit = 'partly on target'
+  }
+
   if (advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses)) {
     statuses.taskFit = 'on target'
   }
@@ -275,7 +283,7 @@ function taskFitFromFeatures(challenge, features) {
   }
 
   if (
-    (features.hasPastContinuous && features.hasSimplePast && (features.hasWhen || features.hasWhile || features.hasAnyConnector)) ||
+    (features.hasPastContinuous && features.hasSimplePast && features.hasRelationshipConnector) ||
     features.hasBecause
   ) {
     return 'on target'
@@ -292,7 +300,8 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
   const localCopy = localFeedbackCopy(feedbackLanguage)
   const normalized = answer.toLowerCase()
   const hasPastContinuous = /\b(was|were)\s+\w+ing\b/.test(normalized)
-  const hasSimplePast = /\b\w+(ed|ght|ought|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/.test(normalized)
+  const simplePastCandidates = normalized.match(/\b\w+(ed|ght|ought|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/g) ?? []
+  const hasSimplePast = simplePastCandidates.some(isLikelySimplePastVerb)
   const hasPastPerfect = /\bhad\s+\w+(ed|en|ne|wn|t)\b/.test(normalized)
   const hasPastPerfectContinuous = /\bhad\s+been\s+\w+ing\b/.test(normalized)
   const hasConnector = /\b(when|while|after|before|as|because)\b/.test(normalized)
@@ -931,7 +940,12 @@ function normalizeVerdict(value, statuses, challenge, features, analysis = null)
   const verdict = normalizeVerdictValue(value)
   const featureVerdict = analysis?.verdictFloor ?? verdictFromFeatures(challenge, features, statuses)
 
-  if (statuses.englishStatus === 'correct' && statuses.sceneFit === 'on scene' && statuses.taskFit === 'on target') {
+  if (
+    statuses.englishStatus === 'correct' &&
+    statuses.sceneFit === 'on scene' &&
+    statuses.taskFit === 'on target' &&
+    analysis?.taskFit !== 'partly on target'
+  ) {
     return highestVerdict(highestVerdict(verdict, featureVerdict), 'excellent')
   }
 
@@ -941,6 +955,10 @@ function normalizeVerdict(value, statuses, challenge, features, analysis = null)
 
   if (statuses.englishStatus === 'unclear' || statuses.sceneFit === 'not scene-based' || statuses.taskFit === 'different skill') {
     return lowestVerdict(verdict, 'good-start')
+  }
+
+  if (analysis?.taskFit === 'partly on target') {
+    return highestVerdict(featureVerdict, verdict === 'excellent' ? 'good-start' : verdict)
   }
 
   if (statuses.taskFit === 'on target') {
@@ -960,12 +978,12 @@ function isExcellentFromFeatures(challenge, features, statuses) {
       features.hasSimplePast &&
       features.hasPastContinuous &&
       (features.hasPastPerfect || features.hasPastPerfectContinuous) &&
-      features.hasAnyConnector
+      features.hasRelationshipConnector
     )
   }
 
   if (challenge?.id === 'intermediate') {
-    return features.hasSimplePast && features.hasPastContinuous && features.hasAnyConnector
+    return features.hasSimplePast && features.hasPastContinuous && features.hasRelationshipConnector
   }
 
   if (challenge?.id === 'beginner') {
@@ -981,7 +999,7 @@ function verdictFromFeatures(challenge, features, statuses) {
   }
 
   const hasClearRelationship =
-    (features.hasPastContinuous && features.hasSimplePast && features.hasAnyConnector) ||
+    (features.hasPastContinuous && features.hasSimplePast && features.hasRelationshipConnector) ||
     features.hasBecause ||
     features.hasInterruption
 
@@ -1110,11 +1128,13 @@ function detectAnswerFeatures(answer) {
   const hasPastPerfectContinuous = /\bhad\s+been\s+\w+ing\b/.test(normalized)
   const hasPastPerfect = /\bhad\s+(?!been\b)\w+(ed|en|ne|wn|t)\b/.test(normalized) || /\bhad\s+already\b/.test(normalized)
   const hasPastContinuous = /\b(was|were)\s+\w+ing\b/.test(normalized) || /\bwas\s+about\s+to\b/.test(normalized)
-  const hasSimplePast = /\b\w+(ed|ght|ought|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/.test(normalized)
+  const simplePastCandidates = normalized.match(/\b\w+(ed|ght|ought|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/g) ?? []
+  const hasSimplePast = simplePastCandidates.some(isLikelySimplePastVerb)
   const hasWhen = /\bwhen\b/.test(normalized)
   const hasWhile = /\bwhile\b/.test(normalized)
   const hasBecause = /\bbecause\b/.test(normalized)
   const hasAnyConnector = /\b(when|while|after|before|as|because|so|by the time|after which|but)\b/.test(normalized)
+  const hasRelationshipConnector = /\b(when|while|after|before|as|because|so|by the time|after which)\b/.test(normalized)
   const hasInterruption = hasWhen && hasPastContinuous && hasSimplePast
   const hasAnyPastVerb = hasPastPerfectContinuous || hasPastPerfect || hasPastContinuous || hasSimplePast
 
@@ -1127,9 +1147,30 @@ function detectAnswerFeatures(answer) {
     hasWhile,
     hasBecause,
     hasAnyConnector,
+    hasRelationshipConnector,
     hasInterruption,
     hasAnyPastVerb,
   }
+}
+
+function isLikelySimplePastVerb(candidate) {
+  const nonPastWords = new Set([
+    'red',
+    'bed',
+    'bread',
+    'head',
+    'dead',
+    'spread',
+    'instead',
+    'thread',
+    'lead',
+    'old',
+    'gold',
+    'cold',
+    'bold',
+  ])
+
+  return !nonPastWords.has(candidate)
 }
 
 function localFeedbackCopy(feedbackLanguage) {
