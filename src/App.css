@@ -272,6 +272,7 @@ button {
   cursor: pointer;
   font: inherit;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 button:hover {
@@ -292,6 +293,22 @@ button:focus-visible {
   border: 1px solid #b8c6be;
   background: #ffffff;
   color: #263630;
+}
+
+.form-actions button {
+  min-width: 144px;
+  text-align: center;
+}
+
+.challenge-tab {
+  min-width: 86px;
+  text-align: center;
+}
+
+.next-challenge button,
+.modal-close {
+  min-width: 104px;
+  text-align: center;
 }
 
 .form-error {
@@ -472,6 +489,7 @@ h2 {
   background: #ffffff;
   color: #263630;
   text-align: left;
+  white-space: normal;
 }
 
 .scene-card.active {

@@ -38,7 +38,7 @@ function App() {
 
     const firstFrame = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        feedbackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        scrollFeedbackOnlyIfNeeded(feedbackRef.current)
       })
     })
 
@@ -384,6 +384,33 @@ function getStoredChallengeMode() {
   const storedChallengeMode = window.localStorage.getItem(storageKeys.challengeMode)
 
   return Object.hasOwn(defaultChallengeModes, storedChallengeMode) ? storedChallengeMode : 'intermediate'
+}
+
+function scrollFeedbackOnlyIfNeeded(element) {
+  if (!element) {
+    return
+  }
+
+  const viewportHeight = window.innerHeight
+  const margin = 16
+  const rect = element.getBoundingClientRect()
+  const visibleTop = margin
+  const visibleBottom = viewportHeight - margin
+
+  if (rect.top >= visibleTop && rect.bottom <= visibleBottom) {
+    return
+  }
+
+  if (rect.height > visibleBottom - visibleTop) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    return
+  }
+
+  const delta = rect.bottom > visibleBottom
+    ? rect.bottom - visibleBottom
+    : rect.top - visibleTop
+
+  window.scrollBy({ top: delta, behavior: 'smooth' })
 }
 
 function buildHints(scene, challengeMode) {
