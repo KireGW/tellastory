@@ -77,6 +77,10 @@
   object-fit: cover;
 }
 
+.scene-visual {
+  display: block;
+}
+
 .coach-pane {
   align-self: center;
   display: grid;
@@ -719,29 +723,43 @@ h2 {
   }
 
   .mobile-focus-mode {
-    --focus-scene-height: clamp(80px, 16dvh, 120px);
-    height: 100dvh;
+    height: var(--visual-viewport-height, 100dvh);
     overflow: hidden;
   }
 
   .mobile-focus-mode .practice {
-    height: 100dvh;
+    height: 100%;
     min-height: 0;
-    display: block;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
     overflow: hidden;
     padding-bottom: 0;
   }
 
   .mobile-focus-mode .scene-pane {
-    position: fixed;
-    inset: 0 0 auto;
-    padding: 6px 12px;
+    position: static;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 4px;
+    min-height: 0;
+    padding: 8px 12px 4px;
+    box-shadow: none;
   }
 
-  .mobile-focus-mode .scene-pane > .scene-art {
-    height: var(--focus-scene-height);
+  .mobile-focus-mode .scene-visual {
     min-height: 0;
-    max-height: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-focus-mode .scene-pane > .scene-visual > .scene-art {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    aspect-ratio: auto;
+    object-fit: contain;
   }
 
   .mobile-focus-mode .scene-meta {
@@ -749,31 +767,39 @@ h2 {
   }
 
   .mobile-focus-mode .coach-pane {
-    position: fixed;
-    top: calc(var(--focus-scene-height) + 12px);
-    right: 0;
-    left: 0;
-    z-index: 12;
-    padding: 6px 14px 0;
+    display: block;
+    align-self: end;
+    padding: 4px 12px calc(8px + env(safe-area-inset-bottom, 0px));
     background: #ffffff;
   }
 
   .mobile-focus-mode .story-form {
-    gap: 6px;
-    max-height: none;
-    overflow: hidden;
+    display: grid;
+    gap: 4px;
+    margin: 0;
   }
 
   .mobile-focus-mode textarea {
-    height: 5.75rem;
-    min-height: 5.75rem;
-    max-height: min(5.75rem, calc(var(--visual-viewport-height, 100dvh) * 0.24));
-    overflow: auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
   }
 
   .mobile-focus-mode .form-actions {
-    position: static;
-    padding: 4px 0 0;
+    gap: 6px;
+    padding: 0;
     background: #ffffff;
+  }
+
+  .mobile-focus-mode .story-form label {
+    margin: 0;
+    font-size: 14px;
+  }
+
+  .mobile-focus-mode .form-actions button {
+    min-width: 0;
+    min-height: 32px;
+    padding: 6px 10px;
+    font-size: 15px;
   }
 }

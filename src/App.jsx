@@ -12,6 +12,8 @@ function App() {
   const [isChecking, setIsChecking] = useState(false)
   const [isGrammarOpen, setIsGrammarOpen] = useState(false)
   const [isStoryFocused, setIsStoryFocused] = useState(false)
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
   const [hintIndex, setHintIndex] = useState(null)
   const [error, setError] = useState('')
   const feedbackRef = useRef(null)
@@ -31,6 +33,7 @@ function App() {
   const activeHint = hintIndex === null ? null : hints[hintIndex % hints.length]
   const feedbackTone = feedback ? getFeedbackTone(copy, feedback) : null
   const storyRows = feedback ? 3 : 8
+  const isMobileFocusMode = isStoryFocused && isMobileViewport && isKeyboardOpen
 
   useEffect(() => {
     if (!feedback || !feedbackRef.current) {
@@ -48,8 +51,12 @@ function App() {
 
   useEffect(() => {
     const updateVisualViewportHeight = () => {
+      const isMobile = window.matchMedia('(max-width: 560px)').matches
       const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+      const keyboardDelta = window.innerHeight - viewportHeight
       document.documentElement.style.setProperty('--visual-viewport-height', `${viewportHeight}px`)
+      setIsMobileViewport(isMobile)
+      setIsKeyboardOpen(isMobile && keyboardDelta > 120)
     }
 
     updateVisualViewportHeight()
@@ -77,14 +84,34 @@ function App() {
       return
     }
 
+    if (isMobileFocusMode) {
+      const styles = window.getComputedStyle(storyInputRef.current)
+      const lineHeight = Number.parseFloat(styles.lineHeight) || 24
+      const padding =
+        (Number.parseFloat(styles.paddingTop) || 0) +
+        (Number.parseFloat(styles.paddingBottom) || 0) +
+        (Number.parseFloat(styles.borderTopWidth) || 0) +
+        (Number.parseFloat(styles.borderBottomWidth) || 0)
+      const minHeight = lineHeight * 2 + padding
+      const maxHeight = lineHeight * 4 + padding
+
+      storyInputRef.current.style.height = 'auto'
+      const nextHeight = Math.min(Math.max(storyInputRef.current.scrollHeight, minHeight), maxHeight)
+      storyInputRef.current.style.height = `${nextHeight}px`
+      storyInputRef.current.style.overflowY = storyInputRef.current.scrollHeight > maxHeight ? 'auto' : 'hidden'
+      return
+    }
+
     if (window.matchMedia('(max-width: 560px)').matches) {
       storyInputRef.current.style.height = ''
+      storyInputRef.current.style.overflowY = 'auto'
       return
     }
 
     storyInputRef.current.style.height = 'auto'
     storyInputRef.current.style.height = `${storyInputRef.current.scrollHeight}px`
-  }, [answer, feedback])
+    storyInputRef.current.style.overflowY = 'hidden'
+  }, [answer, feedback, isMobileFocusMode])
 
   async function submitStory(event) {
     event.preventDefault()
@@ -174,7 +201,7 @@ function App() {
   }
 
   return (
-    <main className={isStoryFocused ? 'app-shell mobile-focus-mode' : 'app-shell'}>
+    <main className={isMobileFocusMode ? 'app-shell mobile-focus-mode' : 'app-shell'}>
       <section className="practice" ref={practiceRef}>
         <div className="mobile-settings" aria-label={copy.mobileSettings.label}>
           <label className="language-control">
@@ -220,7 +247,9 @@ function App() {
             <h1>{copy.app.title}</h1>
             <p className="scene-prompt">{copy.app.scenePrompt}</p>
           </section>
-          <SceneIllustration scene={activeScene} />
+          <div className="scene-visual">
+            <SceneIllustration scene={activeScene} />
+          </div>
           <div className="scene-meta">
             <span>{activeScene.title}</span>
             <div className="scene-stepper" aria-label={copy.sceneNav.label}>
