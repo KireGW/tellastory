@@ -156,14 +156,14 @@ function assertNoText(feedback, pattern, message) {
       ],
       corrections: [
         {
-          original: 'Dad had been up all morning making pancakes',
-          suggestion: 'Dad had been making pancakes all morning',
-          reason: 'This keeps the same meaning and makes the phrase more natural.',
-          grammarFocus: 'past perfect continuous',
+          original: 'your sentence',
+          suggestion: 'The father was cooking pancakes when smoke began to rise, so the grandmother opened the window.',
+          reason: 'Focus on the visible scene actions and use past continuous for the ongoing cooking.',
+          grammarFocus: 'past continuous',
         },
       ],
       rewrite:
-        'Dad had been making pancakes all morning when he suddenly got distracted by the cat and burned the pancakes, so the alarm went off.',
+        'The father was cooking pancakes when smoke began to rise, so the grandmother opened the window.',
       challenge: 'Add one sentence using while to describe what the children were doing during the cooking.',
       detected: {
         verbForms: ['past perfect continuous', 'simple past'],
@@ -193,6 +193,11 @@ function assertNoText(feedback, pattern, message) {
   )
 
   assert.equal(feedback.sceneFit, 'on scene')
+  assert.equal(feedback.taskFit, 'on target')
+  assert.equal(feedback.verdict, 'good-work')
+  assert.match(feedback.rewrite, /cat distracted him|distracted by the cat/i)
+  assert.match(feedback.rewrite, /pancakes burned|burned the pancakes/i)
+  assertNoText(feedback, /grandmother opened the window|smoke began to rise/, 'The rewrite and Try this should preserve the student’s cat-burned-pancakes-alarm chain.')
   assertNoText(feedback, /does not describe[^.?!]*cooking pancakes|visible actions like cooking pancakes/, 'Making pancakes should be treated as the same scene action as cooking pancakes.')
 }
 
@@ -383,6 +388,60 @@ function assertNoText(feedback, pattern, message) {
 
   assert.equal(feedback.verdict, 'excellent')
   assertNoText(feedback, /add what had already happened|something had already happened/, 'Past perfect continuous already satisfies the earlier-past layer.')
+}
+
+{
+  const answer =
+    "Victor had not been following the professor's instructions and when he added the last ingredient the whole mix broke out into a cloud of foam."
+  const feedback = normalizeFeedback(
+    baseFeedback({
+      verdict: 'excellent',
+      taskFit: 'on target',
+      summary: 'The answer uses an earlier ongoing action and a later completed event.',
+      strengths: [
+        'Clear use of past perfect continuous to describe earlier ongoing action',
+        'Simple past used well for the main event',
+        'Logical cause-effect relationship implied',
+      ],
+      corrections: [
+        {
+          original: 'your story',
+          suggestion: 'Keep this sentence. Add a result with so or because.',
+          reason: 'The time relationship is already clear. Now you can show the consequence.',
+          grammarFocus: 'narrative coherence',
+        },
+      ],
+      rewrite: `${answer} As a result, the scene became more chaotic.`,
+      challenge: "Add a sentence using 'because' to explain why the foam overflowed.",
+      detected: {
+        verbForms: ['past perfect continuous', 'simple past'],
+        connectors: ['when', 'and'],
+      },
+    }),
+    {
+      title: 'The science lab',
+      sceneScript: {
+        coreActions: [
+          {
+            id: 'victor-mixing',
+            actor: 'Victor',
+            visibleAs: 'Victor is adding an ingredient to a science experiment.',
+          },
+          {
+            id: 'foam-overflowing',
+            actor: 'foam',
+            visibleAs: 'Foam is overflowing from the beaker.',
+          },
+        ],
+      },
+    },
+    advanced,
+    english,
+    answer,
+  )
+
+  assert.equal(feedback.verdict, 'excellent')
+  assertNoText(feedback, /add a result|using 'because'|using because|explain why/, 'Next step should not ask for a cause/result relationship that is already clear in the answer.')
 }
 
 {

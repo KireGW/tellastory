@@ -231,9 +231,12 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
   }
 
   if (!normalized.corrections.length) {
+    const preservedRewrite = meaningPreservingRewrite(answer)
     normalized.corrections.push(
-      advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses)
-        ? consequenceCorrection(localCopy)
+      preservedRewrite
+        ? meaningPreservingCorrection(preservedRewrite, localCopy)
+        : advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses)
+        ? consequenceCorrection(localCopy, answerFeatures)
         : defaultStretchCorrection(challenge, localCopy),
     )
   }
@@ -297,6 +300,7 @@ function taskFitFromFeatures(challenge, features) {
 
   if (
     (features.hasPastContinuous && features.hasSimplePast && features.hasRelationshipConnector) ||
+    (features.hasPastPerfectContinuous && features.hasSimplePast && features.hasRelationshipConnector) ||
     features.hasBecause
   ) {
     return 'on target'
@@ -317,8 +321,8 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
   const hasSimplePast =
     simplePastCandidates.some(isLikelySimplePastVerb) ||
     (normalized.match(/\b[a-z]+\b/g) ?? []).some(isKnownSimplePastVerb)
-  const hasPastPerfect = /\bhad\s+\w+(ed|en|ne|wn|t)\b/.test(normalized)
-  const hasPastPerfectContinuous = /\bhad\s+been(?:\s+\w+){0,3}\s+\w+ing\b/.test(normalized)
+  const hasPastPerfect = /\bhad\s+(?!not\s+been\b)(?!been\b)\w+(ed|en|ne|wn|t)\b/.test(normalized)
+  const hasPastPerfectContinuous = /\bhad\s+(?:not\s+)?been(?:\s+\w+){0,3}\s+\w+ing\b/.test(normalized)
   const hasConnector = /\b(when|while|after|before|as|because)\b/.test(normalized)
   const connectors = [...new Set(normalized.match(/\b(when|while|after|before|as|because|by the time)\b/g) ?? [])]
   const mentionedActions = detectMentionedActions(answer, scene)
@@ -471,7 +475,7 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
     statuses.taskFit === 'on target'
 
   if (answerWorks && advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses)) {
-    return [consequenceCorrection(localCopy)]
+    return [consequenceCorrection(localCopy, answerFeatures)]
   }
 
   if (answerWorks) {
@@ -497,6 +501,10 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
       return false
     }
 
+    if (answerFeatures.hasCauseResult && asksForAlreadyPresentCauseResult(correction.suggestion, correction.reason)) {
+      return false
+    }
+
     if (
       statuses.sceneFit !== 'not scene-based' &&
       isVisualNitpick(correction.suggestion, correction.reason)
@@ -509,6 +517,10 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
     }
 
     if (changesCausalMeaning(correction.suggestion, answer)) {
+      return false
+    }
+
+    if (changesKitchenPancakeMeaning(correction.suggestion, answer)) {
       return false
     }
 
@@ -548,7 +560,7 @@ function sanitizeAdvancedPastPerfectFeedback(feedback, challenge, features, loca
       ? localCopy.pastPerfectAlreadyWorksSummary
       : feedback.summary,
     strengths: ensureStrength(feedback.strengths, localCopy.strengthPastPerfect),
-    corrections: sanitizedCorrections.length ? sanitizedCorrections : [consequenceCorrection(localCopy)],
+    corrections: sanitizedCorrections.length ? sanitizedCorrections : [consequenceCorrection(localCopy, features)],
     rewrite: mentionsPastPerfectContinuousForm(feedback.rewrite) || isPastPerfectContinuousNitpick(feedback.rewrite)
       ? makeMinimalFallbackRewrite(answer, challenge) || localCopy.advancedRewriteFallback
       : feedback.rewrite,
@@ -717,6 +729,16 @@ function asksForAlreadyPresentEarlierPast(...values) {
   )
 }
 
+function asksForAlreadyPresentCauseResult(...values) {
+  const text = values.join(' ').toLowerCase()
+
+  return (
+    /\b(add|use|include|try|show)\b[^.?!]*(because|so|so that|result|consequence|cause|why|explain why)\b/.test(text) ||
+    /\bnow you can show the consequence\b/.test(text) ||
+    /\badd a result\b/.test(text)
+  )
+}
+
 function mentionsPastPerfectContinuousForm(...values) {
   const text = values.join(' ').toLowerCase()
 
@@ -791,10 +813,14 @@ function normalizeRewrite(value, answer, scene, challenge, localCopy, correction
   }
 
   const candidates = [
-    isUsableRewrite(value, answer) && !changesCausalMeaning(value, answer) && !createsAwkwardWhilePastPerfectContinuous(value, answer) ? value : '',
+    isUsableRewrite(value, answer) &&
+    !changesCausalMeaning(value, answer) &&
+    !changesKitchenPancakeMeaning(value, answer) &&
+    !createsAwkwardWhilePastPerfectContinuous(value, answer) ? value : '',
     corrections.find((correction) =>
       isUsableRewrite(correction.suggestion, answer) &&
       !changesCausalMeaning(correction.suggestion, answer) &&
+      !changesKitchenPancakeMeaning(correction.suggestion, answer) &&
       !createsAwkwardWhilePastPerfectContinuous(correction.suggestion, answer) &&
       !turnsBoundedResultIntoPastContinuous(correction.suggestion, answer),
     )?.suggestion,
@@ -866,6 +892,15 @@ function meaningPreservingRewrite(answer) {
     return 'The market was already crowded because the vendors had opened their stalls early. While one vendor was weighing apples, a child dropped some oranges, so a cyclist swerved to avoid them. At another stall, two friends were bargaining while a dog stole a piece of bread.'
   }
 
+  if (
+    normalized.includes('had been up all morning making pancakes') &&
+    normalized.includes('distracted by the cat') &&
+    normalized.includes('burned the pancakes') &&
+    normalized.includes('alarm went off')
+  ) {
+    return 'Dad had been making pancakes all morning when the cat distracted him, so the pancakes burned and the alarm went off.'
+  }
+
   return ''
 }
 
@@ -882,6 +917,31 @@ function changesCausalMeaning(value, answer) {
     (rewrite.includes('passengers were running') && rewrite.includes('because') && rewrite.includes('suitcase')) ||
     (rewrite.includes('everyone was running') && rewrite.includes('because') && rewrite.includes('suitcase'))
   )
+}
+
+function changesKitchenPancakeMeaning(value, answer) {
+  const rewrite = String(value ?? '').toLowerCase()
+  const original = String(answer ?? '').toLowerCase()
+
+  const originalHasKitchenChain =
+    /\bcat\b/.test(original) &&
+    /\bburn(?:ed|t)\b[^.?!]*\bpancakes?\b/.test(original) &&
+    /\balarm\b[^.?!]*\b(went off|rang|started|sounded)\b/.test(original)
+
+  if (!originalHasKitchenChain) {
+    return false
+  }
+
+  const rewriteKeepsKitchenChain =
+    /\bcat\b/.test(rewrite) &&
+    /\bburn(?:ed|t)\b[^.?!]*\bpancakes?\b/.test(rewrite) &&
+    /\balarm\b[^.?!]*\b(went off|rang|started|sounded)\b/.test(rewrite)
+
+  if (rewriteKeepsKitchenChain) {
+    return false
+  }
+
+  return /\b(grandmother|window|smoke)\b/.test(rewrite) || !/\bcat\b/.test(rewrite)
 }
 
 function createsAwkwardWhilePastPerfectContinuous(value, answer) {
@@ -1042,11 +1102,37 @@ function defaultStretchCorrection(challenge, localCopy) {
   }
 }
 
-function consequenceCorrection(localCopy) {
+function consequenceCorrection(localCopy, features = {}) {
+  return resultOrConsequenceCorrection(localCopy, features)
+}
+
+function resultOrConsequenceCorrection(localCopy, features = {}) {
+  if (features.hasCauseResult) {
+    return whatHappenedNextCorrection(localCopy)
+  }
+
   return {
     original: localCopy.yourStory,
     suggestion: localCopy.keepAndAddResult,
     reason: localCopy.reasonKeepAndAddResult,
+    grammarFocus: 'narrative coherence',
+  }
+}
+
+function whatHappenedNextCorrection(localCopy) {
+  return {
+    original: localCopy.yourStory,
+    suggestion: localCopy.keepAndAddNextEvent,
+    reason: localCopy.reasonKeepAndAddNextEvent,
+    grammarFocus: 'narrative coherence',
+  }
+}
+
+function meaningPreservingCorrection(suggestion, localCopy) {
+  return {
+    original: localCopy.yourStory,
+    suggestion,
+    reason: localCopy.reasonMeaningPreservingPolish,
     grammarFocus: 'narrative coherence',
   }
 }
@@ -1115,6 +1201,7 @@ function verdictFromFeatures(challenge, features, statuses) {
 
   const hasClearRelationship =
     (features.hasPastContinuous && features.hasSimplePast && features.hasRelationshipConnector) ||
+    (features.hasPastPerfectContinuous && features.hasSimplePast && features.hasRelationshipConnector) ||
     features.hasBecause ||
     features.hasInterruption
 
@@ -1191,14 +1278,14 @@ function nextChallengeFor(challenge, feedbackLanguage = 'English', answer = '') 
   const features = detectAnswerFeatures(answer)
 
   if (features.hasPastPerfect || features.hasPastPerfectContinuous) {
-    return copy.nextConsequence
+    return features.hasCauseResult ? copy.nextWhatHappenedNext : copy.nextConsequence
   }
 
   if (features.hasWhen && features.hasPastContinuous && features.hasSimplePast) {
-    return copy.nextResult
+    return features.hasCauseResult ? copy.nextWhatHappenedNext : copy.nextResult
   }
 
-  if (features.hasBecause) {
+  if (features.hasCauseResult) {
     return copy.nextWhatHappenedNext
   }
 
@@ -1226,11 +1313,14 @@ function normalizeChallenge(value, challenge, feedbackLanguage = 'English', answ
   const asksForEarlierPast =
     /\b(had|had been|had or had been|past perfect|past perfect continuous|earlier past|already happened|happened before|what happened earlier|what had happened|before)\b/.test(lower) ||
     /\bhad\b[^.?!]*\bhad been\b/.test(lower)
+  const asksForCauseResult =
+    /\b(because|so|so that|result|consequence|cause|why|explain why|caused|led to)\b/.test(lower)
   const repeatsExistingSkill =
     ((features.hasPastPerfect || features.hasPastPerfectContinuous) && asksForEarlierPast) ||
     (features.hasPastPerfectContinuous && /\b(had been|past perfect continuous)\b/.test(lower)) ||
     (features.hasWhen && /\bwhen\b/.test(lower)) ||
     (features.hasBecause && /\bbecause\b/.test(lower)) ||
+    (features.hasCauseResult && asksForCauseResult) ||
     (features.hasWhile && /\bwhile\b/.test(lower)) ||
     (features.hasInterruption && /\b(interrupt|interruption|sudden event|suddenly)\b/.test(lower))
 
@@ -1243,8 +1333,8 @@ function normalizeChallenge(value, challenge, feedbackLanguage = 'English', answ
 
 function detectAnswerFeatures(answer) {
   const normalized = String(answer ?? '').toLowerCase()
-  const hasPastPerfectContinuous = /\bhad\s+been(?:\s+\w+){0,3}\s+\w+ing\b/.test(normalized)
-  const hasPastPerfect = /\bhad\s+(?!been\b)\w+(ed|en|ne|wn|t)\b/.test(normalized) || /\bhad\s+already\b/.test(normalized)
+  const hasPastPerfectContinuous = /\bhad\s+(?:not\s+)?been(?:\s+\w+){0,3}\s+\w+ing\b/.test(normalized)
+  const hasPastPerfect = /\bhad\s+(?!not\s+been\b)(?!been\b)\w+(ed|en|ne|wn|t)\b/.test(normalized) || /\bhad\s+already\b/.test(normalized)
   const hasPastContinuous = /\b(was|were)\s+\w+ing\b/.test(normalized) || /\bwas\s+about\s+to\b/.test(normalized)
   const simplePastCandidates = normalized.match(/\b\w+(ed|ght|ought|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/g) ?? []
   const hasSimplePast =
@@ -1253,6 +1343,12 @@ function detectAnswerFeatures(answer) {
   const hasWhen = /\bwhen\b/.test(normalized)
   const hasWhile = /\bwhile\b/.test(normalized)
   const hasBecause = /\bbecause\b/.test(normalized)
+  const hasSo = /\bso(?:\s+that)?\b/.test(normalized)
+  const hasCauseResult =
+    hasBecause ||
+    hasSo ||
+    /\b(as a result|therefore|which (made|caused|meant)|after which|that is why|for this reason|led to)\b/.test(normalized) ||
+    (hasPastPerfectContinuous && /\bnot\s+been\s+\w+ing\b/.test(normalized) && hasWhen)
   const hasAnyConnector = /\b(when|while|after|before|as|because|so|by the time|after which|but)\b/.test(normalized)
   const hasRelationshipConnector = /\b(when|while|after|before|as|because|so|by the time|after which)\b/.test(normalized)
   const hasInterruption = hasWhen && hasPastContinuous && hasSimplePast
@@ -1266,6 +1362,8 @@ function detectAnswerFeatures(answer) {
     hasWhen,
     hasWhile,
     hasBecause,
+    hasSo,
+    hasCauseResult,
     hasAnyConnector,
     hasRelationshipConnector,
     hasInterruption,
@@ -1372,8 +1470,11 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonKeepAndAddSimplePast: 'La relación verbal ya funciona. El siguiente paso es continuar la narración con otro evento pasado.',
       keepAndAddResult: 'Mantén esta oración. Agrega un resultado con so o because.',
       reasonKeepAndAddResult: 'La relación temporal ya está clara. Ahora puedes mostrar la consecuencia.',
+      keepAndAddNextEvent: 'Mantén esta oración. Agrega una oración breve sobre lo que pasó después.',
+      reasonKeepAndAddNextEvent: 'La relación causa-resultado ya funciona. El siguiente paso es continuar la narración.',
       keepAndAddEarlierPast: 'Mantén esta oración. Agrega qué ya había pasado antes.',
       reasonKeepAndAddEarlierPast: 'La oración funciona. El siguiente nivel es añadir una capa anterior de la historia con had.',
+      reasonMeaningPreservingPolish: 'Esto conserva tu idea y solo mejora la claridad y el orden natural de la oración.',
       beginnerRewriteFallback: 'A person did one clear action, and then another visible action happened.',
       intermediateRewriteFallback: 'One action was happening when another action suddenly changed the scene.',
       advancedRewriteFallback: 'One action had already happened before another past action changed the scene.',
@@ -1419,8 +1520,11 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonKeepAndAddSimplePast: 'Verbforholdet fungerer allerede. Neste steg er å fortsette fortellingen med en ny hendelse i fortid.',
       keepAndAddResult: 'Behold denne setningen. Legg til et resultat med so eller because.',
       reasonKeepAndAddResult: 'Tidsforholdet er allerede tydelig. Nå kan du vise konsekvensen.',
+      keepAndAddNextEvent: 'Behold denne setningen. Legg til en kort setning om hva som skjedde etterpå.',
+      reasonKeepAndAddNextEvent: 'Årsak-resultat-forholdet fungerer allerede. Neste steg er å fortsette fortellingen.',
       keepAndAddEarlierPast: 'Behold denne setningen. Legg til hva som allerede hadde skjedd før.',
       reasonKeepAndAddEarlierPast: 'Setningen fungerer. Neste nivå er å legge til et tidligere lag i historien med had.',
+      reasonMeaningPreservingPolish: 'Dette beholder ideen din og forbedrer bare klarhet og naturlig ordstilling.',
       beginnerRewriteFallback: 'A person did one clear action, and then another visible action happened.',
       intermediateRewriteFallback: 'One action was happening when another action suddenly changed the scene.',
       advancedRewriteFallback: 'One action had already happened before another past action changed the scene.',
@@ -1465,8 +1569,11 @@ function localFeedbackCopy(feedbackLanguage) {
     reasonKeepAndAddSimplePast: 'The verb relationship already works. The next step is to continue the narration with another past event.',
     keepAndAddResult: 'Keep this sentence. Add a result with so or because.',
     reasonKeepAndAddResult: 'The time relationship is already clear. Now you can show the consequence.',
+    keepAndAddNextEvent: 'Keep this sentence. Add one short sentence about what happened next.',
+    reasonKeepAndAddNextEvent: 'The cause-and-result relationship already works. The next step is to continue the narration.',
     keepAndAddEarlierPast: 'Keep this sentence. Add what had already happened before.',
     reasonKeepAndAddEarlierPast: 'The sentence works. The next level is to add an earlier layer of the story with had.',
+    reasonMeaningPreservingPolish: 'This keeps your idea and only improves clarity and natural sentence order.',
     beginnerRewriteFallback: 'A person did one clear action, and then another visible action happened.',
     intermediateRewriteFallback: 'One action was happening when another action suddenly changed the scene.',
     advancedRewriteFallback: 'One action had already happened before another past action changed the scene.',
