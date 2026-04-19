@@ -252,6 +252,8 @@ function App() {
 
           <form onSubmit={submitStory} className="story-form" autoComplete="off">
             <label htmlFor="storyText">{copy.form.label}</label>
+            {/* Mobile keyboard/autofill controls are browser hints, not guaranteed suppression.
+                Safari/Chrome may still show native accessory bars; full removal needs native app control. */}
             <textarea
               id="storyText"
               name="storyText"
