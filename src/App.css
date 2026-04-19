@@ -719,20 +719,21 @@ h2 {
   }
 
   .mobile-focus-mode {
-    min-height: 100dvh;
-    overflow: visible;
+    height: 100dvh;
+    overflow: hidden;
   }
 
   .mobile-focus-mode .practice {
-    height: auto;
+    height: 100dvh;
     min-height: 0;
-    grid-template-rows: auto auto;
-    align-content: start;
-    overflow: visible;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    display: block;
+    overflow: hidden;
+    padding-bottom: 0;
   }
 
   .mobile-focus-mode .scene-pane {
+    position: fixed;
+    inset: 0 0 auto;
     padding: 6px 12px;
   }
 
@@ -747,9 +748,11 @@ h2 {
   }
 
   .mobile-focus-mode .coach-pane {
-    align-self: start;
-    padding-top: 6px;
-    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    position: fixed;
+    inset: auto 0 calc(8px + env(safe-area-inset-bottom, 0px));
+    z-index: 12;
+    padding: 0 14px;
+    background: #ffffff;
   }
 
   .mobile-focus-mode .story-form {
@@ -767,7 +770,7 @@ h2 {
 
   .mobile-focus-mode .form-actions {
     position: static;
-    padding: 4px 0;
+    padding: 4px 0 0;
     background: #ffffff;
   }
 }
