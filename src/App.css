@@ -719,6 +719,7 @@ h2 {
   }
 
   .mobile-focus-mode {
+    --focus-scene-height: clamp(80px, 16dvh, 120px);
     height: 100dvh;
     overflow: hidden;
   }
@@ -738,7 +739,7 @@ h2 {
   }
 
   .mobile-focus-mode .scene-pane > .scene-art {
-    height: clamp(80px, 16dvh, 120px);
+    height: var(--focus-scene-height);
     min-height: 0;
     max-height: none;
   }
@@ -749,9 +750,11 @@ h2 {
 
   .mobile-focus-mode .coach-pane {
     position: fixed;
-    inset: auto 0 calc(8px + env(safe-area-inset-bottom, 0px));
+    top: calc(var(--focus-scene-height) + 12px);
+    right: 0;
+    left: 0;
     z-index: 12;
-    padding: 0 14px;
+    padding: 6px 14px 0;
     background: #ffffff;
   }
 
@@ -762,9 +765,9 @@ h2 {
   }
 
   .mobile-focus-mode textarea {
-    height: 6.5rem;
-    min-height: 6.5rem;
-    max-height: min(6.5rem, calc(var(--visual-viewport-height, 100dvh) * 0.26));
+    height: 5.75rem;
+    min-height: 5.75rem;
+    max-height: min(5.75rem, calc(var(--visual-viewport-height, 100dvh) * 0.24));
     overflow: auto;
   }
 
