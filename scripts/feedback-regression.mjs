@@ -179,6 +179,48 @@ function assertNoText(feedback, pattern, message) {
 }
 
 {
+  const answer =
+    'Lisa had been out drinking all night, so when she fell asleep she slept so deeply that she did not hear the knocking on the door.'
+  const feedback = normalizeFeedback(
+    baseFeedback({
+      verdict: 'good-start',
+      taskFit: 'partly on target',
+      summary: 'The sentence uses past perfect continuous and simple past.',
+      corrections: [],
+      rewrite: answer,
+      challenge: 'Now add one sentence with had or had been to show what happened earlier.',
+      detected: {
+        verbForms: ['past perfect continuous', 'simple past'],
+        connectors: ['so', 'when'],
+      },
+    }),
+    {
+      title: 'The midnight knock',
+      sceneScript: {
+        coreActions: [
+          {
+            id: 'woman-sleeping',
+            actor: 'woman',
+            visibleAs: 'The woman is asleep under the blanket.',
+          },
+          {
+            id: 'stranger-knocked',
+            actor: 'stranger',
+            visibleAs: 'A shadowy person is knocking on the closed door.',
+          },
+        ],
+      },
+    },
+    intermediate,
+    english,
+    answer,
+  )
+
+  assert.notEqual(feedback.challenge, 'Now add one sentence with had or had been to show what happened earlier.')
+  assertNoText(feedback, /had or had been|what happened earlier/, 'Next step should not ask for an earlier-past form already present in the answer.')
+}
+
+{
   const answer = 'Dad had been making pancakes for an hour when the smoke alarm started ringing.'
   const feedback = normalizeFeedback(
     baseFeedback({

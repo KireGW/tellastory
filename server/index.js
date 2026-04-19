@@ -307,7 +307,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
     simplePastCandidates.some(isLikelySimplePastVerb) ||
     (normalized.match(/\b[a-z]+\b/g) ?? []).some(isKnownSimplePastVerb)
   const hasPastPerfect = /\bhad\s+\w+(ed|en|ne|wn|t)\b/.test(normalized)
-  const hasPastPerfectContinuous = /\bhad\s+been\s+\w+ing\b/.test(normalized)
+  const hasPastPerfectContinuous = /\bhad\s+been(?:\s+\w+){0,3}\s+\w+ing\b/.test(normalized)
   const hasConnector = /\b(when|while|after|before|as|because)\b/.test(normalized)
   const connectors = [...new Set(normalized.match(/\b(when|while|after|before|as|because|by the time)\b/g) ?? [])]
   const mentionedActions = detectMentionedActions(answer, scene)
@@ -1161,8 +1161,11 @@ function normalizeChallenge(value, challenge, feedbackLanguage = 'English', answ
   const features = detectAnswerFeatures(answer)
   const startsLikeTask = /^(add|rewrite|try|use|describe|explain|connect|include|change|make|practice)\b/.test(lower)
   const containsStoryVerb = /\b(was|were|had|dropped|swerved|knocked|jumped|stole|slept|weighed|weighing|sleeping|falling|rolling)\b/.test(lower)
+  const asksForEarlierPast =
+    /\b(had|had been|had or had been|past perfect|past perfect continuous|earlier past|already happened|happened before|what happened earlier|what had happened|before)\b/.test(lower) ||
+    /\bhad\b[^.?!]*\bhad been\b/.test(lower)
   const repeatsExistingSkill =
-    ((features.hasPastPerfect || features.hasPastPerfectContinuous) && /\b(had|had been|past perfect|already happened|happened before|before)\b/.test(lower)) ||
+    ((features.hasPastPerfect || features.hasPastPerfectContinuous) && asksForEarlierPast) ||
     (features.hasPastPerfectContinuous && /\b(had been|past perfect continuous)\b/.test(lower)) ||
     (features.hasWhen && /\bwhen\b/.test(lower)) ||
     (features.hasBecause && /\bbecause\b/.test(lower)) ||
@@ -1178,7 +1181,7 @@ function normalizeChallenge(value, challenge, feedbackLanguage = 'English', answ
 
 function detectAnswerFeatures(answer) {
   const normalized = String(answer ?? '').toLowerCase()
-  const hasPastPerfectContinuous = /\bhad\s+been\s+\w+ing\b/.test(normalized)
+  const hasPastPerfectContinuous = /\bhad\s+been(?:\s+\w+){0,3}\s+\w+ing\b/.test(normalized)
   const hasPastPerfect = /\bhad\s+(?!been\b)\w+(ed|en|ne|wn|t)\b/.test(normalized) || /\bhad\s+already\b/.test(normalized)
   const hasPastContinuous = /\b(was|were)\s+\w+ing\b/.test(normalized) || /\bwas\s+about\s+to\b/.test(normalized)
   const simplePastCandidates = normalized.match(/\b\w+(ed|ght|ought|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/g) ?? []
