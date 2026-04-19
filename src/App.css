@@ -712,32 +712,51 @@ h2 {
     grid-template-columns: 1fr;
   }
 
-  .practice:has(#storyText:focus) .scene-pane {
+  .mobile-focus-mode .scene-bank,
+  .mobile-focus-mode .hint-slot {
+    display: none;
+  }
+
+  .mobile-focus-mode .practice {
+    min-height: var(--visual-viewport-height, 100dvh);
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-focus-mode .scene-pane {
     padding: 6px 12px;
   }
 
-  .practice:has(#storyText:focus) .scene-pane > .scene-art {
+  .mobile-focus-mode .scene-pane > .scene-art {
     max-height: min(16dvh, calc(var(--visual-viewport-height, 100dvh) * 0.2));
     min-height: 78px;
   }
 
-  .practice:has(#storyText:focus) .scene-meta {
+  .mobile-focus-mode .scene-meta {
     display: none;
   }
 
-  .practice:has(#storyText:focus) .coach-pane {
+  .mobile-focus-mode .coach-pane {
     padding-top: 8px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   }
 
-  .practice:has(#storyText:focus) .story-form {
+  .mobile-focus-mode .story-form {
     gap: 6px;
     scroll-margin-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   }
 
-  .practice:has(#storyText:focus) textarea {
+  .mobile-focus-mode textarea {
     height: 6.5rem;
     min-height: 6.5rem;
     max-height: min(6.5rem, calc(var(--visual-viewport-height, 100dvh) * 0.26));
     overflow: auto;
+  }
+
+  .mobile-focus-mode .form-actions {
+    position: sticky;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    z-index: 11;
+    padding: 4px 0;
+    background: #ffffff;
   }
 }

@@ -11,6 +11,7 @@ function App() {
   const [feedback, setFeedback] = useState(null)
   const [isChecking, setIsChecking] = useState(false)
   const [isGrammarOpen, setIsGrammarOpen] = useState(false)
+  const [isStoryFocused, setIsStoryFocused] = useState(false)
   const [hintIndex, setHintIndex] = useState(null)
   const [error, setError] = useState('')
   const feedbackRef = useRef(null)
@@ -173,7 +174,7 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={isStoryFocused ? 'app-shell mobile-focus-mode' : 'app-shell'}>
       <section className="practice" ref={practiceRef}>
         <div className="mobile-settings" aria-label={copy.mobileSettings.label}>
           <label className="language-control">
@@ -283,6 +284,8 @@ function App() {
               ref={storyInputRef}
               value={answer}
               onChange={(event) => setAnswer(event.target.value)}
+              onFocus={() => setIsStoryFocused(true)}
+              onBlur={() => setIsStoryFocused(false)}
               placeholder=""
               rows={storyRows}
               autoComplete="off"
