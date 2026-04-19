@@ -719,15 +719,16 @@ h2 {
   }
 
   .mobile-focus-mode {
-    height: 100dvh;
-    overflow: hidden;
+    min-height: 100dvh;
+    overflow: visible;
   }
 
   .mobile-focus-mode .practice {
-    height: 100dvh;
+    height: auto;
     min-height: 0;
-    grid-template-rows: auto minmax(0, 1fr);
-    overflow: hidden;
+    grid-template-rows: auto auto;
+    align-content: start;
+    overflow: visible;
     padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   }
 
@@ -736,8 +737,9 @@ h2 {
   }
 
   .mobile-focus-mode .scene-pane > .scene-art {
-    max-height: min(16dvh, calc(var(--visual-viewport-height, 100dvh) * 0.2));
-    min-height: 78px;
+    height: clamp(80px, 16dvh, 120px);
+    min-height: 0;
+    max-height: none;
   }
 
   .mobile-focus-mode .scene-meta {
@@ -745,14 +747,14 @@ h2 {
   }
 
   .mobile-focus-mode .coach-pane {
-    align-self: end;
-    padding-top: 8px;
+    align-self: start;
+    padding-top: 6px;
     padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   }
 
   .mobile-focus-mode .story-form {
     gap: 6px;
-    max-height: calc(100dvh - 112px);
+    max-height: none;
     overflow: hidden;
   }
 
