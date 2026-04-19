@@ -132,6 +132,13 @@ function App() {
     setHintIndex((current) => (current === null ? 0 : (current + 1) % hints.length))
   }
 
+  function chooseChallenge(id) {
+    setChallengeMode(id)
+    setFeedback(null)
+    setHintIndex(null)
+    setError('')
+  }
+
   function focusStoryRevision() {
     setFeedback(null)
     setHintIndex(null)
@@ -145,6 +152,44 @@ function App() {
   return (
     <main className="app-shell">
       <section className="practice" ref={practiceRef}>
+        <div className="mobile-settings" aria-label={copy.mobileSettings.label}>
+          <label className="language-control">
+            <span>{copy.app.language}</span>
+            <select value={uiLanguage} onChange={(event) => setUiLanguage(event.target.value)}>
+              {Object.entries(languageOptions).map(([id, option]) => (
+                <option key={id} value={id}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <section className="challenge-box mobile-challenge-box" aria-labelledby="challenge-title-mobile">
+            <div className="challenge-heading">
+              <p className="section-kicker" id="challenge-title-mobile">{copy.task.title}</p>
+              <button
+                type="button"
+                className="info-button"
+                aria-label={copy.grammar.open}
+                onClick={() => setIsGrammarOpen(true)}
+              >
+                i
+              </button>
+            </div>
+            <div className="challenge-tabs" role="group" aria-label={copy.task.level}>
+              {Object.entries(challengeOptions).map(([id, option]) => (
+                <button
+                  className={id === challengeMode ? 'challenge-tab active' : 'challenge-tab'}
+                  type="button"
+                  key={id}
+                  onClick={() => chooseChallenge(id)}
+                >
+                  {copy.challengeLabels[id] ?? option.label}
+                </button>
+              ))}
+            </div>
+            <p className="challenge-prompt">{copy.challengePrompts[challengeMode] ?? activeChallenge.prompt}</p>
+          </section>
+        </div>
+
         <div className="scene-pane">
           <section className="instruction-panel">
             <p className="eyebrow app-title-label">{copy.app.eyebrow}</p>
@@ -196,12 +241,7 @@ function App() {
                   className={id === challengeMode ? 'challenge-tab active' : 'challenge-tab'}
                   type="button"
                   key={id}
-                  onClick={() => {
-                    setChallengeMode(id)
-                    setFeedback(null)
-                    setHintIndex(null)
-                    setError('')
-                  }}
+                  onClick={() => chooseChallenge(id)}
                 >
                   {copy.challengeLabels[id] ?? option.label}
                 </button>
@@ -210,15 +250,26 @@ function App() {
             <p className="challenge-prompt">{copy.challengePrompts[challengeMode] ?? activeChallenge.prompt}</p>
           </section>
 
-          <form onSubmit={submitStory} className="story-form">
+          <form onSubmit={submitStory} className="story-form" autoComplete="off">
             <label htmlFor="story-answer">{copy.form.label}</label>
             <textarea
               id="story-answer"
+              name="past-narration-story"
               ref={storyInputRef}
               value={answer}
               onChange={(event) => setAnswer(event.target.value)}
               placeholder=""
               rows={storyRows}
+              autoComplete="off"
+              autoCorrect="on"
+              autoCapitalize="sentences"
+              spellCheck="true"
+              inputMode="text"
+              enterKeyHint="done"
+              data-form-type="other"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-bwignore="true"
             />
             {error ? <p className="form-error">{error}</p> : null}
             <div className="form-actions">
@@ -512,6 +563,7 @@ const translations = {
       waitingText: 'Write your story and check your verbs to see coaching without leaving the scene.',
     },
     bank: { title: 'Select a practice scene' },
+    mobileSettings: { label: 'Mobile lesson settings' },
     sceneNav: {
       label: 'Scene navigation',
       previous: 'Previous scene',
@@ -596,6 +648,7 @@ const translations = {
       waitingText: 'Escribe tu historia y revisa tus verbos para ver la ayuda sin salir de la escena.',
     },
     bank: { title: 'Selecciona una escena de práctica' },
+    mobileSettings: { label: 'Ajustes móviles de la lección' },
     sceneNav: {
       label: 'Navegación de escenas',
       previous: 'Escena anterior',
@@ -680,6 +733,7 @@ const translations = {
       waitingText: 'Skriv historien din og sjekk verbene for å se veiledningen uten å forlate scenen.',
     },
     bank: { title: 'Velg en øvingsscene' },
+    mobileSettings: { label: 'Mobilinnstillinger for økten' },
     sceneNav: {
       label: 'Scenenavigasjon',
       previous: 'Forrige scene',

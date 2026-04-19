@@ -85,6 +85,10 @@
   text-align: left;
 }
 
+.mobile-settings {
+  display: none;
+}
+
 .coach-topbar {
   display: flex;
   align-items: center;
@@ -616,6 +620,28 @@ h2 {
     border-bottom: 0;
   }
 
+  .mobile-settings {
+    display: grid;
+    gap: 8px;
+    padding: 10px 14px 8px;
+    background: #fbfdf9;
+  }
+
+  .mobile-settings .language-control {
+    justify-content: flex-end;
+  }
+
+  .mobile-settings .mobile-challenge-box {
+    min-height: 0;
+    padding: 8px;
+  }
+
+  .mobile-settings .challenge-prompt {
+    min-height: 0;
+    margin: 0;
+    font-size: 13px;
+  }
+
   .scene-pane {
     position: sticky;
     top: 0;
@@ -639,6 +665,11 @@ h2 {
 
   .scene-meta {
     font-size: 11px;
+  }
+
+  .coach-pane > .coach-topbar,
+  .coach-pane > .challenge-box {
+    display: none;
   }
 
   .coach-pane {
@@ -676,11 +707,6 @@ h2 {
   }
 
   .practice:has(#story-answer:focus) .scene-meta {
-    display: none;
-  }
-
-  .practice:has(#story-answer:focus) .coach-topbar,
-  .practice:has(#story-answer:focus) .challenge-box {
     display: none;
   }
 
