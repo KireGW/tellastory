@@ -21,23 +21,12 @@ function App() {
   const [isSceneDragging, setIsSceneDragging] = useState(false)
   const [isSceneTrackAnimating, setIsSceneTrackAnimating] = useState(false)
   const [pendingSceneHandoffIndex, setPendingSceneHandoffIndex] = useState(null)
-  const [scenePeekOffset, setScenePeekOffset] = useState(0)
-  const [isScenePeeking, setIsScenePeeking] = useState(false)
   const feedbackRef = useRef(null)
   const practiceRef = useRef(null)
   const storyInputRef = useRef(null)
   const scenePaneRef = useRef(null)
   const sceneViewportRef = useRef(null)
   const pendingFeedbackAnchorRef = useRef(false)
-  const scenePeekRef = useRef({
-    startX: 0,
-    startY: 0,
-    startOffset: 0,
-    startDistance: 0,
-    tracking: false,
-    vertical: false,
-    pinch: false,
-  })
   const sceneSwipeRef = useRef({
     startX: 0,
     startY: 0,
@@ -70,7 +59,6 @@ function App() {
       : copy.app.scenePrompt
   const showMobileGhostText = isMobileViewport && !answer.trim() && !feedback
   const showMobileInlineHint = isMobileViewport && Boolean(activeHint) && Boolean(answer.trim()) && !feedback
-  const scenePeekProgress = Math.min(scenePeekOffset, 220) / 220
 
   useEffect(() => {
     if (!feedback || !feedbackRef.current) {
@@ -288,21 +276,6 @@ function App() {
   }
 
   function handleSceneTouchStart(event) {
-    if (isMobileFocusMode) {
-      const touch = event.touches[0]
-      const startDistance = event.touches.length === 2 ? getTouchDistance(event.touches[0], event.touches[1]) : 0
-      scenePeekRef.current = {
-        startX: touch.clientX,
-        startY: touch.clientY,
-        startOffset: scenePeekOffset,
-        startDistance,
-        tracking: true,
-        vertical: false,
-        pinch: event.touches.length === 2,
-      }
-      return
-    }
-
     if (!isMobileViewport || isStoryFocused) {
       sceneSwipeRef.current.tracking = false
       return
@@ -323,56 +296,6 @@ function App() {
   }
 
   function handleSceneTouchMove(event) {
-    if (isMobileFocusMode) {
-      if (!scenePeekRef.current.tracking) {
-        return
-      }
-
-      if (event.touches.length === 2 || scenePeekRef.current.pinch) {
-        if (event.touches.length < 2) {
-          return
-        }
-
-        const distance = getTouchDistance(event.touches[0], event.touches[1])
-        const baseDistance = scenePeekRef.current.startDistance || distance
-        const scaleDelta = distance / baseDistance - 1
-        const nextOffset = Math.min(Math.max(scenePeekRef.current.startOffset + scaleDelta * 260, 0), 220)
-
-        event.preventDefault()
-        scenePeekRef.current.pinch = true
-        setIsScenePeeking(nextOffset > 0)
-        setScenePeekOffset(nextOffset)
-        return
-      }
-
-      const touch = event.touches[0]
-      const deltaX = touch.clientX - scenePeekRef.current.startX
-      const deltaY = touch.clientY - scenePeekRef.current.startY
-      const absX = Math.abs(deltaX)
-      const absY = Math.abs(deltaY)
-
-      if (!scenePeekRef.current.vertical) {
-        if (absX < 8 && absY < 8) {
-          return
-        }
-
-        if (deltaY <= 0 || absY <= absX * 1.1) {
-          scenePeekRef.current.tracking = false
-          scenePeekRef.current.pinch = false
-          setScenePeekOffset(0)
-          setIsScenePeeking(false)
-          return
-        }
-
-        scenePeekRef.current.vertical = true
-      }
-
-      event.preventDefault()
-      setIsScenePeeking(true)
-      setScenePeekOffset(Math.min(Math.max(scenePeekRef.current.startOffset + deltaY * 0.9, 0), 220))
-      return
-    }
-
     if (!sceneSwipeRef.current.tracking || !isMobileViewport || isStoryFocused) {
       return
     }
@@ -408,29 +331,6 @@ function App() {
   }
 
   function handleSceneTouchEnd(event) {
-    if (isMobileFocusMode) {
-      if (event.touches.length > 0) {
-        const touch = event.touches[0]
-        scenePeekRef.current = {
-          startX: touch.clientX,
-          startY: touch.clientY,
-          startOffset: scenePeekOffset,
-          startDistance: event.touches.length === 2 ? getTouchDistance(event.touches[0], event.touches[1]) : 0,
-          tracking: true,
-          vertical: false,
-          pinch: event.touches.length === 2,
-        }
-        return
-      }
-
-      scenePeekRef.current.tracking = false
-      scenePeekRef.current.vertical = false
-      scenePeekRef.current.pinch = false
-      setIsScenePeeking(false)
-      setScenePeekOffset(0)
-      return
-    }
-
     if (!sceneSwipeRef.current.tracking || !isMobileViewport || isStoryFocused) {
       sceneSwipeRef.current.tracking = false
       return
@@ -533,31 +433,15 @@ function App() {
     setAnswer(event.target.value)
   }
 
-  function renderFocusSceneArtwork() {
-    return (
-      <div
-        className="scene-visual-stack"
-        style={{
-          '--scene-peek-offset': `${scenePeekOffset}px`,
-          '--scene-peek-progress': `${scenePeekProgress}`,
-        }}
-      >
-        <div className="scene-visual-base is-cover">
-          <SceneIllustration scene={activeScene} />
-        </div>
-        <div className="scene-visual-layer is-contain" aria-hidden="true">
-          <SceneIllustration scene={activeScene} />
-        </div>
-      </div>
-    )
-  }
-
   return (
     <main className={isMobileFocusMode ? 'app-shell mobile-focus-mode' : 'app-shell'}>
       <section className="practice" ref={practiceRef}>
         <div className="mobile-settings" aria-label={copy.mobileSettings.label}>
           <div className="mobile-topbar">
-            <p className="eyebrow mobile-app-title">{copy.app.eyebrow}</p>
+            <div className="mobile-app-brand">
+              <p className="mobile-app-title">{copy.app.title}</p>
+              <p className="mobile-app-subtitle">{copy.app.subtitle}</p>
+            </div>
             <button
               type="button"
               className="mobile-menu-button ghost"
@@ -617,14 +501,13 @@ function App() {
 
         <div className="scene-pane" ref={scenePaneRef}>
           <section className="instruction-panel">
-            <p className="eyebrow app-title-label">{copy.app.eyebrow}</p>
             <h1>{copy.app.title}</h1>
+            <p className="app-subtitle">{copy.app.subtitle}</p>
             <p className="scene-prompt">{copy.app.scenePrompt}</p>
           </section>
           <div
             className={[
               isMobileViewport && !isMobileFocusMode ? 'scene-visual is-swipeable' : 'scene-visual',
-              isMobileFocusMode && (isScenePeeking || scenePeekOffset > 0) ? 'is-peeking' : '',
             ].filter(Boolean).join(' ')}
             ref={sceneViewportRef}
             onTouchStart={handleSceneTouchStart}
@@ -651,8 +534,6 @@ function App() {
                   <SceneIllustration scene={nextScene} />
                 </div>
               </div>
-            ) : isMobileFocusMode ? (
-              renderFocusSceneArtwork()
             ) : (
               <SceneIllustration scene={activeScene} />
             )}
@@ -1030,13 +911,6 @@ function getFeedbackTone(copy, feedback) {
   return copy.feedback.verdicts[feedback.verdict] ?? copy.feedback.verdicts['good-start']
 }
 
-function getTouchDistance(firstTouch, secondTouch) {
-  const deltaX = secondTouch.clientX - firstTouch.clientX
-  const deltaY = secondTouch.clientY - firstTouch.clientY
-
-  return Math.hypot(deltaX, deltaY)
-}
-
 const languageOptions = {
   en: { label: 'English', feedbackName: 'English' },
   es: { label: 'Español', feedbackName: 'Spanish' },
@@ -1047,8 +921,9 @@ const translations = {
   en: {
     app: {
       eyebrow: 'English past narration trainer',
-      title: 'Tell what was happening, what happened, and what had happened before.',
+      title: 'Tell a story',
       scenePrompt: 'Look at the scene. Tell the story in the past.',
+      subtitle: 'English past narration trainer',
       language: 'Feedback language',
       languageHelp: 'You always write in English. Feedback can be shown in another language.',
       grammarFocus: 'Grammar focus',
@@ -1160,8 +1035,9 @@ const translations = {
   es: {
     app: {
       eyebrow: 'Entrenador de narración en pasado en inglés',
-      title: 'Cuenta qué estaba pasando, qué pasó y qué había pasado antes.',
+      title: 'Cuenta una historia',
       scenePrompt: 'Mira la escena. Cuenta la historia en pasado.',
+      subtitle: 'Entrenador de narración en pasado en inglés',
       language: 'Idioma de ayuda',
       languageHelp: 'Siempre escribes en inglés. La retroalimentación puede mostrarse en otro idioma.',
       grammarFocus: 'Enfoque gramatical',
@@ -1273,8 +1149,9 @@ const translations = {
   sv: {
     app: {
       eyebrow: 'Träning i engelsk berättande i dåtid',
-      title: 'Berätta vad som pågick, vad som hände och vad som hade hänt före det.',
+      title: 'Berätta en historia',
       scenePrompt: 'Titta på scenen. Berätta historien i dåtid.',
+      subtitle: 'Träning i engelsk berättande i dåtid',
       language: 'Språk för feedback',
       languageHelp: 'Du skriver alltid på engelska. Feedbacken kan visas på ett annat språk.',
       grammarFocus: 'Grammatiskt fokus',

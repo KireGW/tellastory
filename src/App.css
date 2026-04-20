@@ -201,9 +201,18 @@ h1 {
   line-height: 1.04;
 }
 
+.app-subtitle {
+  margin: 4px 0 0;
+  color: #53665f;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
 .scene-prompt {
   max-width: 680px;
-  margin-top: 8px;
+  margin-top: 6px;
   color: var(--text);
   font-size: 14px;
 }
@@ -740,19 +749,43 @@ h2 {
 
   .mobile-topbar {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
   }
 
+  .mobile-app-brand {
+    min-width: 0;
+    display: grid;
+    gap: 1px;
+  }
+
   .mobile-app-title {
     display: block;
-    margin-bottom: 0;
-    font-size: 13px;
+    margin: 0;
+    color: var(--text-h);
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1.02;
+  }
+
+  .mobile-app-subtitle {
+    margin: 0;
+    color: #53665f;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.15;
+    text-transform: uppercase;
+  }
+
+  .app-subtitle {
+    margin-top: 2px;
+    font-size: 11px;
   }
 
   .mobile-menu-button {
     display: inline-flex;
+    flex: 0 0 auto;
     min-width: 34px;
     min-height: 34px;
     align-items: center;
@@ -947,60 +980,18 @@ h2 {
   .mobile-focus-mode .scene-visual {
     display: block;
     height: auto;
-    min-height: 0;
+    min-height: clamp(140px, 32dvh, 320px);
     overflow: hidden;
     position: relative;
     z-index: 3;
   }
 
-  .mobile-focus-mode .scene-visual-stack {
-    position: relative;
-    width: 100%;
-    min-height: clamp(140px, 32dvh, 320px);
-    padding-bottom: var(--scene-peek-offset, 0px);
-    box-sizing: border-box;
-    transform-origin: top center;
-    transition: padding-bottom 120ms linear;
-  }
-
-  .mobile-focus-mode .scene-visual-base {
-    width: 100%;
-    height: clamp(140px, 32dvh, 320px);
-  }
-
-  .mobile-focus-mode .scene-visual-layer {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-  }
-
-  .mobile-focus-mode .scene-visual-base > .scene-art,
-  .mobile-focus-mode .scene-visual-layer > .scene-art,
   .mobile-focus-mode .scene-pane > .scene-visual > .scene-art {
     width: 100%;
-    height: 100%;
-    min-height: 0;
-    max-height: 100%;
-    aspect-ratio: auto;
-    transform-origin: top center;
-    transition: opacity 120ms linear, box-shadow 160ms ease;
-  }
-
-  .mobile-focus-mode .scene-visual-base.is-cover > .scene-art {
+    min-height: clamp(140px, 32dvh, 320px);
+    max-height: clamp(140px, 32dvh, 320px);
+    aspect-ratio: 16 / 9;
     object-fit: cover;
-    opacity: calc(1 - var(--scene-peek-progress, 0));
-  }
-
-  .mobile-focus-mode .scene-visual-layer.is-contain > .scene-art {
-    object-fit: contain;
-    opacity: var(--scene-peek-progress, 0);
-    box-shadow: 0 20px 32px rgba(22, 30, 28, calc(var(--scene-peek-progress, 0) * 0.24));
-  }
-
-  .mobile-focus-mode .scene-visual.is-peeking {
-    overflow: visible;
   }
 
   .mobile-focus-mode .scene-meta {
