@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { SceneIllustration } from './components/SceneIllustration.jsx'
 import { scenes } from './data/scenes.js'
@@ -20,12 +19,14 @@ function App() {
   const [sceneDragOffset, setSceneDragOffset] = useState(0)
   const [isSceneDragging, setIsSceneDragging] = useState(false)
   const [isSceneTrackAnimating, setIsSceneTrackAnimating] = useState(false)
+  const [pendingSceneHandoffIndex, setPendingSceneHandoffIndex] = useState(null)
   const [scenePeekOffset, setScenePeekOffset] = useState(0)
   const [isScenePeeking, setIsScenePeeking] = useState(false)
   const feedbackRef = useRef(null)
   const practiceRef = useRef(null)
   const storyInputRef = useRef(null)
   const sceneViewportRef = useRef(null)
+  const pendingFeedbackAnchorRef = useRef(false)
   const scenePeekRef = useRef({
     startX: 0,
     startY: 0,
@@ -73,6 +74,12 @@ function App() {
 
     const firstFrame = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
+        if (pendingFeedbackAnchorRef.current) {
+          pendingFeedbackAnchorRef.current = false
+          scrollFeedbackToTopUnderScene(feedbackRef.current)
+          return
+        }
+
         scrollFeedbackOnlyIfNeeded(feedbackRef.current)
       })
     })
@@ -109,6 +116,24 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(storageKeys.challengeMode, challengeMode)
   }, [challengeMode])
+
+  useLayoutEffect(() => {
+    if (pendingSceneHandoffIndex === null) {
+      return
+    }
+
+    const nextScene = scenes[pendingSceneHandoffIndex]
+
+    setActiveId(nextScene.id)
+    setAnswer('')
+    setFeedback(null)
+    setHintIndex(null)
+    setError('')
+    setSceneDragOffset(0)
+    setIsSceneDragging(false)
+    setIsSceneTrackAnimating(false)
+    setPendingSceneHandoffIndex(null)
+  }, [pendingSceneHandoffIndex])
 
   useEffect(() => {
     if (!storyInputRef.current) {
@@ -186,6 +211,7 @@ function App() {
       setFeedback(nextFeedback)
 
       if (shouldExitFocusAfterFeedback) {
+        pendingFeedbackAnchorRef.current = true
         requestAnimationFrame(() => {
           setIsStoryFocused(false)
           storyInputRef.current?.blur()
@@ -378,12 +404,9 @@ function App() {
       return
     }
 
+    const nextIndex = (activeSceneIndex + pendingOffset + scenes.length) % scenes.length
     sceneSwipeRef.current.pendingOffset = 0
-    flushSync(() => {
-      chooseSceneByOffset(pendingOffset, { scrollToPractice: false, preserveSceneTrack: true })
-      setIsSceneTrackAnimating(false)
-      setSceneDragOffset(0)
-    })
+    setPendingSceneHandoffIndex(nextIndex)
   }
 
   function addHint() {
@@ -829,6 +852,21 @@ function scrollFeedbackOnlyIfNeeded(element) {
     : -clippedTop
 
   window.scrollBy({ top: delta, behavior: 'smooth' })
+}
+
+function scrollFeedbackToTopUnderScene(element) {
+  if (!element) {
+    return
+  }
+
+  const scenePane = document.querySelector('.scene-pane')
+  const stickyOffset = scenePane ? scenePane.getBoundingClientRect().height : 0
+  const top = window.scrollY + element.getBoundingClientRect().top - stickyOffset - 8
+
+  window.scrollTo({
+    top: Math.max(0, top),
+    behavior: 'smooth',
+  })
 }
 
 function buildHints(scene, challengeMode) {
