@@ -1397,7 +1397,7 @@ const translations = {
     },
     form: {
       label: 'Tu historia',
-      submit: 'Revisar mis verbos',
+      submit: 'Revisar mi historia',
       checking: 'Revisando...',
       hint: 'Dame una pista',
       clear: 'Borrar',
@@ -1508,7 +1508,7 @@ const translations = {
     },
     form: {
       label: 'Din historia',
-      submit: 'Kolla min historia',
+      submit: 'Kolla min berättelse',
       checking: 'Kollar...',
       hint: 'Ge mig en ledtråd',
       clear: 'Rensa',
