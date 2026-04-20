@@ -843,9 +843,10 @@ h2 {
     grid-template-rows: minmax(0, 1fr);
     gap: 4px;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
     padding: 8px 12px 8px;
     box-shadow: none;
+    z-index: 2;
   }
 
   .mobile-focus-mode .scene-visual {
@@ -854,6 +855,8 @@ h2 {
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    position: relative;
+    z-index: 3;
   }
 
   .mobile-focus-mode .scene-pane > .scene-visual > .scene-art {
@@ -863,6 +866,17 @@ h2 {
     max-height: 100%;
     aspect-ratio: auto;
     object-fit: contain;
+    transform-origin: top center;
+    transition: transform 180ms ease, box-shadow 180ms ease;
+  }
+
+  .mobile-focus-mode .scene-visual.is-peeking {
+    overflow: visible;
+  }
+
+  .mobile-focus-mode .scene-pane > .scene-visual.is-peeking > .scene-art {
+    transform: translateY(calc(var(--scene-peek-offset, 0px) * 0.14)) scale(var(--scene-peek-scale, 1));
+    box-shadow: 0 20px 32px rgba(22, 30, 28, 0.24);
   }
 
   .mobile-focus-mode .scene-meta {

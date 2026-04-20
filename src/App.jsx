@@ -20,10 +20,18 @@ function App() {
   const [sceneDragOffset, setSceneDragOffset] = useState(0)
   const [isSceneDragging, setIsSceneDragging] = useState(false)
   const [isSceneTrackAnimating, setIsSceneTrackAnimating] = useState(false)
+  const [scenePeekOffset, setScenePeekOffset] = useState(0)
+  const [isScenePeeking, setIsScenePeeking] = useState(false)
   const feedbackRef = useRef(null)
   const practiceRef = useRef(null)
   const storyInputRef = useRef(null)
   const sceneViewportRef = useRef(null)
+  const scenePeekRef = useRef({
+    startX: 0,
+    startY: 0,
+    tracking: false,
+    vertical: false,
+  })
   const sceneSwipeRef = useRef({
     startX: 0,
     startY: 0,
@@ -56,6 +64,7 @@ function App() {
       : copy.app.scenePrompt
   const showMobileGhostText = isMobileViewport && !answer.trim() && !feedback
   const showMobileInlineHint = isMobileViewport && Boolean(activeHint) && Boolean(answer.trim()) && !feedback
+  const scenePeekScale = 1 + Math.min(scenePeekOffset, 180) / 260
 
   useEffect(() => {
     if (!feedback || !feedbackRef.current) {
@@ -135,14 +144,18 @@ function App() {
     storyInputRef.current.style.overflowY = 'hidden'
   }, [answer, feedback, isMobileFocusMode])
 
-  async function submitStory(event) {
-    event.preventDefault()
+  async function runStoryCheck() {
     setError('')
     setFeedback(null)
 
     if (answer.trim().split(/\s+/).length < 8) {
       setError(copy.errors.tooShort)
       return
+    }
+
+    if (isMobileFocusMode) {
+      setIsStoryFocused(false)
+      storyInputRef.current?.blur()
     }
 
     setIsChecking(true)
@@ -181,6 +194,11 @@ function App() {
     }
   }
 
+  async function submitStory(event) {
+    event.preventDefault()
+    await runStoryCheck()
+  }
+
   function chooseScene(sceneId, options = {}) {
     const { scrollToPractice = true, preserveSceneTrack = false } = options
     setActiveId(sceneId)
@@ -209,6 +227,17 @@ function App() {
   }
 
   function handleSceneTouchStart(event) {
+    if (isMobileFocusMode) {
+      const touch = event.touches[0]
+      scenePeekRef.current = {
+        startX: touch.clientX,
+        startY: touch.clientY,
+        tracking: true,
+        vertical: false,
+      }
+      return
+    }
+
     if (!isMobileViewport || isStoryFocused) {
       sceneSwipeRef.current.tracking = false
       return
@@ -229,6 +258,38 @@ function App() {
   }
 
   function handleSceneTouchMove(event) {
+    if (isMobileFocusMode) {
+      if (!scenePeekRef.current.tracking) {
+        return
+      }
+
+      const touch = event.touches[0]
+      const deltaX = touch.clientX - scenePeekRef.current.startX
+      const deltaY = touch.clientY - scenePeekRef.current.startY
+      const absX = Math.abs(deltaX)
+      const absY = Math.abs(deltaY)
+
+      if (!scenePeekRef.current.vertical) {
+        if (absX < 8 && absY < 8) {
+          return
+        }
+
+        if (deltaY <= 0 || absY <= absX * 1.1) {
+          scenePeekRef.current.tracking = false
+          setScenePeekOffset(0)
+          setIsScenePeeking(false)
+          return
+        }
+
+        scenePeekRef.current.vertical = true
+      }
+
+      event.preventDefault()
+      setIsScenePeeking(true)
+      setScenePeekOffset(Math.min(Math.max(deltaY * 0.95, 0), 220))
+      return
+    }
+
     if (!sceneSwipeRef.current.tracking || !isMobileViewport || isStoryFocused) {
       return
     }
@@ -264,6 +325,14 @@ function App() {
   }
 
   function handleSceneTouchEnd(event) {
+    if (isMobileFocusMode) {
+      scenePeekRef.current.tracking = false
+      scenePeekRef.current.vertical = false
+      setIsScenePeeking(false)
+      setScenePeekOffset(0)
+      return
+    }
+
     if (!sceneSwipeRef.current.tracking || !isMobileViewport || isStoryFocused) {
       sceneSwipeRef.current.tracking = false
       return
@@ -327,6 +396,21 @@ function App() {
     }
 
     event.preventDefault()
+  }
+
+  function handleSubmitPress(event) {
+    if (isMobileFocusMode) {
+      event.preventDefault()
+    }
+  }
+
+  function handleSubmitClick(event) {
+    if (!isMobileFocusMode) {
+      return
+    }
+
+    event.preventDefault()
+    runStoryCheck()
   }
 
   function chooseChallenge(id) {
@@ -406,12 +490,19 @@ function App() {
             <p className="scene-prompt">{copy.app.scenePrompt}</p>
           </section>
           <div
-            className={isMobileViewport && !isMobileFocusMode ? 'scene-visual is-swipeable' : 'scene-visual'}
+            className={[
+              isMobileViewport && !isMobileFocusMode ? 'scene-visual is-swipeable' : 'scene-visual',
+              isMobileFocusMode && (isScenePeeking || scenePeekOffset > 0) ? 'is-peeking' : '',
+            ].filter(Boolean).join(' ')}
             ref={sceneViewportRef}
             onTouchStart={handleSceneTouchStart}
             onTouchMove={handleSceneTouchMove}
             onTouchEnd={handleSceneTouchEnd}
             onTouchCancel={handleSceneTouchEnd}
+            style={isMobileFocusMode ? {
+              '--scene-peek-offset': `${scenePeekOffset}px`,
+              '--scene-peek-scale': `${scenePeekScale}`,
+            } : undefined}
           >
             {isMobileViewport && !isMobileFocusMode ? (
               <div
@@ -531,7 +622,13 @@ function App() {
             </div>
             {error ? <p className="form-error">{error}</p> : null}
             <div className="form-actions">
-              <button type="submit" disabled={isChecking}>
+              <button
+                type="submit"
+                disabled={isChecking}
+                onPointerDown={handleSubmitPress}
+                onMouseDown={handleSubmitPress}
+                onClick={handleSubmitClick}
+              >
                 {isChecking ? copy.form.checking : copy.form.submit}
               </button>
               <button
@@ -783,7 +880,7 @@ function getFeedbackTone(copy, feedback) {
 const languageOptions = {
   en: { label: 'English', feedbackName: 'English' },
   es: { label: 'Español', feedbackName: 'Spanish' },
-  no: { label: 'Norsk', feedbackName: 'Norwegian' },
+  sv: { label: 'Svenska', feedbackName: 'Swedish' },
 }
 
 const translations = {
@@ -825,7 +922,7 @@ const translations = {
       next: 'Next step:',
       editStory: 'Edit story',
       waitingTitle: 'Feedback appears here',
-      waitingText: 'Write your story and check your verbs to see coaching without leaving the scene.',
+      waitingText: 'Write your story and check it to see coaching without leaving the scene.',
     },
     bank: { title: 'Select a practice scene' },
     mobileSettings: { label: 'Mobile lesson settings' },
@@ -891,7 +988,7 @@ const translations = {
     },
     form: {
       label: 'Tu historia',
-      submit: 'Revisar mis verbos',
+      submit: 'Revisar mi historia',
       checking: 'Revisando...',
       hint: 'Dame una pista',
       hintLabel: 'Pista',
@@ -911,7 +1008,7 @@ const translations = {
       next: 'Siguiente paso:',
       editStory: 'Editar historia',
       waitingTitle: 'Aquí aparecerá la retroalimentación',
-      waitingText: 'Escribe tu historia y revisa tus verbos para ver la ayuda sin salir de la escena.',
+      waitingText: 'Escribe tu historia y revísala para ver la ayuda sin salir de la escena.',
     },
     bank: { title: 'Selecciona una escena de práctica' },
     mobileSettings: { label: 'Ajustes móviles de la lección' },
@@ -959,88 +1056,88 @@ const translations = {
       ],
     },
   },
-  no: {
+  sv: {
     app: {
-      eyebrow: 'Trener for fortelling i engelsk fortid',
-      title: 'Fortell hva som holdt på å skje, hva som skjedde, og hva som hadde skjedd før.',
-      scenePrompt: 'Se på scenen. Fortell historien i fortid.',
-      language: 'Tilbakemelding',
-      languageHelp: 'Du skriver alltid på engelsk. Tilbakemeldingen kan vises på et annet språk.',
-      grammarFocus: 'Grammatisk fokus',
+      eyebrow: 'Träning i engelsk berättande i dåtid',
+      title: 'Berätta vad som pågick, vad som hände och vad som hade hänt före det.',
+      scenePrompt: 'Titta på scenen. Berätta historien i dåtid.',
+      language: 'Feedback',
+      languageHelp: 'Du skriver alltid på engelska. Feedbacken kan visas på ett annat språk.',
+      grammarFocus: 'Grammatiskt fokus',
     },
-    task: { title: 'Velg vanskelighetsgrad', level: 'Nivå' },
-    challengeLabels: { beginner: 'Nybegynner', intermediate: 'Middels', advanced: 'Avansert' },
+    task: { title: 'Välj svårighetsgrad', level: 'Nivå' },
+    challengeLabels: { beginner: 'Nybörjare', intermediate: 'Medel', advanced: 'Avancerad' },
     challengePrompts: {
-      beginner: 'Skriv to eller tre setninger i simple past om scenen.',
-      intermediate: 'Bruk when eller while for å koble en pågående handling til en avsluttet hendelse.',
-      advanced: 'Bruk had for en tidligere hendelse, eller had been for en tidligere handling som varte en stund.',
+      beginner: 'Skriv två eller tre meningar i simple past om scenen.',
+      intermediate: 'Använd when eller while för att koppla en pågående handling till en avslutad händelse.',
+      advanced: 'Använd had för en tidigare händelse, eller had been för en tidigare handling som pågick en stund.',
     },
     form: {
-      label: 'Historien din',
-      submit: 'Sjekk verbene mine',
-      checking: 'Sjekker...',
-      hint: 'Gi meg et hint',
+      label: 'Din text',
+      submit: 'Granska min text',
+      checking: 'Granskar...',
+      hint: 'Ge mig en hint',
       hintLabel: 'Hint',
     },
     feedback: {
-      verdict: 'Coachens notat',
+      verdict: 'Coachens kommentar',
       verdicts: {
-        'keep-building': { label: 'Start med tidslinjen', detail: 'Bruk en tydelig handling i fortid' },
-        'good-start': { label: 'God start', detail: 'Gjor tidslinjen tydeligere' },
-        'good-work': { label: 'Godt jobbet', detail: 'Litt finpuss' },
-        excellent: { label: 'Utmerket', detail: 'Klar for å strekke deg' },
+        'keep-building': { label: 'Börja med tidslinjen', detail: 'Använd en tydlig handling i dåtid' },
+        'good-start': { label: 'Bra början', detail: 'Förtydliga tidslinjen' },
+        'good-work': { label: 'Bra jobbat', detail: 'Lite puts kvar' },
+        excellent: { label: 'Utmärkt', detail: 'Redo att gå vidare' },
       },
-      worked: 'Dette fungerte',
-      tryThis: 'Prøv dette',
-      betterVersion: 'Bedre versjon:',
-      detected: 'Oppdaget',
-      next: 'Neste steg:',
-      editStory: 'Rediger historien',
-      waitingTitle: 'Tilbakemeldingen vises her',
-      waitingText: 'Skriv historien din og sjekk verbene for å se veiledningen uten å forlate scenen.',
+      worked: 'Det här fungerade',
+      tryThis: 'Prova detta',
+      betterVersion: 'Bättre version:',
+      detected: 'Upptäckt',
+      next: 'Nästa steg:',
+      editStory: 'Redigera texten',
+      waitingTitle: 'Feedback visas här',
+      waitingText: 'Skriv din text och granska den för att få coachning utan att lämna scenen.',
     },
-    bank: { title: 'Velg en øvingsscene' },
-    mobileSettings: { label: 'Mobilinnstillinger for økten' },
+    bank: { title: 'Välj en övningsscen' },
+    mobileSettings: { label: 'Mobilinställningar för övningen' },
     sceneNav: {
-      label: 'Scenenavigasjon',
-      previous: 'Forrige scene',
-      next: 'Neste scene',
+      label: 'Scennavigering',
+      previous: 'Föregående scen',
+      next: 'Nästa scen',
     },
-    starters: { label: 'Nyttige fortellingsstartere' },
+    starters: { label: 'Användbara berättelsestarter' },
     errors: {
-      tooShort: 'Skriv minst én full setning, så coachen kan se forholdet mellom verbene.',
-      checkFailed: 'Coachen kunne ikke sjekke svaret ennå.',
+      tooShort: 'Skriv minst en hel mening så att coachen kan se relationen mellan verbformerna.',
+      checkFailed: 'Coachen kunde inte granska svaret ännu.',
     },
     grammar: {
-      open: 'Åpne grammatikkguide',
-      close: 'Lukk',
-      kicker: 'Grammatikkguide',
-      title: 'Verb for fortelling i fortid',
+      open: 'Öppna grammatikguide',
+      close: 'Stäng',
+      kicker: 'Grammatikguide',
+      title: 'Verb för berättande i dåtid',
       items: [
         {
           title: 'Simple Past',
-          text: 'Brukes for avsluttede hendelser som driver historien videre.',
+          text: 'Används för avslutade händelser som för berättelsen framåt.',
           example: 'The child dropped the oranges. The cyclist swerved.',
         },
         {
           title: 'Past Continuous',
-          text: 'Brukes for handlinger som allerede pågikk i bakgrunnen.',
+          text: 'Används för handlingar som redan pågick i bakgrunden.',
           example: 'The vendor was weighing apples when the child dropped the oranges.',
         },
         {
           title: 'Past Perfect',
-          text: 'Brukes for noe som skjedde før et annet tidspunkt i fortiden.',
+          text: 'Används för något som hände före en annan tidpunkt i dåtiden.',
           example: 'The dog had taken the bread before anyone noticed.',
         },
         {
           title: 'Past Perfect Continuous',
-          text: 'Brukes for en tidligere handling som hadde pågått en stund.',
+          text: 'Används för en tidigare handling som hade pågått under en tid.',
           example: 'She had been reading before she fell asleep.',
         },
         {
           title: 'Connectors',
-          text: 'Bruk when, while, as, because, before, after og by the time for å vise tidslinjen.',
-          example: 'While viser bakgrunn. When markerer ofte hendelsen. Because viser årsak.',
+          text: 'Använd when, while, as, because, before, after och by the time för att visa tidslinjen.',
+          example: 'While visar bakgrund. When markerar ofta händelsen. Because visar orsak.',
         },
       ],
     },
