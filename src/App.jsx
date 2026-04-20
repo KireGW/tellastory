@@ -24,6 +24,7 @@ function App() {
   const feedbackRef = useRef(null)
   const practiceRef = useRef(null)
   const storyInputRef = useRef(null)
+  const storyFormRef = useRef(null)
   const scenePaneRef = useRef(null)
   const sceneViewportRef = useRef(null)
   const pendingFeedbackAnchorRef = useRef(false)
@@ -59,6 +60,7 @@ function App() {
       : copy.app.scenePrompt
   const showMobileGhostText = isMobileViewport && !answer.trim() && !feedback
   const showMobileInlineHint = isMobileViewport && Boolean(activeHint) && Boolean(answer.trim()) && !feedback
+  const challengePromptParts = getChallengePromptParts(copy, challengeMode, activeChallenge)
 
   useEffect(() => {
     if (!feedback || !feedbackRef.current) {
@@ -127,6 +129,31 @@ function App() {
       window.removeEventListener('resize', updateScenePaneHeight)
     }
   }, [activeScene.id, isMobileFocusMode, isMobileMenuOpen, feedback, hintIndex, answer])
+
+  useEffect(() => {
+    if (!storyFormRef.current) {
+      return undefined
+    }
+
+    const updateStoryFormHeight = () => {
+      const height = storyFormRef.current?.getBoundingClientRect().height ?? 0
+      document.documentElement.style.setProperty('--mobile-focus-composer-height', `${height}px`)
+    }
+
+    updateStoryFormHeight()
+
+    const observer = new ResizeObserver(() => {
+      updateStoryFormHeight()
+    })
+
+    observer.observe(storyFormRef.current)
+    window.addEventListener('resize', updateStoryFormHeight)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateStoryFormHeight)
+    }
+  }, [isMobileFocusMode, answer, activeHint, feedback, error, isChecking, uiLanguage])
 
   useEffect(() => {
     window.localStorage.setItem(storageKeys.sceneId, activeScene.id)
@@ -495,7 +522,9 @@ function App() {
                 </button>
               ))}
             </div>
-            <p className="challenge-prompt">{copy.challengePrompts[challengeMode] ?? activeChallenge.prompt}</p>
+            <p className="challenge-prompt">
+              {renderChallengePrompt(challengePromptParts, () => setIsGrammarOpen(true))}
+            </p>
           </section>
         </div>
 
@@ -591,10 +620,12 @@ function App() {
                 </button>
               ))}
             </div>
-            <p className="challenge-prompt">{copy.challengePrompts[challengeMode] ?? activeChallenge.prompt}</p>
+            <p className="challenge-prompt">
+              {renderChallengePrompt(challengePromptParts, () => setIsGrammarOpen(true))}
+            </p>
           </section>
 
-          <form onSubmit={submitStory} className="story-form" autoComplete="off">
+          <form onSubmit={submitStory} className="story-form" autoComplete="off" ref={storyFormRef}>
             <div className="story-composer">
               <label htmlFor="storyText">{copy.form.label}</label>
               <div className={showMobileInlineHint ? 'story-input-shell has-inline-hint' : 'story-input-shell'}>
@@ -811,6 +842,29 @@ function getStoredChallengeMode() {
   return Object.hasOwn(defaultChallengeModes, storedChallengeMode) ? storedChallengeMode : 'intermediate'
 }
 
+function getChallengePromptParts(copy, challengeMode, activeChallenge) {
+  return copy.challengePromptParts?.[challengeMode] ?? [{ type: 'text', value: activeChallenge.prompt }]
+}
+
+function renderChallengePrompt(parts, onTermClick) {
+  return parts.map((part, index) => {
+    if (part.type === 'term') {
+      return (
+        <button
+          key={`${part.value}-${index}`}
+          type="button"
+          className="grammar-inline-link"
+          onClick={onTermClick}
+        >
+          {part.value}
+        </button>
+      )
+    }
+
+    return <span key={`${part.value}-${index}`}>{part.value}</span>
+  })
+}
+
 function scrollFeedbackOnlyIfNeeded(element) {
   if (!element) {
     return
@@ -935,6 +989,27 @@ const translations = {
       intermediate: 'Use when or while to connect an action in progress with a completed event.',
       advanced: 'Use had for an earlier event, or had been for an earlier action that continued for some time.',
     },
+    challengePromptParts: {
+      beginner: [
+        { type: 'text', value: 'Write two or three ' },
+        { type: 'term', value: 'simple past' },
+        { type: 'text', value: ' sentences about the scene.' },
+      ],
+      intermediate: [
+        { type: 'text', value: 'Use ' },
+        { type: 'term', value: 'when' },
+        { type: 'text', value: ' or ' },
+        { type: 'term', value: 'while' },
+        { type: 'text', value: ' to connect an action in progress with a completed event.' },
+      ],
+      advanced: [
+        { type: 'text', value: 'Use ' },
+        { type: 'term', value: 'had' },
+        { type: 'text', value: ' for an earlier event, or ' },
+        { type: 'term', value: 'had been' },
+        { type: 'text', value: ' for an earlier action that continued for some time.' },
+      ],
+    },
     form: {
       label: 'Your story',
       submit: 'Check my story',
@@ -1049,6 +1124,27 @@ const translations = {
       intermediate: 'Usa when o while para conectar una acción en progreso con un evento terminado.',
       advanced: 'Usa had para un evento anterior, o had been para una acción anterior que continuó durante un tiempo.',
     },
+    challengePromptParts: {
+      beginner: [
+        { type: 'text', value: 'Escribe dos o tres oraciones en ' },
+        { type: 'term', value: 'simple past' },
+        { type: 'text', value: ' sobre la escena.' },
+      ],
+      intermediate: [
+        { type: 'text', value: 'Usa ' },
+        { type: 'term', value: 'when' },
+        { type: 'text', value: ' o ' },
+        { type: 'term', value: 'while' },
+        { type: 'text', value: ' para conectar una acción en progreso con un evento terminado.' },
+      ],
+      advanced: [
+        { type: 'text', value: 'Usa ' },
+        { type: 'term', value: 'had' },
+        { type: 'text', value: ' para un evento anterior, o ' },
+        { type: 'term', value: 'had been' },
+        { type: 'text', value: ' para una acción anterior que continuó durante un tiempo.' },
+      ],
+    },
     form: {
       label: 'Tu historia',
       submit: 'Revisar mi historia',
@@ -1162,6 +1258,27 @@ const translations = {
       beginner: 'Skriv två eller tre meningar i simple past om scenen.',
       intermediate: 'Använd when eller while för att koppla en pågående handling till en avslutad händelse.',
       advanced: 'Använd had för en tidigare händelse, eller had been för en tidigare handling som pågick en stund.',
+    },
+    challengePromptParts: {
+      beginner: [
+        { type: 'text', value: 'Skriv två eller tre meningar i ' },
+        { type: 'term', value: 'simple past' },
+        { type: 'text', value: ' om scenen.' },
+      ],
+      intermediate: [
+        { type: 'text', value: 'Använd ' },
+        { type: 'term', value: 'when' },
+        { type: 'text', value: ' eller ' },
+        { type: 'term', value: 'while' },
+        { type: 'text', value: ' för att koppla en pågående handling till en avslutad händelse.' },
+      ],
+      advanced: [
+        { type: 'text', value: 'Använd ' },
+        { type: 'term', value: 'had' },
+        { type: 'text', value: ' för en tidigare händelse, eller ' },
+        { type: 'term', value: 'had been' },
+        { type: 'text', value: ' för en tidigare handling som pågick en stund.' },
+      ],
     },
     form: {
       label: 'Din text',
