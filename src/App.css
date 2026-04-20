@@ -847,7 +847,7 @@ h2 {
 
   .scene-pane > .scene-art {
     aspect-ratio: 16 / 9;
-    max-height: 28dvh;
+    max-height: clamp(130px, 52vw, 220px);
     min-height: 130px;
     object-fit: cover;
   }
@@ -935,11 +935,9 @@ h2 {
 
   .mobile-focus-mode .scene-pane {
     position: static;
-    display: grid;
-    grid-template-rows: minmax(0, 1fr);
-    gap: 4px;
-    height: 100%;
-    min-height: clamp(140px, 32dvh, 320px);
+    display: block;
+    height: auto;
+    min-height: 0;
     overflow: visible;
     padding: 8px 12px 8px;
     box-shadow: none;
@@ -947,31 +945,27 @@ h2 {
   }
 
   .mobile-focus-mode .scene-visual {
-    flex: 1 1 auto;
-    height: 100%;
-    min-height: clamp(132px, 28dvh, 240px);
-    display: flex;
-    align-items: flex-start;
-    justify-content: stretch;
+    display: block;
+    height: auto;
+    min-height: 0;
     overflow: hidden;
     position: relative;
     z-index: 3;
   }
 
-  .mobile-focus-mode .scene-visual > picture {
-    width: 100%;
-    height: 100%;
-  }
-
   .mobile-focus-mode .scene-visual-stack {
     position: relative;
     width: 100%;
-    height: 100%;
-    min-height: 100%;
+    min-height: clamp(140px, 32dvh, 320px);
     padding-bottom: var(--scene-peek-offset, 0px);
     box-sizing: border-box;
     transform-origin: top center;
     transition: padding-bottom 120ms linear;
+  }
+
+  .mobile-focus-mode .scene-visual-base {
+    width: 100%;
+    height: clamp(140px, 32dvh, 320px);
   }
 
   .mobile-focus-mode .scene-visual-layer {
@@ -982,15 +976,9 @@ h2 {
     left: 0;
   }
 
-  .mobile-focus-mode .scene-visual-layer > picture {
-    width: 100%;
-    height: 100%;
-  }
-
-  .mobile-focus-mode .scene-pane > .scene-visual > .scene-art,
-  .mobile-focus-mode .scene-pane > .scene-visual > picture > .scene-art,
+  .mobile-focus-mode .scene-visual-base > .scene-art,
   .mobile-focus-mode .scene-visual-layer > .scene-art,
-  .mobile-focus-mode .scene-visual-layer > picture > .scene-art {
+  .mobile-focus-mode .scene-pane > .scene-visual > .scene-art {
     width: 100%;
     height: 100%;
     min-height: 0;
@@ -1000,14 +988,12 @@ h2 {
     transition: opacity 120ms linear, box-shadow 160ms ease;
   }
 
-  .mobile-focus-mode .scene-visual-layer.is-cover > .scene-art,
-  .mobile-focus-mode .scene-visual-layer.is-cover > picture > .scene-art {
+  .mobile-focus-mode .scene-visual-base.is-cover > .scene-art {
     object-fit: cover;
     opacity: calc(1 - var(--scene-peek-progress, 0));
   }
 
-  .mobile-focus-mode .scene-visual-layer.is-contain > .scene-art,
-  .mobile-focus-mode .scene-visual-layer.is-contain > picture > .scene-art {
+  .mobile-focus-mode .scene-visual-layer.is-contain > .scene-art {
     object-fit: contain;
     opacity: var(--scene-peek-progress, 0);
     box-shadow: 0 20px 32px rgba(22, 30, 28, calc(var(--scene-peek-progress, 0) * 0.24));

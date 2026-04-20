@@ -542,7 +542,7 @@ function App() {
           '--scene-peek-progress': `${scenePeekProgress}`,
         }}
       >
-        <div className="scene-visual-layer is-cover">
+        <div className="scene-visual-base is-cover">
           <SceneIllustration scene={activeScene} />
         </div>
         <div className="scene-visual-layer is-contain" aria-hidden="true">
