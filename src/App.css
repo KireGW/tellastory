@@ -981,30 +981,28 @@ h2 {
   .mobile-focus-mode .practice {
     height: 100%;
     min-height: 0;
-    position: relative;
-    display: block;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
     overflow: hidden;
     padding-bottom: 0;
   }
 
   .mobile-focus-mode .scene-pane {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: calc(var(--mobile-focus-composer-height, 150px) + 12px + env(safe-area-inset-bottom, 0px));
-    left: 0;
-    display: block;
-    height: auto;
+    position: static;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
     overflow: hidden;
-    padding: 8px 12px 0;
+    padding: 8px 12px 8px;
     box-shadow: none;
     z-index: 2;
   }
 
   .mobile-focus-mode .scene-visual {
-    display: block;
-    height: 100%;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
     min-height: 0;
     overflow: hidden;
     position: relative;
@@ -1029,22 +1027,18 @@ h2 {
     display: block;
     position: static;
     margin: 0;
-    padding: 0;
-    background: transparent;
+    padding: 0 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: #ffffff;
   }
 
   .mobile-focus-mode .story-form {
-    display: block;
+    display: grid;
+    gap: 4px;
     margin: 0;
-    background: transparent;
+    background: #ffffff;
   }
 
   .mobile-focus-mode .story-composer {
-    position: absolute;
-    right: 12px;
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-    left: 12px;
-    z-index: 5;
     display: grid;
     gap: 4px;
     margin: 0;
