@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import './App.css'
 import { SceneIllustration } from './components/SceneIllustration.jsx'
 import { scenes } from './data/scenes.js'
@@ -305,8 +306,8 @@ function App() {
     }
 
     sceneSwipeRef.current.pendingOffset = 0
-    chooseSceneByOffset(pendingOffset, { scrollToPractice: false, preserveSceneTrack: true })
-    requestAnimationFrame(() => {
+    flushSync(() => {
+      chooseSceneByOffset(pendingOffset, { scrollToPractice: false, preserveSceneTrack: true })
       setIsSceneTrackAnimating(false)
       setSceneDragOffset(0)
     })
