@@ -101,13 +101,6 @@ function App() {
   }, [challengeMode])
 
   useEffect(() => {
-    setSceneDragOffset(0)
-    setIsSceneDragging(false)
-    setIsSceneTrackAnimating(false)
-    sceneSwipeRef.current.pendingOffset = 0
-  }, [activeScene.id])
-
-  useEffect(() => {
     if (!storyInputRef.current) {
       return
     }
@@ -188,12 +181,19 @@ function App() {
   }
 
   function chooseScene(sceneId, options = {}) {
-    const { scrollToPractice = true } = options
+    const { scrollToPractice = true, preserveSceneTrack = false } = options
     setActiveId(sceneId)
     setAnswer('')
     setFeedback(null)
     setHintIndex(null)
     setError('')
+
+    if (!preserveSceneTrack) {
+      setSceneDragOffset(0)
+      setIsSceneDragging(false)
+      setIsSceneTrackAnimating(false)
+      sceneSwipeRef.current.pendingOffset = 0
+    }
 
     if (scrollToPractice) {
       requestAnimationFrame(() => {
@@ -305,9 +305,11 @@ function App() {
     }
 
     sceneSwipeRef.current.pendingOffset = 0
-    setIsSceneTrackAnimating(false)
-    setSceneDragOffset(0)
-    chooseSceneByOffset(pendingOffset, { scrollToPractice: false })
+    chooseSceneByOffset(pendingOffset, { scrollToPractice: false, preserveSceneTrack: true })
+    requestAnimationFrame(() => {
+      setIsSceneTrackAnimating(false)
+      setSceneDragOffset(0)
+    })
   }
 
   function addHint() {
