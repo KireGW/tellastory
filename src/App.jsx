@@ -965,7 +965,9 @@ function scrollFeedbackToTopUnderScene(element) {
   }
 
   const scenePane = document.querySelector('.scene-pane')
-  const stickyOffset = scenePane ? scenePane.getBoundingClientRect().height : 0
+  const stickyOffset = window.matchMedia('(max-width: 560px)').matches
+    ? 0
+    : (scenePane ? scenePane.getBoundingClientRect().height : 0)
   const top = window.scrollY + element.getBoundingClientRect().top - stickyOffset - 8
 
   window.scrollTo({

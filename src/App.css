@@ -834,13 +834,11 @@ h2 {
   }
 
   .scene-pane {
-    position: sticky;
-    top: 0;
-    z-index: 10;
+    position: static;
     gap: 4px;
     justify-content: flex-start;
     padding: 10px 14px 8px;
-    box-shadow: 0 8px 18px rgba(23, 33, 29, 0.08);
+    box-shadow: none;
   }
 
   .scene-pane .instruction-panel {
@@ -873,13 +871,11 @@ h2 {
   }
 
   .story-composer {
-    position: sticky;
-    top: var(--mobile-scene-pane-height, 0px);
-    z-index: 9;
-    margin: 0 -14px;
-    padding: 8px 14px 10px;
-    background: #ffffff;
-    box-shadow: 0 8px 18px rgba(23, 33, 29, 0.08);
+    position: static;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   textarea {
@@ -898,7 +894,7 @@ h2 {
   }
 
   .feedback {
-    scroll-margin-top: calc(var(--mobile-scene-pane-height, 0px) + 150px);
+    scroll-margin-top: 16px;
   }
 
   .bank-heading {
@@ -932,7 +928,7 @@ h2 {
     height: 100%;
     min-height: 0;
     display: grid;
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(140px, 1fr) auto;
     overflow: hidden;
     padding-bottom: 0;
   }
@@ -942,7 +938,8 @@ h2 {
     display: grid;
     grid-template-rows: minmax(0, 1fr);
     gap: 4px;
-    min-height: 0;
+    height: 100%;
+    min-height: clamp(140px, 32dvh, 320px);
     overflow: visible;
     padding: 8px 12px 8px;
     box-shadow: none;
@@ -969,10 +966,12 @@ h2 {
   .mobile-focus-mode .scene-visual-stack {
     position: relative;
     width: 100%;
-    height: calc(100% + var(--scene-peek-offset, 0px));
+    height: 100%;
     min-height: 100%;
+    padding-bottom: var(--scene-peek-offset, 0px);
+    box-sizing: border-box;
     transform-origin: top center;
-    transition: height 120ms linear;
+    transition: padding-bottom 120ms linear;
   }
 
   .mobile-focus-mode .scene-visual-layer {
