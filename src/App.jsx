@@ -30,8 +30,11 @@ function App() {
   const scenePeekRef = useRef({
     startX: 0,
     startY: 0,
+    startOffset: 0,
+    startDistance: 0,
     tracking: false,
     vertical: false,
+    pinch: false,
   })
   const sceneSwipeRef = useRef({
     startX: 0,
@@ -65,7 +68,7 @@ function App() {
       : copy.app.scenePrompt
   const showMobileGhostText = isMobileViewport && !answer.trim() && !feedback
   const showMobileInlineHint = isMobileViewport && Boolean(activeHint) && Boolean(answer.trim()) && !feedback
-  const scenePeekScale = 1 + Math.min(scenePeekOffset, 180) / 260
+  const scenePeekProgress = Math.min(scenePeekOffset, 220) / 220
 
   useEffect(() => {
     if (!feedback || !feedbackRef.current) {
@@ -259,11 +262,15 @@ function App() {
   function handleSceneTouchStart(event) {
     if (isMobileFocusMode) {
       const touch = event.touches[0]
+      const startDistance = event.touches.length === 2 ? getTouchDistance(event.touches[0], event.touches[1]) : 0
       scenePeekRef.current = {
         startX: touch.clientX,
         startY: touch.clientY,
+        startOffset: scenePeekOffset,
+        startDistance,
         tracking: true,
         vertical: false,
+        pinch: event.touches.length === 2,
       }
       return
     }
@@ -293,6 +300,23 @@ function App() {
         return
       }
 
+      if (event.touches.length === 2 || scenePeekRef.current.pinch) {
+        if (event.touches.length < 2) {
+          return
+        }
+
+        const distance = getTouchDistance(event.touches[0], event.touches[1])
+        const baseDistance = scenePeekRef.current.startDistance || distance
+        const scaleDelta = distance / baseDistance - 1
+        const nextOffset = Math.min(Math.max(scenePeekRef.current.startOffset + scaleDelta * 260, 0), 220)
+
+        event.preventDefault()
+        scenePeekRef.current.pinch = true
+        setIsScenePeeking(nextOffset > 0)
+        setScenePeekOffset(nextOffset)
+        return
+      }
+
       const touch = event.touches[0]
       const deltaX = touch.clientX - scenePeekRef.current.startX
       const deltaY = touch.clientY - scenePeekRef.current.startY
@@ -306,6 +330,7 @@ function App() {
 
         if (deltaY <= 0 || absY <= absX * 1.1) {
           scenePeekRef.current.tracking = false
+          scenePeekRef.current.pinch = false
           setScenePeekOffset(0)
           setIsScenePeeking(false)
           return
@@ -316,7 +341,7 @@ function App() {
 
       event.preventDefault()
       setIsScenePeeking(true)
-      setScenePeekOffset(Math.min(Math.max(deltaY * 0.95, 0), 220))
+      setScenePeekOffset(Math.min(Math.max(scenePeekRef.current.startOffset + deltaY * 0.9, 0), 220))
       return
     }
 
@@ -356,8 +381,23 @@ function App() {
 
   function handleSceneTouchEnd(event) {
     if (isMobileFocusMode) {
+      if (event.touches.length > 0) {
+        const touch = event.touches[0]
+        scenePeekRef.current = {
+          startX: touch.clientX,
+          startY: touch.clientY,
+          startOffset: scenePeekOffset,
+          startDistance: event.touches.length === 2 ? getTouchDistance(event.touches[0], event.touches[1]) : 0,
+          tracking: true,
+          vertical: false,
+          pinch: event.touches.length === 2,
+        }
+        return
+      }
+
       scenePeekRef.current.tracking = false
       scenePeekRef.current.vertical = false
+      scenePeekRef.current.pinch = false
       setIsScenePeeking(false)
       setScenePeekOffset(0)
       return
@@ -465,6 +505,25 @@ function App() {
     setAnswer(event.target.value)
   }
 
+  function renderFocusSceneArtwork() {
+    return (
+      <div
+        className="scene-visual-stack"
+        style={{
+          '--scene-peek-offset': `${scenePeekOffset}px`,
+          '--scene-peek-progress': `${scenePeekProgress}`,
+        }}
+      >
+        <div className="scene-visual-layer is-cover">
+          <SceneIllustration scene={activeScene} />
+        </div>
+        <div className="scene-visual-layer is-contain" aria-hidden="true">
+          <SceneIllustration scene={activeScene} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <main className={isMobileFocusMode ? 'app-shell mobile-focus-mode' : 'app-shell'}>
       <section className="practice" ref={practiceRef}>
@@ -526,10 +585,6 @@ function App() {
             onTouchMove={handleSceneTouchMove}
             onTouchEnd={handleSceneTouchEnd}
             onTouchCancel={handleSceneTouchEnd}
-            style={isMobileFocusMode ? {
-              '--scene-peek-offset': `${scenePeekOffset}px`,
-              '--scene-peek-scale': `${scenePeekScale}`,
-            } : undefined}
           >
             {isMobileViewport && !isMobileFocusMode ? (
               <div
@@ -550,6 +605,8 @@ function App() {
                   <SceneIllustration scene={nextScene} />
                 </div>
               </div>
+            ) : isMobileFocusMode ? (
+              renderFocusSceneArtwork()
             ) : (
               <SceneIllustration scene={activeScene} />
             )}
@@ -921,6 +978,13 @@ function findAction(scene, actionId) {
 
 function getFeedbackTone(copy, feedback) {
   return copy.feedback.verdicts[feedback.verdict] ?? copy.feedback.verdicts['good-start']
+}
+
+function getTouchDistance(firstTouch, secondTouch) {
+  const deltaX = secondTouch.clientX - firstTouch.clientX
+  const deltaY = secondTouch.clientY - firstTouch.clientY
+
+  return Math.hypot(deltaX, deltaY)
 }
 
 const languageOptions = {
