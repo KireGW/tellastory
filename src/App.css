@@ -82,6 +82,29 @@
   touch-action: pan-y;
 }
 
+.scene-visual.is-swipeable {
+  overflow: hidden;
+}
+
+.scene-track {
+  display: flex;
+  width: 300%;
+  will-change: transform;
+}
+
+.scene-track.is-dragging {
+  cursor: grabbing;
+}
+
+.scene-slide {
+  flex: 0 0 33.3333%;
+  min-width: 0;
+}
+
+.scene-slide .scene-art {
+  width: 100%;
+}
+
 .coach-pane {
   align-self: center;
   display: grid;
@@ -230,6 +253,10 @@ h1 {
   font-weight: 800;
 }
 
+.story-input-shell {
+  position: relative;
+}
+
 textarea {
   width: 100%;
   min-height: 0;
@@ -244,6 +271,38 @@ textarea {
   font: inherit;
   font-size: 16px;
   line-height: 1.5;
+}
+
+.story-ghost-text,
+.story-inline-hint {
+  pointer-events: none;
+}
+
+.story-ghost-text {
+  position: absolute;
+  inset: 13px 14px auto 14px;
+  color: #8b9a93;
+  font-size: 15px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.story-ghost-text.is-hint {
+  color: #5e7e73;
+}
+
+.story-inline-hint {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  border-top: 1px solid rgba(31, 122, 92, 0.14);
+  padding-top: 6px;
+  color: #5b7b70;
+  font-size: 13px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), #ffffff 28%);
 }
 
 textarea:focus {
@@ -696,6 +755,14 @@ h2 {
     overflow: auto;
   }
 
+  .story-ghost-text {
+    display: block;
+  }
+
+  .story-input-shell.has-inline-hint textarea {
+    padding-bottom: 52px;
+  }
+
   .feedback {
     scroll-margin-top: calc(28svh + 72px);
   }
@@ -789,6 +856,24 @@ h2 {
     min-height: calc(1.5em * 2 + 26px);
     max-height: none;
     overflow-y: auto;
+  }
+
+  .mobile-focus-mode .story-ghost-text {
+    inset: 11px 14px auto 14px;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .mobile-focus-mode .story-inline-hint {
+    right: 10px;
+    bottom: 8px;
+    left: 10px;
+    padding-top: 5px;
+    font-size: 12px;
+  }
+
+  .mobile-focus-mode .story-input-shell.has-inline-hint textarea {
+    padding-bottom: 48px;
   }
 
   .mobile-focus-mode .form-actions {

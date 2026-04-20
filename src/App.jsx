@@ -16,16 +16,29 @@ function App() {
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
   const [hintIndex, setHintIndex] = useState(null)
   const [error, setError] = useState('')
+  const [sceneDragOffset, setSceneDragOffset] = useState(0)
+  const [isSceneDragging, setIsSceneDragging] = useState(false)
+  const [isSceneTrackAnimating, setIsSceneTrackAnimating] = useState(false)
   const feedbackRef = useRef(null)
   const practiceRef = useRef(null)
   const storyInputRef = useRef(null)
-  const sceneSwipeRef = useRef({ startX: 0, startY: 0, tracking: false })
+  const sceneViewportRef = useRef(null)
+  const sceneSwipeRef = useRef({
+    startX: 0,
+    startY: 0,
+    width: 0,
+    tracking: false,
+    horizontal: false,
+    pendingOffset: 0,
+  })
 
   const activeScene = useMemo(
     () => scenes.find((scene) => scene.id === activeId) ?? scenes[0],
     [activeId],
   )
   const activeSceneIndex = scenes.findIndex((scene) => scene.id === activeScene.id)
+  const previousScene = scenes[(activeSceneIndex - 1 + scenes.length) % scenes.length]
+  const nextScene = scenes[(activeSceneIndex + 1) % scenes.length]
   const challengeOptions = activeScene.challengeModes ?? defaultChallengeModes
   const activeChallenge = challengeOptions[challengeMode] ?? challengeOptions.intermediate ?? Object.values(challengeOptions)[0]
   const submittedChallenge = defaultChallengeModes[challengeMode] ?? activeChallenge
@@ -35,6 +48,11 @@ function App() {
   const feedbackTone = feedback ? getFeedbackTone(copy, feedback) : null
   const isMobileFocusMode = isStoryFocused && isMobileViewport && isKeyboardOpen
   const storyRows = isMobileFocusMode ? 2 : feedback ? 3 : 8
+  const mobileGhostText = activeHint && !answer.trim()
+    ? activeHint
+    : (copy.challengePrompts[challengeMode] ?? activeChallenge.prompt)
+  const showMobileGhostText = isMobileViewport && !answer.trim() && !feedback
+  const showMobileInlineHint = isMobileViewport && Boolean(activeHint) && Boolean(answer.trim()) && !feedback
 
   useEffect(() => {
     if (!feedback || !feedbackRef.current) {
@@ -79,6 +97,13 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(storageKeys.challengeMode, challengeMode)
   }, [challengeMode])
+
+  useEffect(() => {
+    setSceneDragOffset(0)
+    setIsSceneDragging(false)
+    setIsSceneTrackAnimating(false)
+    sceneSwipeRef.current.pendingOffset = 0
+  }, [activeScene.id])
 
   useEffect(() => {
     if (!storyInputRef.current) {
@@ -160,20 +185,24 @@ function App() {
     }
   }
 
-  function chooseScene(sceneId) {
+  function chooseScene(sceneId, options = {}) {
+    const { scrollToPractice = true } = options
     setActiveId(sceneId)
     setAnswer('')
     setFeedback(null)
     setHintIndex(null)
     setError('')
-    requestAnimationFrame(() => {
-      practiceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
+
+    if (scrollToPractice) {
+      requestAnimationFrame(() => {
+        practiceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    }
   }
 
-  function chooseSceneByOffset(offset) {
+  function chooseSceneByOffset(offset, options) {
     const nextIndex = (activeSceneIndex + offset + scenes.length) % scenes.length
-    chooseScene(scenes[nextIndex].id)
+    chooseScene(scenes[nextIndex].id, options)
   }
 
   function handleSceneTouchStart(event) {
@@ -186,8 +215,49 @@ function App() {
     sceneSwipeRef.current = {
       startX: touch.clientX,
       startY: touch.clientY,
+      width: sceneViewportRef.current?.getBoundingClientRect().width ?? window.innerWidth,
       tracking: true,
+      horizontal: false,
+      pendingOffset: 0,
     }
+    setIsSceneTrackAnimating(false)
+    setIsSceneDragging(false)
+    setSceneDragOffset(0)
+  }
+
+  function handleSceneTouchMove(event) {
+    if (!sceneSwipeRef.current.tracking || !isMobileViewport || isStoryFocused) {
+      return
+    }
+
+    const touch = event.touches[0]
+    const deltaX = touch.clientX - sceneSwipeRef.current.startX
+    const deltaY = touch.clientY - sceneSwipeRef.current.startY
+    const absX = Math.abs(deltaX)
+    const absY = Math.abs(deltaY)
+
+    if (!sceneSwipeRef.current.horizontal) {
+      if (absX < 8 && absY < 8) {
+        return
+      }
+
+      if (absX <= absY * 1.1) {
+        sceneSwipeRef.current.tracking = false
+        setSceneDragOffset(0)
+        setIsSceneDragging(false)
+        return
+      }
+
+      sceneSwipeRef.current.horizontal = true
+    }
+
+    event.preventDefault()
+    setIsSceneDragging(true)
+    setIsSceneTrackAnimating(false)
+
+    const maxOffset = sceneSwipeRef.current.width * 0.82
+    const softenedOffset = Math.max(Math.min(deltaX * 0.92, maxOffset), -maxOffset)
+    setSceneDragOffset(softenedOffset)
   }
 
   function handleSceneTouchEnd(event) {
@@ -201,14 +271,41 @@ function App() {
     const deltaY = touch.clientY - sceneSwipeRef.current.startY
     const absX = Math.abs(deltaX)
     const absY = Math.abs(deltaY)
+    const width = sceneSwipeRef.current.width || window.innerWidth
+    const threshold = Math.min(96, width * 0.22)
+    const committedOffset = deltaX < 0 ? -width : width
 
-    sceneSwipeRef.current.tracking = false
-
-    if (absX < 48 || absX <= absY * 1.2) {
+    if (!sceneSwipeRef.current.horizontal || absX < threshold || absX <= absY * 1.15) {
+      sceneSwipeRef.current.tracking = false
+      sceneSwipeRef.current.horizontal = false
+      sceneSwipeRef.current.pendingOffset = 0
+      setIsSceneTrackAnimating(true)
+      setIsSceneDragging(false)
+      setSceneDragOffset(0)
       return
     }
 
-    chooseSceneByOffset(deltaX < 0 ? 1 : -1)
+    sceneSwipeRef.current.tracking = false
+    sceneSwipeRef.current.horizontal = false
+    sceneSwipeRef.current.pendingOffset = deltaX < 0 ? 1 : -1
+    setIsSceneTrackAnimating(true)
+    setIsSceneDragging(false)
+    setSceneDragOffset(committedOffset)
+  }
+
+  function handleSceneTrackTransitionEnd() {
+    const pendingOffset = sceneSwipeRef.current.pendingOffset
+
+    if (!pendingOffset) {
+      setIsSceneTrackAnimating(false)
+      setSceneDragOffset(0)
+      return
+    }
+
+    sceneSwipeRef.current.pendingOffset = 0
+    setIsSceneTrackAnimating(false)
+    setSceneDragOffset(0)
+    chooseSceneByOffset(pendingOffset, { scrollToPractice: false })
   }
 
   function addHint() {
@@ -234,6 +331,14 @@ function App() {
       const answerLength = storyInputRef.current?.value.length ?? 0
       storyInputRef.current?.setSelectionRange(answerLength, answerLength)
     })
+  }
+
+  function handleAnswerChange(event) {
+    if (isMobileViewport && activeHint) {
+      setHintIndex(null)
+    }
+
+    setAnswer(event.target.value)
   }
 
   return (
@@ -284,11 +389,35 @@ function App() {
             <p className="scene-prompt">{copy.app.scenePrompt}</p>
           </section>
           <div
-            className="scene-visual"
+            className={isMobileViewport && !isMobileFocusMode ? 'scene-visual is-swipeable' : 'scene-visual'}
+            ref={sceneViewportRef}
             onTouchStart={handleSceneTouchStart}
+            onTouchMove={handleSceneTouchMove}
             onTouchEnd={handleSceneTouchEnd}
+            onTouchCancel={handleSceneTouchEnd}
           >
-            <SceneIllustration scene={activeScene} />
+            {isMobileViewport && !isMobileFocusMode ? (
+              <div
+                className={isSceneDragging ? 'scene-track is-dragging' : 'scene-track'}
+                style={{
+                  transform: `translate3d(calc(-100% + ${sceneDragOffset}px), 0, 0)`,
+                  transition: isSceneTrackAnimating ? 'transform 220ms ease' : 'none',
+                }}
+                onTransitionEnd={handleSceneTrackTransitionEnd}
+              >
+                <div className="scene-slide" aria-hidden="true">
+                  <SceneIllustration scene={previousScene} />
+                </div>
+                <div className="scene-slide">
+                  <SceneIllustration scene={activeScene} />
+                </div>
+                <div className="scene-slide" aria-hidden="true">
+                  <SceneIllustration scene={nextScene} />
+                </div>
+              </div>
+            ) : (
+              <SceneIllustration scene={activeScene} />
+            )}
           </div>
           <div className="scene-meta">
             <span>{activeScene.title}</span>
@@ -345,29 +474,41 @@ function App() {
 
           <form onSubmit={submitStory} className="story-form" autoComplete="off">
             <label htmlFor="storyText">{copy.form.label}</label>
-            {/* Mobile keyboard/autofill controls are browser hints, not guaranteed suppression.
-                Safari/Chrome may still show native accessory bars; full removal needs native app control. */}
-            <textarea
-              id="storyText"
-              name="storyText"
-              ref={storyInputRef}
-              value={answer}
-              onChange={(event) => setAnswer(event.target.value)}
-              onFocus={() => setIsStoryFocused(true)}
-              onBlur={() => setIsStoryFocused(false)}
-              placeholder=""
-              rows={storyRows}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              inputMode="text"
-              enterKeyHint="done"
-              data-form-type="other"
-              data-lpignore="true"
-              data-1p-ignore="true"
-              data-bwignore="true"
-            />
+            <div className={showMobileInlineHint ? 'story-input-shell has-inline-hint' : 'story-input-shell'}>
+              {/* Mobile keyboard/autofill controls are browser hints, not guaranteed suppression.
+                  Safari/Chrome may still show native accessory bars; full removal needs native app control. */}
+              <textarea
+                id="storyText"
+                name="storyText"
+                ref={storyInputRef}
+                value={answer}
+                onChange={handleAnswerChange}
+                onFocus={() => setIsStoryFocused(true)}
+                onBlur={() => setIsStoryFocused(false)}
+                placeholder=""
+                rows={storyRows}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                inputMode="text"
+                enterKeyHint="done"
+                data-form-type="other"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
+              />
+              {showMobileGhostText ? (
+                <div className={activeHint ? 'story-ghost-text is-hint' : 'story-ghost-text'} aria-hidden="true">
+                  {mobileGhostText}
+                </div>
+              ) : null}
+              {showMobileInlineHint ? (
+                <div className="story-inline-hint" aria-hidden="true">
+                  {activeHint}
+                </div>
+              ) : null}
+            </div>
             {error ? <p className="form-error">{error}</p> : null}
             <div className="form-actions">
               <button type="submit" disabled={isChecking}>
@@ -434,7 +575,7 @@ function App() {
                     </button>
                   </div>
                 </section>
-              ) : activeHint ? (
+              ) : activeHint && !isMobileViewport ? (
                 <aside className="hint-panel" aria-live="polite">
                   <p className="section-kicker">{copy.form.hintLabel} {hintIndex + 1}/{hints.length}</p>
                   <p>{activeHint}</p>
