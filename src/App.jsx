@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { SceneIllustration } from './components/SceneIllustration.jsx'
 import { scenes } from './data/scenes.js'
@@ -13,26 +13,44 @@ function App() {
   const [isGrammarOpen, setIsGrammarOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isStoryFocused, setIsStoryFocused] = useState(false)
+  const [isFocusSceneExpanded, setIsFocusSceneExpanded] = useState(false)
+  const [isFocusSceneExpandedFromFocus, setIsFocusSceneExpandedFromFocus] = useState(false)
+  const [isRestoringFocusMode, setIsRestoringFocusMode] = useState(false)
+  const [focusSceneZoom, setFocusSceneZoom] = useState({ scale: 1, x: 0, y: 0 })
   const [isMobileViewport, setIsMobileViewport] = useState(false)
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
   const [hintIndex, setHintIndex] = useState(null)
   const [error, setError] = useState('')
+  const [sceneTrackIndex, setSceneTrackIndex] = useState(getStoredSceneTrackIndex)
   const [sceneDragOffset, setSceneDragOffset] = useState(0)
   const [isSceneDragging, setIsSceneDragging] = useState(false)
   const [isSceneTrackAnimating, setIsSceneTrackAnimating] = useState(false)
-  const [pendingSceneHandoffIndex, setPendingSceneHandoffIndex] = useState(null)
   const feedbackRef = useRef(null)
   const practiceRef = useRef(null)
   const storyInputRef = useRef(null)
   const sceneViewportRef = useRef(null)
   const pendingFeedbackAnchorRef = useRef(false)
+  const viewportStateRef = useRef({
+    height: null,
+    isMobile: null,
+    keyboardOpen: null,
+  })
   const sceneSwipeRef = useRef({
     startX: 0,
     startY: 0,
     width: 0,
     tracking: false,
     horizontal: false,
-    pendingOffset: 0,
+    targetTrackIndex: null,
+  })
+  const focusSceneGestureRef = useRef({
+    mode: null,
+    startDistance: 0,
+    startScale: 1,
+    startTouchX: 0,
+    startTouchY: 0,
+    startX: 0,
+    startY: 0,
   })
 
   const activeScene = useMemo(
@@ -40,8 +58,22 @@ function App() {
     [activeId],
   )
   const activeSceneIndex = scenes.findIndex((scene) => scene.id === activeScene.id)
-  const previousScene = scenes[(activeSceneIndex - 1 + scenes.length) % scenes.length]
-  const nextScene = scenes[(activeSceneIndex + 1) % scenes.length]
+  const swipeScenes = useMemo(() => {
+    if (!scenes.length) {
+      return []
+    }
+
+    const firstScene = scenes[0]
+    const lastScene = scenes[scenes.length - 1]
+
+    return [
+      { scene: lastScene, key: `clone-last-${lastScene.id}`, isClone: true },
+      ...scenes.map((scene) => ({ scene, key: scene.id, isClone: false })),
+      { scene: firstScene, key: `clone-first-${firstScene.id}`, isClone: true },
+    ]
+  }, [])
+  const sceneSlideCount = swipeScenes.length || 1
+  const sceneTrackTranslatePercent = -(sceneTrackIndex * 100) / sceneSlideCount
   const challengeOptions = activeScene.challengeModes ?? defaultChallengeModes
   const activeChallenge = challengeOptions[challengeMode] ?? challengeOptions.intermediate ?? Object.values(challengeOptions)[0]
   const submittedChallenge = defaultChallengeModes[challengeMode] ?? activeChallenge
@@ -49,8 +81,12 @@ function App() {
   const hints = useMemo(() => buildHints(activeScene, challengeMode, copy), [activeScene, challengeMode, copy])
   const activeHint = hintIndex === null ? null : hints[hintIndex % hints.length]
   const feedbackTone = feedback ? getFeedbackTone(copy, feedback) : null
-  const isMobileFocusMode = isStoryFocused && isMobileViewport && isKeyboardOpen
+  const isMobileFocusMode = isMobileViewport && (
+    (isFocusSceneExpanded && isFocusSceneExpandedFromFocus) ||
+    (isStoryFocused && (isKeyboardOpen || isRestoringFocusMode))
+  )
   const storyRows = isMobileFocusMode ? 2 : feedback ? 3 : 8
+  const challengePromptParts = getChallengePromptParts(copy, challengeMode, activeChallenge)
   const mobileGhostText = activeHint && !answer.trim()
     ? activeHint
     : isMobileFocusMode
@@ -58,7 +94,41 @@ function App() {
       : copy.app.scenePrompt
   const showMobileGhostText = isMobileViewport && !answer.trim() && !feedback
   const showMobileInlineHint = isMobileViewport && Boolean(activeHint) && Boolean(answer.trim()) && !feedback
-  const challengePromptParts = getChallengePromptParts(copy, challengeMode, activeChallenge)
+
+  useEffect(() => {
+    if (!isMobileViewport) {
+      setIsFocusSceneExpanded(false)
+      setIsFocusSceneExpandedFromFocus(false)
+    }
+  }, [isMobileViewport])
+
+  useEffect(() => {
+    if (!isFocusSceneExpanded) {
+      setIsFocusSceneExpandedFromFocus(false)
+      setFocusSceneZoom({ scale: 1, x: 0, y: 0 })
+      focusSceneGestureRef.current = {
+        mode: null,
+        startDistance: 0,
+        startScale: 1,
+        startTouchX: 0,
+        startTouchY: 0,
+        startX: 0,
+        startY: 0,
+      }
+    }
+  }, [isFocusSceneExpanded])
+
+  useEffect(() => {
+    if (!isRestoringFocusMode) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsRestoringFocusMode(false)
+    }, 700)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [isRestoringFocusMode])
 
   useEffect(() => {
     if (!feedback || !feedbackRef.current) {
@@ -86,20 +156,37 @@ function App() {
       const viewportHeight = window.visualViewport?.height ?? window.innerHeight
       const keyboardDelta = window.innerHeight - viewportHeight
       const keyboardOpen = isMobile && keyboardDelta > 120
-      const effectiveHeight = keyboardOpen ? viewportHeight : window.innerHeight
+      const nextHeight = keyboardOpen ? `${viewportHeight}px` : null
 
-      document.documentElement.style.setProperty('--visual-viewport-height', `${effectiveHeight}px`)
-      setIsMobileViewport(isMobile)
-      setIsKeyboardOpen(keyboardOpen)
+      if (viewportStateRef.current.height !== nextHeight) {
+        if (nextHeight) {
+          document.documentElement.style.setProperty('--visual-viewport-height', nextHeight)
+        } else {
+          document.documentElement.style.removeProperty('--visual-viewport-height')
+        }
+        viewportStateRef.current.height = nextHeight
+      }
+
+      if (viewportStateRef.current.isMobile !== isMobile) {
+        setIsMobileViewport(isMobile)
+        viewportStateRef.current.isMobile = isMobile
+      }
+
+      if (viewportStateRef.current.keyboardOpen !== keyboardOpen) {
+        setIsKeyboardOpen(keyboardOpen)
+        viewportStateRef.current.keyboardOpen = keyboardOpen
+      }
     }
 
     updateVisualViewportHeight()
     window.visualViewport?.addEventListener('resize', updateVisualViewportHeight)
     window.addEventListener('resize', updateVisualViewportHeight)
+    window.addEventListener('orientationchange', updateVisualViewportHeight)
 
     return () => {
       window.visualViewport?.removeEventListener('resize', updateVisualViewportHeight)
       window.removeEventListener('resize', updateVisualViewportHeight)
+      window.removeEventListener('orientationchange', updateVisualViewportHeight)
     }
   }, [])
 
@@ -110,24 +197,6 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(storageKeys.challengeMode, challengeMode)
   }, [challengeMode])
-
-  useLayoutEffect(() => {
-    if (pendingSceneHandoffIndex === null) {
-      return
-    }
-
-    const nextScene = scenes[pendingSceneHandoffIndex]
-
-    setActiveId(nextScene.id)
-    setAnswer('')
-    setFeedback(null)
-    setHintIndex(null)
-    setError('')
-    setSceneDragOffset(0)
-    setIsSceneDragging(false)
-    setIsSceneTrackAnimating(false)
-    setPendingSceneHandoffIndex(null)
-  }, [pendingSceneHandoffIndex])
 
   useEffect(() => {
     if (!storyInputRef.current) {
@@ -171,6 +240,7 @@ function App() {
       setError(copy.errors.tooShort)
       return
     }
+
     const shouldExitFocusAfterFeedback = isMobileFocusMode
 
     setIsChecking(true)
@@ -201,8 +271,7 @@ function App() {
         throw new Error(copy.errors.checkFailed)
       }
 
-      const nextFeedback = await response.json()
-      setFeedback(nextFeedback)
+      setFeedback(await response.json())
 
       if (shouldExitFocusAfterFeedback) {
         pendingFeedbackAnchorRef.current = true
@@ -224,19 +293,21 @@ function App() {
   }
 
   function chooseScene(sceneId, options = {}) {
-    const { scrollToPractice = true, preserveSceneTrack = false } = options
+    const { scrollToPractice = true } = options
+    const nextSceneIndex = scenes.findIndex((scene) => scene.id === sceneId)
+
     setActiveId(sceneId)
+    if (nextSceneIndex >= 0) {
+      setSceneTrackIndex(nextSceneIndex + 1)
+    }
     setAnswer('')
     setFeedback(null)
     setHintIndex(null)
     setError('')
-
-    if (!preserveSceneTrack) {
-      setSceneDragOffset(0)
-      setIsSceneDragging(false)
-      setIsSceneTrackAnimating(false)
-      sceneSwipeRef.current.pendingOffset = 0
-    }
+    setSceneDragOffset(0)
+    setIsSceneDragging(false)
+    setIsSceneTrackAnimating(false)
+    sceneSwipeRef.current.targetTrackIndex = null
 
     if (scrollToPractice) {
       requestAnimationFrame(() => {
@@ -251,7 +322,7 @@ function App() {
   }
 
   function handleSceneTouchStart(event) {
-    if (!isMobileViewport || isStoryFocused) {
+    if (!isMobileViewport || isMobileFocusMode || isFocusSceneExpanded) {
       sceneSwipeRef.current.tracking = false
       return
     }
@@ -263,7 +334,7 @@ function App() {
       width: sceneViewportRef.current?.getBoundingClientRect().width ?? window.innerWidth,
       tracking: true,
       horizontal: false,
-      pendingOffset: 0,
+      targetTrackIndex: null,
     }
     setIsSceneTrackAnimating(false)
     setIsSceneDragging(false)
@@ -271,7 +342,7 @@ function App() {
   }
 
   function handleSceneTouchMove(event) {
-    if (!sceneSwipeRef.current.tracking || !isMobileViewport || isStoryFocused) {
+    if (!sceneSwipeRef.current.tracking || !isMobileViewport || isMobileFocusMode || isFocusSceneExpanded) {
       return
     }
 
@@ -286,7 +357,7 @@ function App() {
         return
       }
 
-      if (absX <= absY * 1.1) {
+      if (absX <= absY * 0.85) {
         sceneSwipeRef.current.tracking = false
         setSceneDragOffset(0)
         setIsSceneDragging(false)
@@ -306,7 +377,7 @@ function App() {
   }
 
   function handleSceneTouchEnd(event) {
-    if (!sceneSwipeRef.current.tracking || !isMobileViewport || isStoryFocused) {
+    if (!sceneSwipeRef.current.tracking || !isMobileViewport || isMobileFocusMode || isFocusSceneExpanded) {
       sceneSwipeRef.current.tracking = false
       return
     }
@@ -318,38 +389,77 @@ function App() {
     const absY = Math.abs(deltaY)
     const width = sceneSwipeRef.current.width || window.innerWidth
     const threshold = Math.min(96, width * 0.22)
-    const committedOffset = deltaX < 0 ? -width : width
+    const tapThreshold = 10
 
-    if (!sceneSwipeRef.current.horizontal || absX < threshold || absX <= absY * 1.15) {
+    if (!sceneSwipeRef.current.horizontal && absX < tapThreshold && absY < tapThreshold) {
       sceneSwipeRef.current.tracking = false
       sceneSwipeRef.current.horizontal = false
-      sceneSwipeRef.current.pendingOffset = 0
+      sceneSwipeRef.current.targetTrackIndex = null
+      setIsSceneTrackAnimating(false)
+      setIsSceneDragging(false)
+      setSceneDragOffset(0)
+      openFocusSceneExpanded(false)
+      return
+    }
+
+    if (!sceneSwipeRef.current.horizontal || absX < threshold || absX <= absY * 0.9) {
+      sceneSwipeRef.current.tracking = false
+      sceneSwipeRef.current.horizontal = false
+      sceneSwipeRef.current.targetTrackIndex = null
       setIsSceneTrackAnimating(true)
       setIsSceneDragging(false)
       setSceneDragOffset(0)
       return
     }
 
+    const targetTrackIndex = sceneTrackIndex + (deltaX < 0 ? 1 : -1)
     sceneSwipeRef.current.tracking = false
     sceneSwipeRef.current.horizontal = false
-    sceneSwipeRef.current.pendingOffset = deltaX < 0 ? 1 : -1
+    sceneSwipeRef.current.targetTrackIndex = targetTrackIndex
     setIsSceneTrackAnimating(true)
     setIsSceneDragging(false)
-    setSceneDragOffset(committedOffset)
+    setSceneTrackIndex(targetTrackIndex)
+    setSceneDragOffset(0)
   }
 
-  function handleSceneTrackTransitionEnd() {
-    const pendingOffset = sceneSwipeRef.current.pendingOffset
+  function handleSceneTrackTransitionEnd(event) {
+    if (event.target !== event.currentTarget) {
+      return
+    }
 
-    if (!pendingOffset) {
+    const targetTrackIndex = sceneSwipeRef.current.targetTrackIndex
+
+    if (targetTrackIndex === null) {
       setIsSceneTrackAnimating(false)
       setSceneDragOffset(0)
       return
     }
 
-    const nextIndex = (activeSceneIndex + pendingOffset + scenes.length) % scenes.length
-    sceneSwipeRef.current.pendingOffset = 0
-    setPendingSceneHandoffIndex(nextIndex)
+    sceneSwipeRef.current.targetTrackIndex = null
+    setIsSceneTrackAnimating(false)
+    setSceneDragOffset(0)
+    setIsSceneDragging(false)
+
+    let normalizedTrackIndex = targetTrackIndex
+
+    if (targetTrackIndex === 0) {
+      normalizedTrackIndex = scenes.length
+    } else if (targetTrackIndex === scenes.length + 1) {
+      normalizedTrackIndex = 1
+    }
+
+    const normalizedSceneIndex = normalizedTrackIndex - 1
+    setActiveId(scenes[normalizedSceneIndex].id)
+    setAnswer('')
+    setFeedback(null)
+    setHintIndex(null)
+    setError('')
+
+    if (normalizedTrackIndex !== targetTrackIndex) {
+      requestAnimationFrame(() => {
+        setSceneTrackIndex(normalizedTrackIndex)
+      })
+    }
   }
 
   function addHint() {
@@ -366,6 +476,113 @@ function App() {
     }
 
     event.preventDefault()
+  }
+
+  function openFocusSceneExpanded(returnToFocus = false) {
+    setIsFocusSceneExpandedFromFocus(returnToFocus)
+    setIsFocusSceneExpanded(true)
+  }
+
+  function closeFocusSceneExpanded() {
+    setIsFocusSceneExpanded(false)
+    if (isFocusSceneExpandedFromFocus) {
+      setIsStoryFocused(true)
+      setIsRestoringFocusMode(true)
+      requestAnimationFrame(() => {
+        storyInputRef.current?.focus()
+      })
+    }
+  }
+
+  function handleFocusSceneTouchStart(event) {
+    const touches = event.touches
+
+    if (touches.length === 2) {
+      const [first, second] = touches
+      focusSceneGestureRef.current = {
+        mode: 'pinch',
+        startDistance: getTouchDistance(first, second),
+        startScale: focusSceneZoom.scale,
+        startTouchX: 0,
+        startTouchY: 0,
+        startX: focusSceneZoom.x,
+        startY: focusSceneZoom.y,
+      }
+      return
+    }
+
+    if (touches.length === 1 && focusSceneZoom.scale > 1) {
+      const [touch] = touches
+      focusSceneGestureRef.current = {
+        mode: 'pan',
+        startDistance: 0,
+        startScale: focusSceneZoom.scale,
+        startTouchX: touch.clientX,
+        startTouchY: touch.clientY,
+        startX: focusSceneZoom.x,
+        startY: focusSceneZoom.y,
+      }
+    }
+  }
+
+  function handleFocusSceneTouchMove(event) {
+    const gesture = focusSceneGestureRef.current
+
+    if (gesture.mode === 'pinch' && event.touches.length === 2) {
+      event.preventDefault()
+      const [first, second] = event.touches
+      const distance = getTouchDistance(first, second)
+      const nextScale = clamp(gesture.startScale * (distance / Math.max(gesture.startDistance, 1)), 1, 4)
+      const scaleRatio = nextScale / Math.max(focusSceneZoom.scale, 1)
+
+      setFocusSceneZoom((current) => {
+        if (nextScale <= 1.05) {
+          return { scale: 1, x: 0, y: 0 }
+        }
+
+        return {
+          scale: nextScale,
+          x: current.x * scaleRatio,
+          y: current.y * scaleRatio,
+        }
+      })
+      return
+    }
+
+    if (gesture.mode === 'pan' && event.touches.length === 1 && focusSceneZoom.scale > 1) {
+      event.preventDefault()
+      const [touch] = event.touches
+      const deltaX = touch.clientX - gesture.startTouchX
+      const deltaY = touch.clientY - gesture.startTouchY
+
+      setFocusSceneZoom((current) => ({
+        ...current,
+        x: gesture.startX + deltaX,
+        y: gesture.startY + deltaY,
+      }))
+    }
+  }
+
+  function handleFocusSceneTouchEnd(event) {
+    if (event.touches.length === 1 && focusSceneZoom.scale > 1) {
+      const [touch] = event.touches
+      focusSceneGestureRef.current = {
+        mode: 'pan',
+        startDistance: 0,
+        startScale: focusSceneZoom.scale,
+        startTouchX: touch.clientX,
+        startTouchY: touch.clientY,
+        startX: focusSceneZoom.x,
+        startY: focusSceneZoom.y,
+      }
+      return
+    }
+
+    focusSceneGestureRef.current.mode = null
+
+    if (event.touches.length === 0 && focusSceneZoom.scale <= 1.05) {
+      setFocusSceneZoom({ scale: 1, x: 0, y: 0 })
+    }
   }
 
   function handleSubmitPress(event) {
@@ -408,18 +625,34 @@ function App() {
     setAnswer(event.target.value)
   }
 
+  function clearStory() {
+    setAnswer('')
+    setError('')
+    setHintIndex(null)
+    requestAnimationFrame(() => {
+      storyInputRef.current?.focus()
+    })
+  }
+
+  function refreshFromTitle() {
+    setAnswer('')
+    window.location.reload()
+  }
+
   return (
     <main className={isMobileFocusMode ? 'app-shell mobile-focus-mode' : 'app-shell'}>
       <section className="practice" ref={practiceRef}>
         <div className="mobile-settings" aria-label={copy.mobileSettings.label}>
           <div className="mobile-topbar">
             <div className="mobile-app-brand">
-              <p className="mobile-app-title">{copy.app.title}</p>
+              <button type="button" className="title-reset mobile-app-title-button" onClick={refreshFromTitle}>
+                <span className="mobile-app-title">{copy.app.title}</span>
+              </button>
               <p className="mobile-app-subtitle">{copy.app.subtitle}</p>
             </div>
             <button
               type="button"
-              className="mobile-menu-button ghost"
+              className={isMobileMenuOpen ? 'mobile-menu-button ghost is-open' : 'mobile-menu-button ghost'}
               aria-label={copy.mobileSettings.toggle}
               aria-expanded={isMobileMenuOpen}
               onClick={() => setIsMobileMenuOpen((open) => !open)}
@@ -429,10 +662,7 @@ function App() {
               <span />
             </button>
           </div>
-          <div
-            className={isMobileMenuOpen ? 'mobile-menu-panel is-open' : 'mobile-menu-panel'}
-            aria-hidden={!isMobileMenuOpen}
-          >
+          <div className={isMobileMenuOpen ? 'mobile-menu-panel is-open' : 'mobile-menu-panel'} aria-hidden={!isMobileMenuOpen}>
             <div className="language-stack">
               <label className="language-control">
                 <span>{copy.app.language}</span>
@@ -478,15 +708,15 @@ function App() {
 
         <div className="scene-pane">
           <section className="instruction-panel">
-            <h1>{copy.app.title}</h1>
+            <button type="button" className="title-reset app-title-button" onClick={refreshFromTitle}>
+              <span className="app-title-text">{copy.app.title}</span>
+            </button>
             <p className="app-subtitle">{copy.app.subtitle}</p>
             <p className="scene-prompt">{copy.app.scenePrompt}</p>
           </section>
-          <div
-            className={[
-              isMobileViewport && !isMobileFocusMode ? 'scene-visual is-swipeable' : 'scene-visual',
-            ].filter(Boolean).join(' ')}
-            ref={sceneViewportRef}
+        <div
+          className={isMobileViewport && !isMobileFocusMode ? 'scene-visual is-swipeable' : 'scene-visual'}
+          ref={sceneViewportRef}
             onTouchStart={handleSceneTouchStart}
             onTouchMove={handleSceneTouchMove}
             onTouchEnd={handleSceneTouchEnd}
@@ -496,24 +726,34 @@ function App() {
               <div
                 className={isSceneDragging ? 'scene-track is-dragging' : 'scene-track'}
                 style={{
-                  transform: `translate3d(calc(-33.333333% + ${sceneDragOffset}px), 0, 0)`,
+                  '--scene-slide-count': sceneSlideCount,
+                  width: `${sceneSlideCount * 100}%`,
+                  transform: `translate3d(calc(${sceneTrackTranslatePercent}% + ${sceneDragOffset}px), 0, 0)`,
                   transition: isSceneTrackAnimating ? 'transform 220ms ease' : 'none',
                 }}
                 onTransitionEnd={handleSceneTrackTransitionEnd}
               >
-                <div className="scene-slide" aria-hidden="true" key={`previous-${previousScene.id}`}>
-                  <SceneIllustration scene={previousScene} />
-                </div>
-                <div className="scene-slide" key={`active-${activeScene.id}`}>
-                  <SceneIllustration scene={activeScene} />
-                </div>
-                <div className="scene-slide" aria-hidden="true" key={`next-${nextScene.id}`}>
-                  <SceneIllustration scene={nextScene} />
-                </div>
+                {swipeScenes.map(({ scene, key, isClone }) => (
+                  <div className="scene-slide" aria-hidden={isClone ? 'true' : undefined} key={key}>
+                    <SceneIllustration scene={scene} />
+                  </div>
+                ))}
               </div>
             ) : (
               <SceneIllustration scene={activeScene} />
             )}
+            {isMobileFocusMode ? (
+              <button
+                type="button"
+                className="focus-scene-toggle ghost"
+                aria-label={copy.form.openImage}
+                onPointerDown={preserveStoryFocus}
+                onMouseDown={preserveStoryFocus}
+                onClick={() => openFocusSceneExpanded(true)}
+              >
+                ⤢
+              </button>
+            ) : null}
           </div>
           <div className="scene-meta">
             <span>{activeScene.title}</span>
@@ -574,65 +814,77 @@ function App() {
           </section>
 
           <form onSubmit={submitStory} className="story-form" autoComplete="off">
-            <div className="story-composer">
-              <label htmlFor="storyText">{copy.form.label}</label>
-              <div className={showMobileInlineHint ? 'story-input-shell has-inline-hint' : 'story-input-shell'}>
-                {/* Mobile keyboard/autofill controls are browser hints, not guaranteed suppression.
-                    Safari/Chrome may still show native accessory bars; full removal needs native app control. */}
-                <textarea
-                  id="storyText"
-                  name="storyText"
-                  ref={storyInputRef}
-                  value={answer}
-                  onChange={handleAnswerChange}
-                  onFocus={() => setIsStoryFocused(true)}
-                  onBlur={() => setIsStoryFocused(false)}
-                  placeholder=""
-                  rows={storyRows}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  inputMode="text"
-                  enterKeyHint="done"
-                  data-form-type="other"
-                  data-lpignore="true"
-                  data-1p-ignore="true"
-                  data-bwignore="true"
-                />
-                {showMobileGhostText ? (
-                  <div className={activeHint ? 'story-ghost-text is-hint' : 'story-ghost-text'} aria-hidden="true">
-                    {mobileGhostText}
-                  </div>
-                ) : null}
-                {showMobileInlineHint ? (
-                  <div className="story-inline-hint" aria-hidden="true">
-                    {activeHint}
-                  </div>
-                ) : null}
-              </div>
-              {error ? <p className="form-error">{error}</p> : null}
-              <div className="form-actions">
-                <button
-                  type="submit"
-                  disabled={isChecking}
-                  onPointerDown={handleSubmitPress}
-                  onMouseDown={handleSubmitPress}
-                  onClick={handleSubmitClick}
-                >
-                  {isChecking ? copy.form.checking : copy.form.submit}
-                </button>
-                <button
-                  type="button"
-                  className="ghost"
-                  onPointerDown={preserveStoryFocus}
-                  onMouseDown={preserveStoryFocus}
-                  onClick={addHint}
-                >
-                  {copy.form.hint}
-                </button>
-              </div>
+            <label htmlFor="storyText">{copy.form.label}</label>
+            <div className={showMobileInlineHint ? 'story-input-shell has-inline-hint' : 'story-input-shell'}>
+              {/* Mobile keyboard/autofill controls are browser hints, not guaranteed suppression.
+                  Safari/Chrome may still show native accessory bars; full removal needs native app control. */}
+              <textarea
+                id="storyText"
+                name="storyText"
+                ref={storyInputRef}
+                value={answer}
+                onChange={handleAnswerChange}
+                onFocus={() => {
+                  setIsStoryFocused(true)
+                  setIsRestoringFocusMode(false)
+                }}
+                onBlur={() => {
+                  setIsStoryFocused(false)
+                }}
+                placeholder=""
+                rows={storyRows}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                inputMode="text"
+                enterKeyHint="done"
+                data-form-type="other"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
+              />
+              {showMobileGhostText ? (
+                <div className={activeHint ? 'story-ghost-text is-hint' : 'story-ghost-text'} aria-hidden="true">
+                  {mobileGhostText}
+                </div>
+              ) : null}
+              {showMobileInlineHint ? (
+                <div className="story-inline-hint" aria-hidden="true">
+                  {activeHint}
+                </div>
+              ) : null}
             </div>
+            {error ? <p className="form-error">{error}</p> : null}
+            <div className="form-actions">
+              <button
+                type="submit"
+                disabled={isChecking}
+                onPointerDown={handleSubmitPress}
+                onMouseDown={handleSubmitPress}
+                onClick={handleSubmitClick}
+              >
+                {isChecking ? copy.form.checking : copy.form.submit}
+              </button>
+            <button
+              type="button"
+              className="ghost"
+              onPointerDown={preserveStoryFocus}
+              onMouseDown={preserveStoryFocus}
+              onClick={addHint}
+            >
+              {copy.form.hint}
+            </button>
+              <button
+                type="button"
+                className="ghost clear-button"
+                onPointerDown={preserveStoryFocus}
+                onMouseDown={preserveStoryFocus}
+                onClick={clearStory}
+              >
+              {copy.form.clear}
+            </button>
+          </div>
             <div className="hint-slot">
               {feedback ? (
                 <section className="feedback" ref={feedbackRef} aria-live="polite" tabIndex="-1">
@@ -700,6 +952,53 @@ function App() {
           </form>
         </div>
       </section>
+
+      {isFocusSceneExpanded ? (
+        <div
+          className="focus-scene-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={copy.form.openImage}
+          onClick={closeFocusSceneExpanded}
+        >
+          <button
+            type="button"
+            className="focus-scene-close ghost"
+            aria-label={copy.form.closeImage}
+            onPointerDown={preserveStoryFocus}
+            onMouseDown={preserveStoryFocus}
+            onClick={closeFocusSceneExpanded}
+          >
+            ×
+          </button>
+          <div
+            className="focus-scene-overlay-art"
+            onClick={(event) => event.stopPropagation()}
+            onTouchStart={handleFocusSceneTouchStart}
+            onTouchMove={handleFocusSceneTouchMove}
+            onTouchEnd={handleFocusSceneTouchEnd}
+            onTouchCancel={handleFocusSceneTouchEnd}
+          >
+            <div
+              className="focus-scene-zoom-content"
+              style={{
+                transform: `translate3d(${focusSceneZoom.x}px, ${focusSceneZoom.y}px, 0) scale(${focusSceneZoom.scale})`,
+              }}
+            >
+              {activeScene.image ? (
+                <img
+                  className="focus-scene-image"
+                  src={activeScene.image}
+                  alt={activeScene.prompt}
+                  draggable="false"
+                />
+              ) : (
+                <SceneIllustration scene={activeScene} />
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="scene-bank" aria-labelledby="scene-bank-title">
         <div className="bank-heading">
@@ -790,27 +1089,11 @@ function getStoredChallengeMode() {
   return Object.hasOwn(defaultChallengeModes, storedChallengeMode) ? storedChallengeMode : 'intermediate'
 }
 
-function getChallengePromptParts(copy, challengeMode, activeChallenge) {
-  return copy.challengePromptParts?.[challengeMode] ?? [{ type: 'text', value: activeChallenge.prompt }]
-}
+function getStoredSceneTrackIndex() {
+  const storedSceneId = getStoredSceneId()
+  const storedSceneIndex = scenes.findIndex((scene) => scene.id === storedSceneId)
 
-function renderChallengePrompt(parts, onTermClick) {
-  return parts.map((part, index) => {
-    if (part.type === 'term') {
-      return (
-        <button
-          key={`${part.value}-${index}`}
-          type="button"
-          className="grammar-inline-link"
-          onClick={onTermClick}
-        >
-          {part.value}
-        </button>
-      )
-    }
-
-    return <span key={`${part.value}-${index}`}>{part.value}</span>
-  })
+  return storedSceneIndex >= 0 ? storedSceneIndex + 1 : 1
 }
 
 function scrollFeedbackOnlyIfNeeded(element) {
@@ -848,9 +1131,7 @@ function scrollFeedbackToTopUnderScene(element) {
   }
 
   const scenePane = document.querySelector('.scene-pane')
-  const stickyOffset = window.matchMedia('(max-width: 560px)').matches
-    ? 0
-    : (scenePane ? scenePane.getBoundingClientRect().height : 0)
+  const stickyOffset = scenePane ? scenePane.getBoundingClientRect().height : 0
   const top = window.scrollY + element.getBoundingClientRect().top - stickyOffset - 8
 
   window.scrollTo({
@@ -859,50 +1140,117 @@ function scrollFeedbackToTopUnderScene(element) {
   })
 }
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function getTouchDistance(firstTouch, secondTouch) {
+  return Math.hypot(secondTouch.clientX - firstTouch.clientX, secondTouch.clientY - firstTouch.clientY)
+}
+
 function buildHints(scene, challengeMode, copy) {
   const relationships = scene.sceneScript?.relationships ?? []
-  const coreActions = scene.sceneScript?.coreActions ?? []
   const interruption = relationships.find((relationship) => relationship.type === 'interruption')
   const causeResult = relationships.find((relationship) => relationship.type === 'cause-result' || relationship.type === 'reaction')
   const earlierPast = relationships.find((relationship) => relationship.type === 'earlier-past')
   const backgroundAction = findAction(scene, interruption?.backgroundAction)
   const eventAction = findAction(scene, interruption?.interruptingAction)
   const resultAction = findAction(scene, causeResult?.result)
-  const focusActor = eventAction?.actor ?? resultAction?.actor ?? coreActions.find((action) => action.actor)?.actor
 
   if (challengeMode === 'beginner') {
     return [
       eventAction
-        ? copy.hints.beginner.finishedActionWithForm(eventAction.recommendedVerbForms?.[0] ?? copy.hints.defaults.simplePast)
-        : copy.hints.beginner.finishedAction,
+        ? copy.hints.beginner.finishedAction(eventAction.recommendedVerbForms?.[0] ?? 'simple past')
+        : copy.hints.beginner.finishedActionFallback,
       resultAction
-        ? copy.hints.beginner.secondActionWithActor(resultAction.actor)
-        : copy.hints.beginner.secondAction,
-      focusActor
-        ? copy.hints.beginner.visibleThingWithActor(focusActor)
-        : copy.hints.beginner.visibleThing,
+        ? copy.hints.beginner.secondAction(resultAction.actor)
+        : copy.hints.beginner.secondActionFallback,
+      copy.hints.beginner.sceneAnchor,
     ]
   }
 
   if (challengeMode === 'advanced') {
     return [
       earlierPast
-        ? copy.hints.advanced.earlierClue
-        : copy.hints.advanced.earlierDetail,
-      copy.hints.advanced.beforeByTheTime,
-      copy.hints.advanced.chooseTimeline,
+        ? copy.hints.advanced.earlierPast
+        : copy.hints.advanced.earlierPastFallback,
+      copy.hints.advanced.connectors,
+      copy.hints.advanced.selectiveDetail,
     ]
   }
 
   return [
     backgroundAction
-      ? copy.hints.intermediate.backgroundWithForm(backgroundAction.recommendedVerbForms?.[0] ?? copy.hints.defaults.pastContinuous)
-      : copy.hints.intermediate.background,
+      ? copy.hints.intermediate.backgroundAction(backgroundAction.recommendedVerbForms?.[0] ?? 'was/were + -ing')
+      : copy.hints.intermediate.backgroundActionFallback,
     eventAction
-      ? copy.hints.intermediate.whenWithActor(eventAction.actor)
-      : copy.hints.intermediate.when,
-    copy.hints.intermediate.whileAndPast,
+      ? copy.hints.intermediate.eventAction(eventAction.actor)
+      : copy.hints.intermediate.eventActionFallback,
+    copy.hints.intermediate.pattern,
   ]
+}
+
+function getChallengePromptParts(copy, challengeMode, activeChallenge) {
+  const text = copy.challengePrompts[challengeMode] ?? activeChallenge.prompt
+  const grammarTerms = ['simple past', 'had been', 'had', 'when', 'while']
+  const orderedTerms = grammarTerms
+    .filter((term) => text.includes(term))
+    .sort((left, right) => right.length - left.length)
+
+  if (!orderedTerms.length) {
+    return [{ type: 'text', value: text }]
+  }
+
+  const parts = []
+  let cursor = 0
+
+  while (cursor < text.length) {
+    let nextMatch = null
+
+    for (const term of orderedTerms) {
+      const matchIndex = text.indexOf(term, cursor)
+      if (matchIndex === -1) {
+        continue
+      }
+
+      if (!nextMatch || matchIndex < nextMatch.index) {
+        nextMatch = { term, index: matchIndex }
+      }
+    }
+
+    if (!nextMatch) {
+      parts.push({ type: 'text', value: text.slice(cursor) })
+      break
+    }
+
+    if (nextMatch.index > cursor) {
+      parts.push({ type: 'text', value: text.slice(cursor, nextMatch.index) })
+    }
+
+    parts.push({ type: 'grammar', value: nextMatch.term })
+    cursor = nextMatch.index + nextMatch.term.length
+  }
+
+  return parts
+}
+
+function renderChallengePrompt(parts, openGrammar) {
+  return parts.map((part, index) => {
+    if (part.type !== 'grammar') {
+      return <span key={`text-${index}`}>{part.value}</span>
+    }
+
+    return (
+      <button
+        key={`grammar-${part.value}-${index}`}
+        type="button"
+        className="grammar-inline-link"
+        onClick={openGrammar}
+      >
+        {part.value}
+      </button>
+    )
+  })
 }
 
 function findAction(scene, actionId) {
@@ -922,10 +1270,9 @@ const languageOptions = {
 const translations = {
   en: {
     app: {
-      eyebrow: 'English past narration trainer',
       title: 'Tell a story',
-      scenePrompt: 'Look at the scene. Tell the story in the past.',
       subtitle: 'English past narration trainer',
+      scenePrompt: 'Look at the scene. Tell the story in the past.',
       language: 'Feedback language',
       languageHelp: 'You always write in English. Feedback can be shown in another language.',
       grammarFocus: 'Grammar focus',
@@ -937,32 +1284,14 @@ const translations = {
       intermediate: 'Use when or while to connect an action in progress with a completed event.',
       advanced: 'Use had for an earlier event, or had been for an earlier action that continued for some time.',
     },
-    challengePromptParts: {
-      beginner: [
-        { type: 'text', value: 'Write two or three ' },
-        { type: 'term', value: 'simple past' },
-        { type: 'text', value: ' sentences about the scene.' },
-      ],
-      intermediate: [
-        { type: 'text', value: 'Use ' },
-        { type: 'term', value: 'when' },
-        { type: 'text', value: ' or ' },
-        { type: 'term', value: 'while' },
-        { type: 'text', value: ' to connect an action in progress with a completed event.' },
-      ],
-      advanced: [
-        { type: 'text', value: 'Use ' },
-        { type: 'term', value: 'had' },
-        { type: 'text', value: ' for an earlier event, or ' },
-        { type: 'term', value: 'had been' },
-        { type: 'text', value: ' for an earlier action that continued for some time.' },
-      ],
-    },
     form: {
       label: 'Your story',
       submit: 'Check my story',
       checking: 'Checking...',
       hint: 'Give me a hint',
+      clear: 'Clear',
+      openImage: 'Open image full screen',
+      closeImage: 'Close full screen image',
       hintLabel: 'Hint',
     },
     feedback: {
@@ -980,7 +1309,7 @@ const translations = {
       next: 'Next step:',
       editStory: 'Edit story',
       waitingTitle: 'Feedback appears here',
-      waitingText: 'Write your story and check it to see coaching without leaving the scene.',
+      waitingText: 'Write your story and check your verbs to see coaching without leaving the scene.',
     },
     bank: { title: 'Select a practice scene' },
     mobileSettings: { label: 'Mobile lesson settings', toggle: 'Open feedback settings' },
@@ -990,36 +1319,31 @@ const translations = {
       next: 'Next scene',
     },
     starters: { label: 'Useful story starters' },
-    hints: {
-      defaults: {
-        simplePast: 'simple past',
-        pastContinuous: 'was/were + -ing',
-      },
-      beginner: {
-        finishedActionWithForm: (form) => `Look for one finished action. You could use: ${form}.`,
-        finishedAction: 'Look for one finished action and describe it with simple past.',
-        secondActionWithActor: (actor) => `Add a second finished action. Look at: ${actor}.`,
-        secondAction: 'Add a second simple past sentence with Then...',
-        visibleThingWithActor: (actor) => `Name one visible person or thing in the scene, like ${actor}, and say what happened.`,
-        visibleThing: 'Name one visible person or thing in the scene and say what happened.',
-      },
-      intermediate: {
-        backgroundWithForm: (form) => `Start with the background action: ${form}.`,
-        background: 'Start with an action already in progress.',
-        whenWithActor: (actor) => `Connect it to a sudden event with when. Look at: ${actor}.`,
-        when: 'Connect the background action to a sudden event with when.',
-        whileAndPast: 'Use while for the background action and simple past for the sudden event.',
-      },
-      advanced: {
-        earlierClue: 'Find a clue about what happened earlier. Use had or had been.',
-        earlierDetail: 'Add an earlier past detail with had or had been.',
-        beforeByTheTime: 'Use before or by the time to make the earlier past relationship clear.',
-        chooseTimeline: 'Do not describe every action. Choose the detail that changes the timeline.',
-      },
-    },
     errors: {
       tooShort: 'Write at least one full sentence so the coach can see the verb relationships.',
       checkFailed: 'The coach could not check that answer yet.',
+    },
+    hints: {
+      beginner: {
+        finishedAction: (verbForm) => `Look for one finished action. You could use: ${verbForm}.`,
+        finishedActionFallback: 'Look for one finished action and describe it with simple past.',
+        secondAction: (actor) => `Add a second finished action. Look at: ${actor}.`,
+        secondActionFallback: 'Add a second simple past sentence with Then...',
+        sceneAnchor: 'Name one visible person or thing in the scene and say what happened.',
+      },
+      intermediate: {
+        backgroundAction: (verbForm) => `Start with the background action: ${verbForm}.`,
+        backgroundActionFallback: 'Start with an action already in progress.',
+        eventAction: (actor) => `Connect it to a sudden event with when. Look at: ${actor}.`,
+        eventActionFallback: 'Connect the background action to a sudden event with when.',
+        pattern: 'Use while for the background action and simple past for the sudden event.',
+      },
+      advanced: {
+        earlierPast: 'Find a clue about what happened earlier. Use had or had been.',
+        earlierPastFallback: 'Add an earlier past detail with had or had been.',
+        connectors: 'Use before or by the time to make the earlier past relationship clear.',
+        selectiveDetail: 'Do not describe every action. Choose the detail that changes the timeline.',
+      },
     },
     grammar: {
       open: 'Open grammar guide',
@@ -1030,7 +1354,7 @@ const translations = {
         {
           title: 'Simple Past',
           text: 'Use it for completed events that move the story forward.',
-          example: 'The child dropped the oranges. The woman opened the door.',
+          example: 'The child dropped the oranges. The cyclist swerved.',
         },
         {
           title: 'Past Continuous',
@@ -1057,11 +1381,10 @@ const translations = {
   },
   es: {
     app: {
-      eyebrow: 'Entrenador de narración en pasado en inglés',
       title: 'Cuenta una historia',
-      scenePrompt: 'Mira la escena. Cuenta la historia en pasado.',
       subtitle: 'Entrenador de narración en pasado en inglés',
-      language: 'Idioma de ayuda',
+      scenePrompt: 'Mira la escena. Cuenta la historia en pasado.',
+      language: 'Idioma del feedback',
       languageHelp: 'Siempre escribes en inglés. La retroalimentación puede mostrarse en otro idioma.',
       grammarFocus: 'Enfoque gramatical',
     },
@@ -1072,32 +1395,14 @@ const translations = {
       intermediate: 'Usa when o while para conectar una acción en progreso con un evento terminado.',
       advanced: 'Usa had para un evento anterior, o had been para una acción anterior que continuó durante un tiempo.',
     },
-    challengePromptParts: {
-      beginner: [
-        { type: 'text', value: 'Escribe dos o tres oraciones en ' },
-        { type: 'term', value: 'simple past' },
-        { type: 'text', value: ' sobre la escena.' },
-      ],
-      intermediate: [
-        { type: 'text', value: 'Usa ' },
-        { type: 'term', value: 'when' },
-        { type: 'text', value: ' o ' },
-        { type: 'term', value: 'while' },
-        { type: 'text', value: ' para conectar una acción en progreso con un evento terminado.' },
-      ],
-      advanced: [
-        { type: 'text', value: 'Usa ' },
-        { type: 'term', value: 'had' },
-        { type: 'text', value: ' para un evento anterior, o ' },
-        { type: 'term', value: 'had been' },
-        { type: 'text', value: ' para una acción anterior que continuó durante un tiempo.' },
-      ],
-    },
     form: {
       label: 'Tu historia',
-      submit: 'Revisar mi historia',
+      submit: 'Revisar mis verbos',
       checking: 'Revisando...',
       hint: 'Dame una pista',
+      clear: 'Borrar',
+      openImage: 'Abrir imagen en pantalla completa',
+      closeImage: 'Cerrar imagen en pantalla completa',
       hintLabel: 'Pista',
     },
     feedback: {
@@ -1115,7 +1420,7 @@ const translations = {
       next: 'Siguiente paso:',
       editStory: 'Editar historia',
       waitingTitle: 'Aquí aparecerá la retroalimentación',
-      waitingText: 'Escribe tu historia y revísala para ver la ayuda sin salir de la escena.',
+      waitingText: 'Escribe tu historia y revisa tus verbos para ver la ayuda sin salir de la escena.',
     },
     bank: { title: 'Selecciona una escena de práctica' },
     mobileSettings: { label: 'Ajustes móviles de la lección', toggle: 'Abrir ajustes de feedback' },
@@ -1125,36 +1430,31 @@ const translations = {
       next: 'Siguiente escena',
     },
     starters: { label: 'Inicios útiles para historias' },
-    hints: {
-      defaults: {
-        simplePast: 'simple past',
-        pastContinuous: 'was/were + -ing',
-      },
-      beginner: {
-        finishedActionWithForm: (form) => `Busca una acción terminada. Podrías usar: ${form}.`,
-        finishedAction: 'Busca una acción terminada y descríbela con simple past.',
-        secondActionWithActor: (actor) => `Añade una segunda acción terminada. Mira: ${actor}.`,
-        secondAction: 'Añade una segunda oración en simple past con Then...',
-        visibleThingWithActor: (actor) => `Nombra una persona o cosa visible en la escena, como ${actor}, y di qué pasó.`,
-        visibleThing: 'Nombra una persona o cosa visible en la escena y di qué pasó.',
-      },
-      intermediate: {
-        backgroundWithForm: (form) => `Empieza con la acción de fondo: ${form}.`,
-        background: 'Empieza con una acción que ya estaba en progreso.',
-        whenWithActor: (actor) => `Conéctala con un evento repentino usando when. Mira: ${actor}.`,
-        when: 'Conecta la acción de fondo con un evento repentino usando when.',
-        whileAndPast: 'Usa while para la acción de fondo y simple past para el evento repentino.',
-      },
-      advanced: {
-        earlierClue: 'Busca una pista de lo que había pasado antes. Usa had o had been.',
-        earlierDetail: 'Añade un detalle anterior con had o had been.',
-        beforeByTheTime: 'Usa before o by the time para dejar clara la relación con el pasado anterior.',
-        chooseTimeline: 'No describas cada acción. Elige el detalle que cambia la línea de tiempo.',
-      },
-    },
     errors: {
       tooShort: 'Escribe al menos una oración completa para que el coach pueda ver la relación entre los verbos.',
       checkFailed: 'El coach no pudo revisar esa respuesta todavía.',
+    },
+    hints: {
+      beginner: {
+        finishedAction: (verbForm) => `Busca una acción terminada. Puedes usar: ${verbForm}.`,
+        finishedActionFallback: 'Busca una acción terminada y descríbela con simple past.',
+        secondAction: (actor) => `Añade una segunda acción terminada. Mira: ${actor}.`,
+        secondActionFallback: 'Añade una segunda oración en simple past con Then...',
+        sceneAnchor: 'Nombra una persona u objeto visible de la escena y di qué pasó.',
+      },
+      intermediate: {
+        backgroundAction: (verbForm) => `Empieza con la acción de fondo: ${verbForm}.`,
+        backgroundActionFallback: 'Empieza con una acción que ya estaba en progreso.',
+        eventAction: (actor) => `Conéctala con un evento repentino usando when. Mira: ${actor}.`,
+        eventActionFallback: 'Conecta la acción de fondo con un evento repentino usando when.',
+        pattern: 'Usa while para la acción de fondo y simple past para el evento repentino.',
+      },
+      advanced: {
+        earlierPast: 'Busca una pista de algo que ocurrió antes. Usa had o had been.',
+        earlierPastFallback: 'Añade un detalle anterior con had o had been.',
+        connectors: 'Usa before o by the time para dejar clara la relación anterior.',
+        selectiveDetail: 'No describas todo. Elige el detalle que cambia la línea de tiempo.',
+      },
     },
     grammar: {
       open: 'Abrir guía gramatical',
@@ -1165,7 +1465,7 @@ const translations = {
         {
           title: 'Simple Past',
           text: 'Úsalo para eventos terminados que hacen avanzar la historia.',
-          example: 'The child dropped the oranges. The woman opened the door.',
+          example: 'The child dropped the oranges. The cyclist swerved.',
         },
         {
           title: 'Past Continuous',
@@ -1192,10 +1492,9 @@ const translations = {
   },
   sv: {
     app: {
-      eyebrow: 'Träning i engelsk berättande i dåtid',
       title: 'Berätta en historia',
+      subtitle: 'Tränare för engelsk berättelse i dåtid',
       scenePrompt: 'Titta på scenen. Berätta historien i dåtid.',
-      subtitle: 'Träning i engelsk berättande i dåtid',
       language: 'Språk för feedback',
       languageHelp: 'Du skriver alltid på engelska. Feedbacken kan visas på ett annat språk.',
       grammarFocus: 'Grammatiskt fokus',
@@ -1207,50 +1506,32 @@ const translations = {
       intermediate: 'Använd when eller while för att koppla en pågående handling till en avslutad händelse.',
       advanced: 'Använd had för en tidigare händelse, eller had been för en tidigare handling som pågick en stund.',
     },
-    challengePromptParts: {
-      beginner: [
-        { type: 'text', value: 'Skriv två eller tre meningar i ' },
-        { type: 'term', value: 'simple past' },
-        { type: 'text', value: ' om scenen.' },
-      ],
-      intermediate: [
-        { type: 'text', value: 'Använd ' },
-        { type: 'term', value: 'when' },
-        { type: 'text', value: ' eller ' },
-        { type: 'term', value: 'while' },
-        { type: 'text', value: ' för att koppla en pågående handling till en avslutad händelse.' },
-      ],
-      advanced: [
-        { type: 'text', value: 'Använd ' },
-        { type: 'term', value: 'had' },
-        { type: 'text', value: ' för en tidigare händelse, eller ' },
-        { type: 'term', value: 'had been' },
-        { type: 'text', value: ' för en tidigare handling som pågick en stund.' },
-      ],
-    },
     form: {
-      label: 'Din text',
-      submit: 'Granska min text',
-      checking: 'Granskar...',
-      hint: 'Ge mig en hint',
-      hintLabel: 'Hint',
+      label: 'Din historia',
+      submit: 'Kolla min historia',
+      checking: 'Kollar...',
+      hint: 'Ge mig en ledtråd',
+      clear: 'Rensa',
+      openImage: 'Öppna bild i helskärm',
+      closeImage: 'Stäng helskärmsbild',
+      hintLabel: 'Ledtråd',
     },
     feedback: {
       verdict: 'Coachens kommentar',
       verdicts: {
         'keep-building': { label: 'Börja med tidslinjen', detail: 'Använd en tydlig handling i dåtid' },
-        'good-start': { label: 'Bra början', detail: 'Förtydliga tidslinjen' },
-        'good-work': { label: 'Bra jobbat', detail: 'Lite puts kvar' },
+        'good-start': { label: 'Bra start', detail: 'Förtydliga tidslinjen' },
+        'good-work': { label: 'Bra jobbat', detail: 'Lite finslipning' },
         excellent: { label: 'Utmärkt', detail: 'Redo att gå vidare' },
       },
-      worked: 'Det här fungerade',
+      worked: 'Detta fungerade',
       tryThis: 'Prova detta',
       betterVersion: 'Bättre version:',
       detected: 'Upptäckt',
       next: 'Nästa steg:',
-      editStory: 'Redigera texten',
-      waitingTitle: 'Feedback visas här',
-      waitingText: 'Skriv din text och granska den för att få coachning utan att lämna scenen.',
+      editStory: 'Redigera historien',
+      waitingTitle: 'Feedbacken visas här',
+      waitingText: 'Skriv din historia och kolla den för att se coachning utan att lämna scenen.',
     },
     bank: { title: 'Välj en övningsscen' },
     mobileSettings: { label: 'Mobilinställningar för övningen', toggle: 'Öppna feedbackinställningar' },
@@ -1260,47 +1541,42 @@ const translations = {
       next: 'Nästa scen',
     },
     starters: { label: 'Användbara berättelsestarter' },
+    errors: {
+      tooShort: 'Skriv minst en hel mening så att coachen kan se relationen mellan verben.',
+      checkFailed: 'Coachen kunde inte kolla svaret ännu.',
+    },
     hints: {
-      defaults: {
-        simplePast: 'simple past',
-        pastContinuous: 'was/were + -ing',
-      },
       beginner: {
-        finishedActionWithForm: (form) => `Leta efter en avslutad handling. Du kan använda: ${form}.`,
-        finishedAction: 'Leta efter en avslutad handling och beskriv den med simple past.',
-        secondActionWithActor: (actor) => `Lägg till en andra avslutad handling. Titta på: ${actor}.`,
-        secondAction: 'Lägg till en andra mening i simple past med Then...',
-        visibleThingWithActor: (actor) => `Nämn en synlig person eller sak i scenen, till exempel ${actor}, och säg vad som hände.`,
-        visibleThing: 'Nämn en synlig person eller sak i scenen och säg vad som hände.',
+        finishedAction: (verbForm) => `Leta efter en avslutad handling. Du kan använda: ${verbForm}.`,
+        finishedActionFallback: 'Leta efter en avslutad handling och beskriv den med simple past.',
+        secondAction: (actor) => `Lägg till en andra avslutad handling. Titta på: ${actor}.`,
+        secondActionFallback: 'Lägg till en andra mening i simple past med Then...',
+        sceneAnchor: 'Nämn en synlig person eller sak i scenen och säg vad som hände.',
       },
       intermediate: {
-        backgroundWithForm: (form) => `Börja med bakgrundshandlingen: ${form}.`,
-        background: 'Börja med en handling som redan pågick.',
-        whenWithActor: (actor) => `Knyt den till en plötslig händelse med when. Titta på: ${actor}.`,
-        when: 'Knyt bakgrundshandlingen till en plötslig händelse med when.',
-        whileAndPast: 'Använd while för bakgrundshandlingen och simple past för den plötsliga händelsen.',
+        backgroundAction: (verbForm) => `Börja med bakgrundshandlingen: ${verbForm}.`,
+        backgroundActionFallback: 'Börja med en handling som redan pågick.',
+        eventAction: (actor) => `Koppla den till en plötslig händelse med when. Titta på: ${actor}.`,
+        eventActionFallback: 'Koppla bakgrundshandlingen till en plötslig händelse med when.',
+        pattern: 'Använd while för bakgrundshandlingen och simple past för den plötsliga händelsen.',
       },
       advanced: {
-        earlierClue: 'Leta efter en ledtråd till vad som hade hänt tidigare. Använd had eller had been.',
-        earlierDetail: 'Lägg till en tidigare detalj med had eller had been.',
-        beforeByTheTime: 'Använd before eller by the time för att göra den tidigare relationen tydlig.',
-        chooseTimeline: 'Beskriv inte varje handling. Välj den detalj som förändrar tidslinjen.',
+        earlierPast: 'Hitta en ledtråd om något som hände tidigare. Använd had eller had been.',
+        earlierPastFallback: 'Lägg till en tidigare detalj med had eller had been.',
+        connectors: 'Använd before eller by the time för att göra den tidigare relationen tydlig.',
+        selectiveDetail: 'Beskriv inte allt. Välj den detalj som förändrar tidslinjen.',
       },
     },
-    errors: {
-      tooShort: 'Skriv minst en hel mening så att coachen kan se relationen mellan verbformerna.',
-      checkFailed: 'Coachen kunde inte granska svaret ännu.',
-    },
     grammar: {
-      open: 'Öppna grammatikguide',
+      open: 'Öppna grammatikguiden',
       close: 'Stäng',
       kicker: 'Grammatikguide',
       title: 'Verb för berättande i dåtid',
       items: [
         {
           title: 'Simple Past',
-          text: 'Används för avslutade händelser som för berättelsen framåt.',
-          example: 'The child dropped the oranges. The woman opened the door.',
+          text: 'Används för avslutade händelser som driver berättelsen framåt.',
+          example: 'The child dropped the oranges. The cyclist swerved.',
         },
         {
           title: 'Past Continuous',
@@ -1314,7 +1590,7 @@ const translations = {
         },
         {
           title: 'Past Perfect Continuous',
-          text: 'Används för en tidigare handling som hade pågått under en tid.',
+          text: 'Används för en tidigare handling som hade pågått en stund.',
           example: 'She had been reading before she fell asleep.',
         },
         {

@@ -19,6 +19,11 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  overflow-anchor: none;
+}
+
 body {
   margin: 0;
 }

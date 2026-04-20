@@ -213,7 +213,7 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
     summary,
     strengths: arrayOfStrings(feedback.strengths).map(cleanFeedbackText).slice(0, 3),
     corrections: usefulCorrections,
-    rewrite: cleanFeedbackText(polishRewriteSurface(normalizeRewrite(feedback.rewrite, answer, scene, challenge, localCopy, usefulCorrections))),
+    rewrite: cleanFeedbackText(normalizeRewrite(feedback.rewrite, answer, scene, challenge, localCopy, usefulCorrections)),
     challenge: cleanFeedbackText(normalizeChallenge(feedback.challenge, challenge, feedbackLanguage, answer)),
     detected: {
       mentionedActions: arrayOfStrings(feedback.detected?.mentionedActions),
@@ -813,9 +813,11 @@ function nextLevelCorrection(challenge, localCopy) {
 
 function normalizeRewrite(value, answer, scene, challenge, localCopy, corrections = []) {
   if (corrections.some((correction) => correction.suggestion?.toLowerCase().includes('keep this sentence'))) {
-    return meaningPreservingRewrite(answer) ||
-      makePolishedFallbackRewrite(answer) ||
-      makeMinimalFallbackRewrite(answer, challenge)
+    return polishRewriteSurface(
+      meaningPreservingRewrite(answer) ||
+        makePolishedFallbackRewrite(answer) ||
+        makeMinimalFallbackRewrite(answer, challenge),
+    )
   }
 
   const candidates = [
@@ -838,9 +840,11 @@ function normalizeRewrite(value, answer, scene, challenge, localCopy, correction
     fallbackRewriteFor(challenge, localCopy),
   ]
 
-  const rewrite = candidates.find((candidate) => candidate && !sameText(candidate, answer))
+  const rewrite = candidates
+    .map((candidate) => polishRewriteSurface(candidate))
+    .find((candidate) => candidate && !sameText(candidate, answer))
 
-  return rewrite || fallbackRewriteFor(challenge, localCopy)
+  return rewrite || polishRewriteSurface(fallbackRewriteFor(challenge, localCopy))
 }
 
 function ensureDistinctRewrite(feedback, answer, challenge, localCopy) {
@@ -849,15 +853,32 @@ function ensureDistinctRewrite(feedback, answer, challenge, localCopy) {
   }
 
   const fallback =
-    meaningPreservingRewrite(answer) ||
-    makePolishedFallbackRewrite(answer) ||
-    makeMinimalFallbackRewrite(answer, challenge) ||
-    fallbackRewriteFor(challenge, localCopy)
+    polishRewriteSurface(meaningPreservingRewrite(answer)) ||
+    polishRewriteSurface(makePolishedFallbackRewrite(answer)) ||
+    polishRewriteSurface(makeMinimalFallbackRewrite(answer, challenge)) ||
+    polishRewriteSurface(fallbackRewriteFor(challenge, localCopy))
 
   return {
     ...feedback,
-    rewrite: sameText(fallback, answer) ? fallbackRewriteFor(challenge, localCopy) : fallback,
+    rewrite: sameText(fallback, answer) ? polishRewriteSurface(fallbackRewriteFor(challenge, localCopy)) : fallback,
   }
+}
+
+function polishRewriteSurface(value) {
+  const text = String(value ?? '').trim()
+
+  if (!text) {
+    return ''
+  }
+
+  const normalizedSpacing = text
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.;!?])/g, '$1')
+
+  const capitalizedSentences = normalizedSpacing.replace(/(^|[.!?]\s+)([a-z])/g, (match, prefix, letter) => `${prefix}${letter.toUpperCase()}`)
+  const withTerminalPunctuation = /[.!?]$/.test(capitalizedSentences) ? capitalizedSentences : `${capitalizedSentences}.`
+
+  return withTerminalPunctuation
 }
 
 function makePolishedFallbackRewrite(answer) {
@@ -877,20 +898,6 @@ function makePolishedFallbackRewrite(answer) {
     .replace(/\boff of\b/g, 'off')
 
   return sameText(polished, text) ? '' : polished
-}
-
-function polishRewriteSurface(value) {
-  const text = String(value ?? '').trim()
-
-  if (!text) {
-    return ''
-  }
-
-  const polished = text
-    .replace(/\s+/g, ' ')
-    .replace(/(^|[.!?]\s+)([a-zÀ-ÿ])/g, (match, prefix, letter) => `${prefix}${letter.toUpperCase()}`)
-
-  return /[.!?]["')\]]?$/.test(polished) ? polished : `${polished}.`
 }
 
 function meaningPreservingRewrite(answer) {
