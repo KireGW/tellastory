@@ -11,6 +11,7 @@ function App() {
   const [feedback, setFeedback] = useState(null)
   const [isChecking, setIsChecking] = useState(false)
   const [isGrammarOpen, setIsGrammarOpen] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isStoryFocused, setIsStoryFocused] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(false)
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
@@ -25,6 +26,7 @@ function App() {
   const feedbackRef = useRef(null)
   const practiceRef = useRef(null)
   const storyInputRef = useRef(null)
+  const scenePaneRef = useRef(null)
   const sceneViewportRef = useRef(null)
   const pendingFeedbackAnchorRef = useRef(false)
   const scenePeekRef = useRef({
@@ -111,6 +113,31 @@ function App() {
       window.removeEventListener('resize', updateVisualViewportHeight)
     }
   }, [])
+
+  useEffect(() => {
+    if (!scenePaneRef.current) {
+      return undefined
+    }
+
+    const updateScenePaneHeight = () => {
+      const height = scenePaneRef.current?.getBoundingClientRect().height ?? 0
+      document.documentElement.style.setProperty('--mobile-scene-pane-height', `${height}px`)
+    }
+
+    updateScenePaneHeight()
+
+    const observer = new ResizeObserver(() => {
+      updateScenePaneHeight()
+    })
+
+    observer.observe(scenePaneRef.current)
+    window.addEventListener('resize', updateScenePaneHeight)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateScenePaneHeight)
+    }
+  }, [activeScene.id, isMobileFocusMode, isMobileMenuOpen, feedback, hintIndex, answer])
 
   useEffect(() => {
     window.localStorage.setItem(storageKeys.sceneId, activeScene.id)
@@ -528,18 +555,35 @@ function App() {
     <main className={isMobileFocusMode ? 'app-shell mobile-focus-mode' : 'app-shell'}>
       <section className="practice" ref={practiceRef}>
         <div className="mobile-settings" aria-label={copy.mobileSettings.label}>
-          <p className="eyebrow mobile-app-title">{copy.app.eyebrow}</p>
-          <div className="language-stack">
-            <label className="language-control">
-              <span>{copy.app.language}</span>
-              <select value={uiLanguage} onChange={(event) => setUiLanguage(event.target.value)}>
-                {Object.entries(languageOptions).map(([id, option]) => (
-                  <option key={id} value={id}>{option.label}</option>
-                ))}
-              </select>
-            </label>
-            <p className="language-helper">{copy.app.languageHelp}</p>
+          <div className="mobile-topbar">
+            <p className="eyebrow mobile-app-title">{copy.app.eyebrow}</p>
+            <button
+              type="button"
+              className="mobile-menu-button ghost"
+              aria-label={copy.mobileSettings.toggle}
+              aria-expanded={isMobileMenuOpen}
+              onClick={() => setIsMobileMenuOpen((open) => !open)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
           </div>
+          {isMobileMenuOpen ? (
+            <div className="mobile-menu-panel">
+              <div className="language-stack">
+                <label className="language-control">
+                  <span>{copy.app.language}</span>
+                  <select value={uiLanguage} onChange={(event) => setUiLanguage(event.target.value)}>
+                    {Object.entries(languageOptions).map(([id, option]) => (
+                      <option key={id} value={id}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <p className="language-helper">{copy.app.languageHelp}</p>
+              </div>
+            </div>
+          ) : null}
 
           <section className="challenge-box mobile-challenge-box" aria-labelledby="challenge-title-mobile">
             <div className="challenge-heading">
@@ -569,7 +613,7 @@ function App() {
           </section>
         </div>
 
-        <div className="scene-pane">
+        <div className="scene-pane" ref={scenePaneRef}>
           <section className="instruction-panel">
             <p className="eyebrow app-title-label">{copy.app.eyebrow}</p>
             <h1>{copy.app.title}</h1>
@@ -595,13 +639,13 @@ function App() {
                 }}
                 onTransitionEnd={handleSceneTrackTransitionEnd}
               >
-                <div className="scene-slide" aria-hidden="true">
+                <div className="scene-slide" aria-hidden="true" key={`previous-${previousScene.id}`}>
                   <SceneIllustration scene={previousScene} />
                 </div>
-                <div className="scene-slide">
+                <div className="scene-slide" key={`active-${activeScene.id}`}>
                   <SceneIllustration scene={activeScene} />
                 </div>
-                <div className="scene-slide" aria-hidden="true">
+                <div className="scene-slide" aria-hidden="true" key={`next-${nextScene.id}`}>
                   <SceneIllustration scene={nextScene} />
                 </div>
               </div>
@@ -668,62 +712,64 @@ function App() {
           </section>
 
           <form onSubmit={submitStory} className="story-form" autoComplete="off">
-            <label htmlFor="storyText">{copy.form.label}</label>
-            <div className={showMobileInlineHint ? 'story-input-shell has-inline-hint' : 'story-input-shell'}>
-              {/* Mobile keyboard/autofill controls are browser hints, not guaranteed suppression.
-                  Safari/Chrome may still show native accessory bars; full removal needs native app control. */}
-              <textarea
-                id="storyText"
-                name="storyText"
-                ref={storyInputRef}
-                value={answer}
-                onChange={handleAnswerChange}
-                onFocus={() => setIsStoryFocused(true)}
-                onBlur={() => setIsStoryFocused(false)}
-                placeholder=""
-                rows={storyRows}
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                inputMode="text"
-                enterKeyHint="done"
-                data-form-type="other"
-                data-lpignore="true"
-                data-1p-ignore="true"
-                data-bwignore="true"
-              />
-              {showMobileGhostText ? (
-                <div className={activeHint ? 'story-ghost-text is-hint' : 'story-ghost-text'} aria-hidden="true">
-                  {mobileGhostText}
-                </div>
-              ) : null}
-              {showMobileInlineHint ? (
-                <div className="story-inline-hint" aria-hidden="true">
-                  {activeHint}
-                </div>
-              ) : null}
-            </div>
-            {error ? <p className="form-error">{error}</p> : null}
-            <div className="form-actions">
-              <button
-                type="submit"
-                disabled={isChecking}
-                onPointerDown={handleSubmitPress}
-                onMouseDown={handleSubmitPress}
-                onClick={handleSubmitClick}
-              >
-                {isChecking ? copy.form.checking : copy.form.submit}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onPointerDown={preserveStoryFocus}
-                onMouseDown={preserveStoryFocus}
-                onClick={addHint}
-              >
-                {copy.form.hint}
-              </button>
+            <div className="story-composer">
+              <label htmlFor="storyText">{copy.form.label}</label>
+              <div className={showMobileInlineHint ? 'story-input-shell has-inline-hint' : 'story-input-shell'}>
+                {/* Mobile keyboard/autofill controls are browser hints, not guaranteed suppression.
+                    Safari/Chrome may still show native accessory bars; full removal needs native app control. */}
+                <textarea
+                  id="storyText"
+                  name="storyText"
+                  ref={storyInputRef}
+                  value={answer}
+                  onChange={handleAnswerChange}
+                  onFocus={() => setIsStoryFocused(true)}
+                  onBlur={() => setIsStoryFocused(false)}
+                  placeholder=""
+                  rows={storyRows}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  inputMode="text"
+                  enterKeyHint="done"
+                  data-form-type="other"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                />
+                {showMobileGhostText ? (
+                  <div className={activeHint ? 'story-ghost-text is-hint' : 'story-ghost-text'} aria-hidden="true">
+                    {mobileGhostText}
+                  </div>
+                ) : null}
+                {showMobileInlineHint ? (
+                  <div className="story-inline-hint" aria-hidden="true">
+                    {activeHint}
+                  </div>
+                ) : null}
+              </div>
+              {error ? <p className="form-error">{error}</p> : null}
+              <div className="form-actions">
+                <button
+                  type="submit"
+                  disabled={isChecking}
+                  onPointerDown={handleSubmitPress}
+                  onMouseDown={handleSubmitPress}
+                  onClick={handleSubmitClick}
+                >
+                  {isChecking ? copy.form.checking : copy.form.submit}
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  onPointerDown={preserveStoryFocus}
+                  onMouseDown={preserveStoryFocus}
+                  onClick={addHint}
+                >
+                  {copy.form.hint}
+                </button>
+              </div>
             </div>
             <div className="hint-slot">
               {feedback ? (
@@ -1035,7 +1081,7 @@ const translations = {
       waitingText: 'Write your story and check it to see coaching without leaving the scene.',
     },
     bank: { title: 'Select a practice scene' },
-    mobileSettings: { label: 'Mobile lesson settings' },
+    mobileSettings: { label: 'Mobile lesson settings', toggle: 'Open feedback settings' },
     sceneNav: {
       label: 'Scene navigation',
       previous: 'Previous scene',
@@ -1121,7 +1167,7 @@ const translations = {
       waitingText: 'Escribe tu historia y revísala para ver la ayuda sin salir de la escena.',
     },
     bank: { title: 'Selecciona una escena de práctica' },
-    mobileSettings: { label: 'Ajustes móviles de la lección' },
+    mobileSettings: { label: 'Ajustes móviles de la lección', toggle: 'Abrir ajustes de feedback' },
     sceneNav: {
       label: 'Navegación de escenas',
       previous: 'Escena anterior',
@@ -1207,7 +1253,7 @@ const translations = {
       waitingText: 'Skriv din text och granska den för att få coachning utan att lämna scenen.',
     },
     bank: { title: 'Välj en övningsscen' },
-    mobileSettings: { label: 'Mobilinställningar för övningen' },
+    mobileSettings: { label: 'Mobilinställningar för övningen', toggle: 'Öppna feedbackinställningar' },
     sceneNav: {
       label: 'Scennavigering',
       previous: 'Föregående scen',

@@ -565,10 +565,15 @@ export function SceneIllustration({ scene }) {
 
   if (scene.image && !imageFailed) {
     return (
-      <picture>
-        <source srcSet={scene.image} type="image/png" />
-        <img className="scene-art" src={scene.image} alt={scene.prompt} onError={() => setImageFailed(true)} />
-      </picture>
+      <img
+        className="scene-art"
+        src={scene.image}
+        alt={scene.prompt}
+        onError={() => setImageFailed(true)}
+        loading="eager"
+        decoding="sync"
+        draggable="false"
+      />
     )
   }
 
