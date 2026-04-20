@@ -50,7 +50,9 @@ function App() {
   const storyRows = isMobileFocusMode ? 2 : feedback ? 3 : 8
   const mobileGhostText = activeHint && !answer.trim()
     ? activeHint
-    : (copy.challengePrompts[challengeMode] ?? activeChallenge.prompt)
+    : isMobileFocusMode
+      ? (copy.challengePrompts[challengeMode] ?? activeChallenge.prompt)
+      : copy.app.scenePrompt
   const showMobileGhostText = isMobileViewport && !answer.trim() && !feedback
   const showMobileInlineHint = isMobileViewport && Boolean(activeHint) && Boolean(answer.trim()) && !feedback
 
@@ -353,14 +355,18 @@ function App() {
     <main className={isMobileFocusMode ? 'app-shell mobile-focus-mode' : 'app-shell'}>
       <section className="practice" ref={practiceRef}>
         <div className="mobile-settings" aria-label={copy.mobileSettings.label}>
-          <label className="language-control">
-            <span>{copy.app.language}</span>
-            <select value={uiLanguage} onChange={(event) => setUiLanguage(event.target.value)}>
-              {Object.entries(languageOptions).map(([id, option]) => (
-                <option key={id} value={id}>{option.label}</option>
-              ))}
-            </select>
-          </label>
+          <p className="eyebrow mobile-app-title">{copy.app.eyebrow}</p>
+          <div className="language-stack">
+            <label className="language-control">
+              <span>{copy.app.language}</span>
+              <select value={uiLanguage} onChange={(event) => setUiLanguage(event.target.value)}>
+                {Object.entries(languageOptions).map(([id, option]) => (
+                  <option key={id} value={id}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <p className="language-helper">{copy.app.languageHelp}</p>
+          </div>
 
           <section className="challenge-box mobile-challenge-box" aria-labelledby="challenge-title-mobile">
             <div className="challenge-heading">
@@ -443,14 +449,17 @@ function App() {
 
         <div className="coach-pane">
           <div className="coach-topbar">
-            <label className="language-control">
-              <span>{copy.app.language}</span>
-              <select value={uiLanguage} onChange={(event) => setUiLanguage(event.target.value)}>
-                {Object.entries(languageOptions).map(([id, option]) => (
-                  <option key={id} value={id}>{option.label}</option>
-                ))}
-              </select>
-            </label>
+            <div className="language-stack">
+              <label className="language-control">
+                <span>{copy.app.language}</span>
+                <select value={uiLanguage} onChange={(event) => setUiLanguage(event.target.value)}>
+                  {Object.entries(languageOptions).map(([id, option]) => (
+                    <option key={id} value={id}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <p className="language-helper">{copy.app.languageHelp}</p>
+            </div>
           </div>
 
           <section className="challenge-box" aria-labelledby="challenge-title">
@@ -777,10 +786,11 @@ const languageOptions = {
 const translations = {
   en: {
     app: {
-      eyebrow: 'Past narration trainer',
+      eyebrow: 'English past narration trainer',
       title: 'Tell what was happening, what happened, and what had happened before.',
       scenePrompt: 'Look at the scene. Tell the story in the past.',
-      language: 'Feedback language',
+      language: 'Feedback',
+      languageHelp: 'You always write in English. Feedback can be shown in another language.',
       grammarFocus: 'Grammar focus',
     },
     task: { title: 'Choose a difficulty level', level: 'Challenge level' },
@@ -862,10 +872,11 @@ const translations = {
   },
   es: {
     app: {
-      eyebrow: 'Entrenador de narración en pasado',
+      eyebrow: 'Entrenador de narración en pasado en inglés',
       title: 'Cuenta qué estaba pasando, qué pasó y qué había pasado antes.',
       scenePrompt: 'Mira la escena. Cuenta la historia en pasado.',
       language: 'Idioma de ayuda',
+      languageHelp: 'Siempre escribes en inglés. La retroalimentación puede mostrarse en otro idioma.',
       grammarFocus: 'Enfoque gramatical',
     },
     task: { title: 'Elige un nivel de dificultad', level: 'Nivel de reto' },
@@ -947,10 +958,11 @@ const translations = {
   },
   no: {
     app: {
-      eyebrow: 'Trener for fortelling i fortid',
+      eyebrow: 'Trener for fortelling i engelsk fortid',
       title: 'Fortell hva som holdt på å skje, hva som skjedde, og hva som hadde skjedd før.',
       scenePrompt: 'Se på scenen. Fortell historien i fortid.',
-      language: 'Tilbakemeldingsspråk',
+      language: 'Tilbakemelding',
+      languageHelp: 'Du skriver alltid på engelsk. Tilbakemeldingen kan vises på et annet språk.',
       grammarFocus: 'Grammatisk fokus',
     },
     task: { title: 'Velg vanskelighetsgrad', level: 'Nivå' },

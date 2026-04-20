@@ -138,6 +138,15 @@
   margin-bottom: 8px;
 }
 
+.mobile-app-title {
+  display: none;
+}
+
+.language-stack {
+  display: grid;
+  gap: 4px;
+}
+
 .language-control {
   display: flex;
   align-items: center;
@@ -155,6 +164,13 @@
   background: #ffffff;
   color: #263630;
   font: inherit;
+}
+
+.language-helper {
+  margin: 0;
+  color: #6a7b74;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 h1 {
@@ -698,8 +714,26 @@ h2 {
     background: #fbfdf9;
   }
 
+  .mobile-app-title {
+    display: block;
+    margin-bottom: 0;
+    font-size: 13px;
+  }
+
   .mobile-settings .language-control {
+    justify-self: end;
     justify-content: flex-end;
+    margin-top: -2px;
+  }
+
+  .mobile-settings .language-stack {
+    justify-items: end;
+  }
+
+  .mobile-settings .language-helper {
+    max-width: 220px;
+    text-align: right;
+    font-size: 11px;
   }
 
   .mobile-settings .mobile-challenge-box {
