@@ -316,6 +316,14 @@ function App() {
     setHintIndex((current) => (current === null ? 0 : (current + 1) % hints.length))
   }
 
+  function preserveStoryFocus(event) {
+    if (!isMobileViewport) {
+      return
+    }
+
+    event.preventDefault()
+  }
+
   function chooseChallenge(id) {
     setChallengeMode(id)
     setFeedback(null)
@@ -400,7 +408,7 @@ function App() {
               <div
                 className={isSceneDragging ? 'scene-track is-dragging' : 'scene-track'}
                 style={{
-                  transform: `translate3d(calc(-100% + ${sceneDragOffset}px), 0, 0)`,
+                  transform: `translate3d(calc(-33.333333% + ${sceneDragOffset}px), 0, 0)`,
                   transition: isSceneTrackAnimating ? 'transform 220ms ease' : 'none',
                 }}
                 onTransitionEnd={handleSceneTrackTransitionEnd}
@@ -514,7 +522,13 @@ function App() {
               <button type="submit" disabled={isChecking}>
                 {isChecking ? copy.form.checking : copy.form.submit}
               </button>
-              <button type="button" className="ghost" onClick={addHint}>
+              <button
+                type="button"
+                className="ghost"
+                onPointerDown={preserveStoryFocus}
+                onMouseDown={preserveStoryFocus}
+                onClick={addHint}
+              >
                 {copy.form.hint}
               </button>
             </div>
