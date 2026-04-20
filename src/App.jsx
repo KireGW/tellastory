@@ -152,11 +152,7 @@ function App() {
       setError(copy.errors.tooShort)
       return
     }
-
-    if (isMobileFocusMode) {
-      setIsStoryFocused(false)
-      storyInputRef.current?.blur()
-    }
+    const shouldExitFocusAfterFeedback = isMobileFocusMode
 
     setIsChecking(true)
     try {
@@ -186,7 +182,15 @@ function App() {
         throw new Error(copy.errors.checkFailed)
       }
 
-      setFeedback(await response.json())
+      const nextFeedback = await response.json()
+      setFeedback(nextFeedback)
+
+      if (shouldExitFocusAfterFeedback) {
+        requestAnimationFrame(() => {
+          setIsStoryFocused(false)
+          storyInputRef.current?.blur()
+        })
+      }
     } catch (feedbackError) {
       setError(feedbackError.message)
     } finally {
@@ -829,12 +833,14 @@ function scrollFeedbackOnlyIfNeeded(element) {
 
 function buildHints(scene, challengeMode) {
   const relationships = scene.sceneScript?.relationships ?? []
+  const coreActions = scene.sceneScript?.coreActions ?? []
   const interruption = relationships.find((relationship) => relationship.type === 'interruption')
   const causeResult = relationships.find((relationship) => relationship.type === 'cause-result' || relationship.type === 'reaction')
   const earlierPast = relationships.find((relationship) => relationship.type === 'earlier-past')
   const backgroundAction = findAction(scene, interruption?.backgroundAction)
   const eventAction = findAction(scene, interruption?.interruptingAction)
   const resultAction = findAction(scene, causeResult?.result)
+  const focusActor = eventAction?.actor ?? resultAction?.actor ?? coreActions.find((action) => action.actor)?.actor
 
   if (challengeMode === 'beginner') {
     return [
@@ -844,7 +850,9 @@ function buildHints(scene, challengeMode) {
       resultAction
         ? `Add a second finished action. Look at: ${resultAction.actor}.`
         : 'Add a second simple past sentence with Then...',
-      'Name one person or animal in the scene and say what happened.',
+      focusActor
+        ? `Name one visible person or thing in the scene, like ${focusActor}, and say what happened.`
+        : 'Name one visible person or thing in the scene and say what happened.',
     ]
   }
 
