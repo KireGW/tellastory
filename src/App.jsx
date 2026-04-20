@@ -58,7 +58,7 @@ function App() {
   const activeChallenge = challengeOptions[challengeMode] ?? challengeOptions.intermediate ?? Object.values(challengeOptions)[0]
   const submittedChallenge = defaultChallengeModes[challengeMode] ?? activeChallenge
   const copy = translations[uiLanguage]
-  const hints = useMemo(() => buildHints(activeScene, challengeMode), [activeScene, challengeMode])
+  const hints = useMemo(() => buildHints(activeScene, challengeMode, copy), [activeScene, challengeMode, copy])
   const activeHint = hintIndex === null ? null : hints[hintIndex % hints.length]
   const feedbackTone = feedback ? getFeedbackTone(copy, feedback) : null
   const isMobileFocusMode = isStoryFocused && isMobileViewport && isKeyboardOpen
@@ -97,19 +97,20 @@ function App() {
       const isMobile = window.matchMedia('(max-width: 560px)').matches
       const viewportHeight = window.visualViewport?.height ?? window.innerHeight
       const keyboardDelta = window.innerHeight - viewportHeight
-      document.documentElement.style.setProperty('--visual-viewport-height', `${viewportHeight}px`)
+      const keyboardOpen = isMobile && keyboardDelta > 120
+      const effectiveHeight = keyboardOpen ? viewportHeight : window.innerHeight
+
+      document.documentElement.style.setProperty('--visual-viewport-height', `${effectiveHeight}px`)
       setIsMobileViewport(isMobile)
-      setIsKeyboardOpen(isMobile && keyboardDelta > 120)
+      setIsKeyboardOpen(keyboardOpen)
     }
 
     updateVisualViewportHeight()
     window.visualViewport?.addEventListener('resize', updateVisualViewportHeight)
-    window.visualViewport?.addEventListener('scroll', updateVisualViewportHeight)
     window.addEventListener('resize', updateVisualViewportHeight)
 
     return () => {
       window.visualViewport?.removeEventListener('resize', updateVisualViewportHeight)
-      window.visualViewport?.removeEventListener('scroll', updateVisualViewportHeight)
       window.removeEventListener('resize', updateVisualViewportHeight)
     }
   }, [])
@@ -569,21 +570,22 @@ function App() {
               <span />
             </button>
           </div>
-          {isMobileMenuOpen ? (
-            <div className="mobile-menu-panel">
-              <div className="language-stack">
-                <label className="language-control">
-                  <span>{copy.app.language}</span>
-                  <select value={uiLanguage} onChange={(event) => setUiLanguage(event.target.value)}>
-                    {Object.entries(languageOptions).map(([id, option]) => (
-                      <option key={id} value={id}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <p className="language-helper">{copy.app.languageHelp}</p>
-              </div>
+          <div
+            className={isMobileMenuOpen ? 'mobile-menu-panel is-open' : 'mobile-menu-panel'}
+            aria-hidden={!isMobileMenuOpen}
+          >
+            <div className="language-stack">
+              <label className="language-control">
+                <span>{copy.app.language}</span>
+                <select value={uiLanguage} onChange={(event) => setUiLanguage(event.target.value)}>
+                  {Object.entries(languageOptions).map(([id, option]) => (
+                    <option key={id} value={id}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <p className="language-helper">{copy.app.languageHelp}</p>
             </div>
-          ) : null}
+          </div>
 
           <section className="challenge-box mobile-challenge-box" aria-labelledby="challenge-title-mobile">
             <div className="challenge-heading">
@@ -972,7 +974,7 @@ function scrollFeedbackToTopUnderScene(element) {
   })
 }
 
-function buildHints(scene, challengeMode) {
+function buildHints(scene, challengeMode, copy) {
   const relationships = scene.sceneScript?.relationships ?? []
   const coreActions = scene.sceneScript?.coreActions ?? []
   const interruption = relationships.find((relationship) => relationship.type === 'interruption')
@@ -986,35 +988,35 @@ function buildHints(scene, challengeMode) {
   if (challengeMode === 'beginner') {
     return [
       eventAction
-        ? `Look for one finished action. You could use: ${eventAction.recommendedVerbForms?.[0] ?? 'simple past'}.`
-        : 'Look for one finished action and describe it with simple past.',
+        ? copy.hints.beginner.finishedActionWithForm(eventAction.recommendedVerbForms?.[0] ?? copy.hints.defaults.simplePast)
+        : copy.hints.beginner.finishedAction,
       resultAction
-        ? `Add a second finished action. Look at: ${resultAction.actor}.`
-        : 'Add a second simple past sentence with Then...',
+        ? copy.hints.beginner.secondActionWithActor(resultAction.actor)
+        : copy.hints.beginner.secondAction,
       focusActor
-        ? `Name one visible person or thing in the scene, like ${focusActor}, and say what happened.`
-        : 'Name one visible person or thing in the scene and say what happened.',
+        ? copy.hints.beginner.visibleThingWithActor(focusActor)
+        : copy.hints.beginner.visibleThing,
     ]
   }
 
   if (challengeMode === 'advanced') {
     return [
       earlierPast
-        ? `Find a clue about what happened earlier. Use had or had been.`
-        : 'Add an earlier past detail with had or had been.',
-      'Use before or by the time to make the earlier past relationship clear.',
-      'Do not describe every action. Choose the detail that changes the timeline.',
+        ? copy.hints.advanced.earlierClue
+        : copy.hints.advanced.earlierDetail,
+      copy.hints.advanced.beforeByTheTime,
+      copy.hints.advanced.chooseTimeline,
     ]
   }
 
   return [
     backgroundAction
-      ? `Start with the background action: ${backgroundAction.recommendedVerbForms?.[0] ?? 'was/were + -ing'}.`
-      : 'Start with an action already in progress.',
+      ? copy.hints.intermediate.backgroundWithForm(backgroundAction.recommendedVerbForms?.[0] ?? copy.hints.defaults.pastContinuous)
+      : copy.hints.intermediate.background,
     eventAction
-      ? `Connect it to a sudden event with when. Look at: ${eventAction.actor}.`
-      : 'Connect the background action to a sudden event with when.',
-    'Use while for the background action and simple past for the sudden event.',
+      ? copy.hints.intermediate.whenWithActor(eventAction.actor)
+      : copy.hints.intermediate.when,
+    copy.hints.intermediate.whileAndPast,
   ]
 }
 
@@ -1045,7 +1047,7 @@ const translations = {
       eyebrow: 'English past narration trainer',
       title: 'Tell what was happening, what happened, and what had happened before.',
       scenePrompt: 'Look at the scene. Tell the story in the past.',
-      language: 'Feedback',
+      language: 'Feedback language',
       languageHelp: 'You always write in English. Feedback can be shown in another language.',
       grammarFocus: 'Grammar focus',
     },
@@ -1088,6 +1090,33 @@ const translations = {
       next: 'Next scene',
     },
     starters: { label: 'Useful story starters' },
+    hints: {
+      defaults: {
+        simplePast: 'simple past',
+        pastContinuous: 'was/were + -ing',
+      },
+      beginner: {
+        finishedActionWithForm: (form) => `Look for one finished action. You could use: ${form}.`,
+        finishedAction: 'Look for one finished action and describe it with simple past.',
+        secondActionWithActor: (actor) => `Add a second finished action. Look at: ${actor}.`,
+        secondAction: 'Add a second simple past sentence with Then...',
+        visibleThingWithActor: (actor) => `Name one visible person or thing in the scene, like ${actor}, and say what happened.`,
+        visibleThing: 'Name one visible person or thing in the scene and say what happened.',
+      },
+      intermediate: {
+        backgroundWithForm: (form) => `Start with the background action: ${form}.`,
+        background: 'Start with an action already in progress.',
+        whenWithActor: (actor) => `Connect it to a sudden event with when. Look at: ${actor}.`,
+        when: 'Connect the background action to a sudden event with when.',
+        whileAndPast: 'Use while for the background action and simple past for the sudden event.',
+      },
+      advanced: {
+        earlierClue: 'Find a clue about what happened earlier. Use had or had been.',
+        earlierDetail: 'Add an earlier past detail with had or had been.',
+        beforeByTheTime: 'Use before or by the time to make the earlier past relationship clear.',
+        chooseTimeline: 'Do not describe every action. Choose the detail that changes the timeline.',
+      },
+    },
     errors: {
       tooShort: 'Write at least one full sentence so the coach can see the verb relationships.',
       checkFailed: 'The coach could not check that answer yet.',
@@ -1174,6 +1203,33 @@ const translations = {
       next: 'Siguiente escena',
     },
     starters: { label: 'Inicios útiles para historias' },
+    hints: {
+      defaults: {
+        simplePast: 'simple past',
+        pastContinuous: 'was/were + -ing',
+      },
+      beginner: {
+        finishedActionWithForm: (form) => `Busca una acción terminada. Podrías usar: ${form}.`,
+        finishedAction: 'Busca una acción terminada y descríbela con simple past.',
+        secondActionWithActor: (actor) => `Añade una segunda acción terminada. Mira: ${actor}.`,
+        secondAction: 'Añade una segunda oración en simple past con Then...',
+        visibleThingWithActor: (actor) => `Nombra una persona o cosa visible en la escena, como ${actor}, y di qué pasó.`,
+        visibleThing: 'Nombra una persona o cosa visible en la escena y di qué pasó.',
+      },
+      intermediate: {
+        backgroundWithForm: (form) => `Empieza con la acción de fondo: ${form}.`,
+        background: 'Empieza con una acción que ya estaba en progreso.',
+        whenWithActor: (actor) => `Conéctala con un evento repentino usando when. Mira: ${actor}.`,
+        when: 'Conecta la acción de fondo con un evento repentino usando when.',
+        whileAndPast: 'Usa while para la acción de fondo y simple past para el evento repentino.',
+      },
+      advanced: {
+        earlierClue: 'Busca una pista de lo que había pasado antes. Usa had o had been.',
+        earlierDetail: 'Añade un detalle anterior con had o had been.',
+        beforeByTheTime: 'Usa before o by the time para dejar clara la relación con el pasado anterior.',
+        chooseTimeline: 'No describas cada acción. Elige el detalle que cambia la línea de tiempo.',
+      },
+    },
     errors: {
       tooShort: 'Escribe al menos una oración completa para que el coach pueda ver la relación entre los verbos.',
       checkFailed: 'El coach no pudo revisar esa respuesta todavía.',
@@ -1217,7 +1273,7 @@ const translations = {
       eyebrow: 'Träning i engelsk berättande i dåtid',
       title: 'Berätta vad som pågick, vad som hände och vad som hade hänt före det.',
       scenePrompt: 'Titta på scenen. Berätta historien i dåtid.',
-      language: 'Feedback',
+      language: 'Språk för feedback',
       languageHelp: 'Du skriver alltid på engelska. Feedbacken kan visas på ett annat språk.',
       grammarFocus: 'Grammatiskt fokus',
     },
@@ -1260,6 +1316,33 @@ const translations = {
       next: 'Nästa scen',
     },
     starters: { label: 'Användbara berättelsestarter' },
+    hints: {
+      defaults: {
+        simplePast: 'simple past',
+        pastContinuous: 'was/were + -ing',
+      },
+      beginner: {
+        finishedActionWithForm: (form) => `Leta efter en avslutad handling. Du kan använda: ${form}.`,
+        finishedAction: 'Leta efter en avslutad handling och beskriv den med simple past.',
+        secondActionWithActor: (actor) => `Lägg till en andra avslutad handling. Titta på: ${actor}.`,
+        secondAction: 'Lägg till en andra mening i simple past med Then...',
+        visibleThingWithActor: (actor) => `Nämn en synlig person eller sak i scenen, till exempel ${actor}, och säg vad som hände.`,
+        visibleThing: 'Nämn en synlig person eller sak i scenen och säg vad som hände.',
+      },
+      intermediate: {
+        backgroundWithForm: (form) => `Börja med bakgrundshandlingen: ${form}.`,
+        background: 'Börja med en handling som redan pågick.',
+        whenWithActor: (actor) => `Knyt den till en plötslig händelse med when. Titta på: ${actor}.`,
+        when: 'Knyt bakgrundshandlingen till en plötslig händelse med when.',
+        whileAndPast: 'Använd while för bakgrundshandlingen och simple past för den plötsliga händelsen.',
+      },
+      advanced: {
+        earlierClue: 'Leta efter en ledtråd till vad som hade hänt tidigare. Använd had eller had been.',
+        earlierDetail: 'Lägg till en tidigare detalj med had eller had been.',
+        beforeByTheTime: 'Använd before eller by the time för att göra den tidigare relationen tydlig.',
+        chooseTimeline: 'Beskriv inte varje handling. Välj den detalj som förändrar tidslinjen.',
+      },
+    },
     errors: {
       tooShort: 'Skriv minst en hel mening så att coachen kan se relationen mellan verbformerna.',
       checkFailed: 'Coachen kunde inte granska svaret ännu.',

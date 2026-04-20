@@ -724,7 +724,6 @@ h2 {
 @media (max-width: 560px) {
   .app-shell {
     min-height: 100dvh;
-    min-height: var(--visual-viewport-height, 100dvh);
   }
 
   .practice {
@@ -758,25 +757,59 @@ h2 {
     min-height: 34px;
     align-items: center;
     justify-content: center;
-    gap: 3px;
+    flex-direction: column;
+    gap: 4px;
     padding: 7px 9px;
   }
 
   .mobile-menu-button span {
     display: block;
-    width: 14px;
-    height: 1.5px;
+    width: 16px;
+    height: 1.75px;
     border-radius: 999px;
     background: currentColor;
+    transition: transform 180ms ease, opacity 180ms ease, width 180ms ease;
+  }
+
+  .mobile-menu-button[aria-expanded="true"] span:nth-child(1) {
+    transform: translateY(5.75px) rotate(45deg);
+  }
+
+  .mobile-menu-button[aria-expanded="true"] span:nth-child(2) {
+    opacity: 0;
+  }
+
+  .mobile-menu-button[aria-expanded="true"] span:nth-child(3) {
+    transform: translateY(-5.75px) rotate(-45deg);
   }
 
   .mobile-menu-panel {
     display: block;
     margin-top: -2px;
-    padding: 8px 10px;
+    padding: 0 10px;
     border: 1px solid rgba(31, 122, 92, 0.14);
     border-radius: 8px;
     background: #ffffff;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transform: translateY(-4px);
+    transition:
+      max-height 220ms ease,
+      opacity 180ms ease,
+      transform 180ms ease,
+      padding-top 220ms ease,
+      padding-bottom 220ms ease;
+    pointer-events: none;
+  }
+
+  .mobile-menu-panel.is-open {
+    max-height: 120px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
   }
 
   .mobile-settings .language-control {
@@ -816,7 +849,7 @@ h2 {
 
   .scene-pane > .scene-art {
     aspect-ratio: 16 / 9;
-    max-height: min(28dvh, calc(var(--visual-viewport-height, 100dvh) * 0.32));
+    max-height: 28dvh;
     min-height: 130px;
     object-fit: cover;
   }
@@ -917,7 +950,9 @@ h2 {
   }
 
   .mobile-focus-mode .scene-visual {
-    min-height: 0;
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: clamp(132px, 28dvh, 240px);
     display: flex;
     align-items: flex-start;
     justify-content: stretch;
@@ -935,7 +970,7 @@ h2 {
     position: relative;
     width: 100%;
     height: calc(100% + var(--scene-peek-offset, 0px));
-    min-height: 0;
+    min-height: 100%;
     transform-origin: top center;
     transition: height 120ms linear;
   }
