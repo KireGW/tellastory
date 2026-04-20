@@ -991,9 +991,10 @@ h2 {
     position: absolute;
     top: 0;
     right: 0;
+    bottom: calc(var(--mobile-focus-composer-height, 150px) + env(safe-area-inset-bottom, 0px));
     left: 0;
     display: block;
-    height: calc(var(--visual-viewport-height, 100dvh) - var(--mobile-focus-composer-height, 196px));
+    height: auto;
     min-height: 0;
     overflow: hidden;
     padding: 8px 12px 8px;
@@ -1038,9 +1039,7 @@ h2 {
   }
 
   .mobile-focus-mode .story-form {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    display: block;
     margin: 0;
     background: #ffffff;
   }

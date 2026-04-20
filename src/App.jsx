@@ -24,7 +24,7 @@ function App() {
   const feedbackRef = useRef(null)
   const practiceRef = useRef(null)
   const storyInputRef = useRef(null)
-  const storyFormRef = useRef(null)
+  const storyComposerRef = useRef(null)
   const scenePaneRef = useRef(null)
   const sceneViewportRef = useRef(null)
   const pendingFeedbackAnchorRef = useRef(false)
@@ -131,27 +131,27 @@ function App() {
   }, [activeScene.id, isMobileFocusMode, isMobileMenuOpen, feedback, hintIndex, answer])
 
   useEffect(() => {
-    if (!storyFormRef.current) {
+    if (!storyComposerRef.current) {
       return undefined
     }
 
-    const updateStoryFormHeight = () => {
-      const height = storyFormRef.current?.getBoundingClientRect().height ?? 0
+    const updateStoryComposerHeight = () => {
+      const height = storyComposerRef.current?.getBoundingClientRect().height ?? 0
       document.documentElement.style.setProperty('--mobile-focus-composer-height', `${height}px`)
     }
 
-    updateStoryFormHeight()
+    updateStoryComposerHeight()
 
     const observer = new ResizeObserver(() => {
-      updateStoryFormHeight()
+      updateStoryComposerHeight()
     })
 
-    observer.observe(storyFormRef.current)
-    window.addEventListener('resize', updateStoryFormHeight)
+    observer.observe(storyComposerRef.current)
+    window.addEventListener('resize', updateStoryComposerHeight)
 
     return () => {
       observer.disconnect()
-      window.removeEventListener('resize', updateStoryFormHeight)
+      window.removeEventListener('resize', updateStoryComposerHeight)
     }
   }, [isMobileFocusMode, answer, activeHint, feedback, error, isChecking, uiLanguage])
 
@@ -625,8 +625,8 @@ function App() {
             </p>
           </section>
 
-          <form onSubmit={submitStory} className="story-form" autoComplete="off" ref={storyFormRef}>
-            <div className="story-composer">
+          <form onSubmit={submitStory} className="story-form" autoComplete="off">
+            <div className="story-composer" ref={storyComposerRef}>
               <label htmlFor="storyText">{copy.form.label}</label>
               <div className={showMobileInlineHint ? 'story-input-shell has-inline-hint' : 'story-input-shell'}>
                 {/* Mobile keyboard/autofill controls are browser hints, not guaranteed suppression.
