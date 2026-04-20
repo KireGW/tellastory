@@ -1082,7 +1082,7 @@ const translations = {
         {
           title: 'Simple Past',
           text: 'Use it for completed events that move the story forward.',
-          example: 'The child dropped the oranges. The cyclist swerved.',
+          example: 'The child dropped the oranges. The woman opened the door.',
         },
         {
           title: 'Past Continuous',
@@ -1217,7 +1217,7 @@ const translations = {
         {
           title: 'Simple Past',
           text: 'Úsalo para eventos terminados que hacen avanzar la historia.',
-          example: 'The child dropped the oranges. The cyclist swerved.',
+          example: 'The child dropped the oranges. The woman opened the door.',
         },
         {
           title: 'Past Continuous',
@@ -1352,7 +1352,7 @@ const translations = {
         {
           title: 'Simple Past',
           text: 'Används för avslutade händelser som för berättelsen framåt.',
-          example: 'The child dropped the oranges. The cyclist swerved.',
+          example: 'The child dropped the oranges. The woman opened the door.',
         },
         {
           title: 'Past Continuous',

@@ -1024,7 +1024,9 @@ h2 {
   }
 
   .mobile-focus-mode .coach-pane {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
     position: absolute;
     right: 0;
     bottom: 0;
@@ -1036,15 +1038,24 @@ h2 {
   }
 
   .mobile-focus-mode .story-form {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 4px;
     margin: 0;
     background: #ffffff;
   }
 
+  .mobile-focus-mode .story-composer {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+  }
+
   .mobile-focus-mode textarea {
     min-height: calc(1.5em * 2 + 26px);
-    max-height: none;
+    max-height: calc(1.5em * 4 + 26px);
     overflow-y: auto;
   }
 
@@ -1074,20 +1085,7 @@ h2 {
   }
 
   .mobile-focus-mode .hint-slot {
-    min-height: 0;
-  }
-
-  .mobile-focus-mode .hint-panel {
-    margin-top: 2px;
-    padding: 8px 10px;
-  }
-
-  .mobile-focus-mode .hint-panel p {
-    margin: 0;
-  }
-
-  .mobile-focus-mode .hint-panel .section-kicker {
-    margin-bottom: 4px;
+    display: none;
   }
 
   .mobile-focus-mode .story-form label {
