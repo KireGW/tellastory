@@ -1,6 +1,6 @@
 # QC Difficulty Report
 
-## Does basic behave like basic?
+## Does beginner behave like beginner?
 
 **After the fixes: yes.**
 
@@ -12,7 +12,7 @@ What the suite checked:
 
 What was weak before:
 - beginner `nextStep` escalated to `when/while` too quickly
-- this created the impression that basic was secretly trying to become intermediate
+- this created the impression that beginner was secretly trying to become intermediate
 
 What is true now:
 - beginner keeps its descriptive role
@@ -35,7 +35,7 @@ What was weak before:
 What is true now:
 - intermediate still clearly teaches action-linking
 - it now recognizes clear background/event relationships a little more gracefully
-- the level does not collapse downward into basic or upward into advanced
+- the level does not collapse downward into beginner or upward into advanced
 
 ## Does advanced behave like advanced?
 
@@ -76,7 +76,7 @@ The previous weak spots were:
 **Yes.**
 
 The progression now behaves like:
-- **basic** = describe in the past
+- **beginner** = describe in the past
 - **intermediate** = connect actions in the past
 - **advanced** = add what happened before
 
@@ -108,7 +108,7 @@ Behavior now:
 ## Bottom line
 
 The difficulty system now behaves like a coherent teaching ladder rather than a moving target:
-- basic stays basic
+- beginner stays beginner
 - intermediate teaches connection
 - advanced teaches earlier past
 - stronger student grammar is preserved instead of simplified away

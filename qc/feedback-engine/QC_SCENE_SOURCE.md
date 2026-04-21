@@ -29,4 +29,4 @@
   - Scene IDs and scene semantics are loaded directly from the live scene model file.
   - Displayed instruction text and quick-hint strings are reproduced from the current English UI copy in [src/App.jsx](/Users/erikgw/Documents/tellastory/src/App.jsx) so the QC run reflects the actual lesson framing.
   - `deterministic_mode` runs the extracted backend function with the local/deterministic path and evaluates every case in `QC_CASES.json`.
-  - `live_model_mode` runs the same feedback function through the real LLM path and uses a cost-controlled subset drawn from `QC_CASES.json` (basic-clear-short, intermediate-no-connector, intermediate-correct-when, advanced-no-earlier-event per scene when present).
+  - `live_model_mode` runs the same feedback function through the real LLM path and uses a cost-controlled subset drawn from `QC_CASES.json` (beginner-clear-short, intermediate-no-connector, intermediate-correct-when, advanced-no-earlier-event per scene when present).

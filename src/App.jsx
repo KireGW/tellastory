@@ -922,15 +922,17 @@ function App() {
               >
                 {isChecking ? copy.form.checking : copy.form.submit}
               </button>
-            <button
-              type="button"
-              className="ghost"
-              onPointerDown={preserveStoryFocus}
-              onMouseDown={preserveStoryFocus}
-              onClick={addHint}
-            >
-              {copy.form.hint}
-            </button>
+              {!feedback ? (
+                <button
+                  type="button"
+                  className="ghost"
+                  onPointerDown={preserveStoryFocus}
+                  onMouseDown={preserveStoryFocus}
+                  onClick={addHint}
+                >
+                  {copy.form.hint}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="ghost clear-button"
@@ -1246,6 +1248,8 @@ const storageKeys = {
   challengeMode: 'pastNarrationTrainer.challengeMode',
 }
 
+const VALID_LEVELS = ['beginner', 'intermediate', 'advanced']
+
 function getStoredSceneId() {
   const storedSceneId = window.localStorage.getItem(storageKeys.sceneId)
 
@@ -1254,6 +1258,10 @@ function getStoredSceneId() {
 
 function getStoredChallengeMode() {
   const storedChallengeMode = window.localStorage.getItem(storageKeys.challengeMode)
+
+  if (storedChallengeMode && !VALID_LEVELS.includes(storedChallengeMode)) {
+    throw new Error(`Invalid difficulty level: ${storedChallengeMode}`)
+  }
 
   return Object.hasOwn(defaultChallengeModes, storedChallengeMode) ? storedChallengeMode : 'intermediate'
 }
@@ -1543,7 +1551,7 @@ const translations = {
     feedback: {
       verdict: 'Coach note',
       verdicts: {
-        'keep-building': { label: 'Start with the timeline', detail: 'Use one clear past action' },
+        'keep-building': { label: 'Needs work', detail: 'Use one clear past action' },
         'good-start': { label: 'Good start', detail: 'Clarify the timeline' },
         'good-work': { label: 'Good work', detail: 'A little polish' },
         excellent: { label: 'Excellent', detail: 'Ready to stretch' },
@@ -1685,7 +1693,7 @@ const translations = {
     feedback: {
       verdict: 'Nota del coach',
       verdicts: {
-        'keep-building': { label: 'Empieza con la linea de tiempo', detail: 'Usa una accion clara en pasado' },
+        'keep-building': { label: 'Necesita trabajo', detail: 'Usa una accion clara en pasado' },
         'good-start': { label: 'Buen comienzo', detail: 'Aclara la linea de tiempo' },
         'good-work': { label: 'Buen trabajo', detail: 'Un poco de pulido' },
         excellent: { label: 'Excelente', detail: 'Listo para avanzar' },
@@ -1827,7 +1835,7 @@ const translations = {
     feedback: {
       verdict: 'Coachens kommentar',
       verdicts: {
-        'keep-building': { label: 'Börja med tidslinjen', detail: 'Använd en tydlig handling i dåtid' },
+        'keep-building': { label: 'Behöver arbete', detail: 'Använd en tydlig handling i dåtid' },
         'good-start': { label: 'Bra start', detail: 'Förtydliga tidslinjen' },
         'good-work': { label: 'Bra jobbat', detail: 'Lite finslipning' },
         excellent: { label: 'Utmärkt', detail: 'Redo att gå vidare' },

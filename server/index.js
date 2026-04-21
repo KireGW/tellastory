@@ -22,6 +22,11 @@ app.post('/api/feedback', async (request, response) => {
     response.json(await generateFeedback({ answer, scene, challenge, feedbackLanguage, recentAttemptHistory }))
   } catch (error) {
     console.error(error)
+    if (error instanceof Error && error.message.startsWith('Invalid difficulty level:')) {
+      response.status(400).json({ error: error.message })
+      return
+    }
+
     response.status(500).json({ error: 'Could not generate feedback.' })
   }
 })
@@ -33,8 +38,10 @@ async function generateFeedback({
   feedbackLanguage = 'English',
   recentAttemptHistory = [],
 }) {
+  const normalizedChallenge = normalizeChallenge(challenge)
+
   if (!openai) {
-    return localFeedback(answer, scene, challenge, feedbackLanguage, recentAttemptHistory)
+    return localFeedback(answer, scene, normalizedChallenge, feedbackLanguage, recentAttemptHistory)
   }
 
   const completion = await openai.chat.completions.create({
@@ -50,7 +57,7 @@ async function generateFeedback({
         role: 'user',
         content: JSON.stringify({
           scene,
-          challenge,
+          challenge: normalizedChallenge,
           feedbackLanguage,
           studentAnswer: answer,
           task:
@@ -63,11 +70,31 @@ async function generateFeedback({
   return normalizeFeedback(
     JSON.parse(completion.choices[0].message.content),
     scene,
-    challenge,
+    normalizedChallenge,
     feedbackLanguage,
     answer,
     recentAttemptHistory,
   )
+}
+
+const VALID_LEVELS = ['beginner', 'intermediate', 'advanced']
+
+function normalizeChallenge(challenge) {
+  const level = normalizeDifficultyLevel(challenge?.id)
+  return {
+    ...challenge,
+    id: level,
+  }
+}
+
+function normalizeDifficultyLevel(level) {
+  const normalizedLevel = String(level ?? '').trim().toLowerCase()
+
+  if (!VALID_LEVELS.includes(normalizedLevel)) {
+    throw new Error(`Invalid difficulty level: ${level}`)
+  }
+
+  return normalizedLevel
 }
 
 function coachSystemPrompt() {
@@ -161,6 +188,13 @@ Apply these level rules:
 - Beginner: improve clarity, grammar, wording, or detail, but do not force when, while, had, or had been if the student did not already use them.
 - Intermediate: improve the relationship between actions, and you may add or refine when or while when useful, but do not add had or had been unless the student already used them.
 - Advanced: include or refine had or had been to show what happened before, while preserving the student's main narration.
+- For advanced rewrites, follow this order strictly:
+  1. first turn the student's original sentence into correct past narration
+  2. preserve the original subject and main action
+  3. only then add one earlier event with had or had been
+  4. make that earlier event logically connected to the original action
+  5. never add a generic template sentence such as "something had already happened before that"
+  6. never leave the original sentence in incorrect tense
 If a student already uses higher-level grammar correctly in a lower level, keep it and improve it naturally. Do not remove it just because the selected level is lower.
 
 The "challenge" field must be a short imperative task for the learner, not a corrected sentence.
@@ -226,7 +260,7 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
     statuses.taskFit = 'on target'
   }
 
-  const usefulCorrections = normalizeUsefulCorrections(corrections, answer, challenge, localCopy, statuses).slice(0, 4)
+  const usefulCorrections = normalizeUsefulCorrections(corrections, answer, challenge, localCopy, statuses, scene).slice(0, 4)
   const summary = cleanSceneSynonymNitpick(
     cleanSceneNitpick(
       cleanAdvancedPastPerfectNitpick(cleanFeedbackText(feedback.summary || localCopy.genericSummary), challenge, answerFeatures, localCopy),
@@ -247,7 +281,7 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
     summary,
     strengths: arrayOfStrings(feedback.strengths).map(cleanFeedbackText).slice(0, 3),
     corrections: usefulCorrections,
-    rewrite: cleanFeedbackText(normalizeRewrite(feedback.rewrite, answer, scene, challenge, localCopy, usefulCorrections)),
+    rewrite: cleanFeedbackText(normalizeRewrite(feedback.rewrite, answer, scene, challenge, localCopy, usefulCorrections, statuses)),
     challenge: cleanFeedbackText(generateNextStep({ challenge, feedbackLanguage, answer, scene, statuses, features: answerFeatures })),
     detected: {
       mentionedActions: arrayOfStrings(feedback.detected?.mentionedActions),
@@ -294,7 +328,7 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
     )
   }
 
-  const sanitized = sanitizeAdvancedPastPerfectFeedback(normalized, challenge, answerFeatures, localCopy, answer)
+  const sanitized = sanitizeAdvancedPastPerfectFeedback(normalized, challenge, answerFeatures, localCopy)
   const withReadinessHint = {
     ...sanitized,
     levelReadinessHint: generateLevelReadinessHint({
@@ -335,7 +369,11 @@ function mergeDetectedValues(first, second) {
 function analyzeAnswer(answer, scene, challenge) {
   const features = detectAnswerFeatures(answer)
   const mentionedActions = detectMentionedActions(answer, scene)
-  const sceneFit = mentionedActions.length ? 'on scene' : null
+  const sceneFit = checkSceneMatch(answer, scene)
+    ? 'on scene'
+    : mentionedActions.length
+    ? 'partly on scene'
+    : null
   const taskFit = taskFitFromFeatures(challenge, features)
   const englishStatus = features.hasAnyPastVerb ? 'mostly correct' : 'unclear'
   const statuses = { englishStatus, sceneFit: sceneFit ?? 'partly on scene', taskFit }
@@ -345,7 +383,7 @@ function analyzeAnswer(answer, scene, challenge) {
     mentionedActions,
     sceneFit,
     taskFit,
-    verdictFloor: verdictFromFeatures(challenge, features, statuses),
+    verdictFloor: verdictFromFeatures(challenge, features, statuses, answer, scene),
     hasBoundedResultAsContinuous: turnsBoundedResultIntoPastContinuous(answer),
   }
 }
@@ -356,7 +394,9 @@ function taskFitFromFeatures(challenge, features) {
   }
 
   if (challenge?.id === 'advanced') {
-    return (features.hasPastPerfect || features.hasPastPerfectContinuous) && features.hasAnyConnector
+    return hasAdvancedTimelineLayer(features)
+      ? 'on target'
+      : (features.hasPastPerfect || features.hasPastPerfectContinuous)
       ? 'on target'
       : 'partly on target'
   }
@@ -383,10 +423,14 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
   const localCopy = localFeedbackCopy(feedbackLanguage)
   const normalized = answer.toLowerCase()
   const features = detectAnswerFeatures(answer)
+  const advancedMastery = demonstratesAdvancedMastery(answer, features)
   const hasPastContinuous = features.hasPastContinuous
   const hasSimplePast = features.hasSimplePast
   const hasPastPerfect = features.hasPastPerfect
   const hasPastPerfectContinuous = features.hasPastPerfectContinuous
+  const hasValidAdvancedStructure = challenge?.id === 'advanced' && hasValidAdvancedEarlierPast(answer, features)
+  const needsAdvancedRepair = challenge?.id === 'advanced' && needsAdvancedStructureRepair(answer, features)
+  const needsAdvancedTimelineClarity = challenge?.id === 'advanced' && hasValidAdvancedStructure && !needsAdvancedRepair && !hasAdvancedTimelineLayer(features)
   const hasConnector = /\b(when|while|after|before|as|because)\b/.test(normalized)
   const hasAnyPastVerb = hasSimplePast || hasPastContinuous || hasPastPerfect || hasPastPerfectContinuous
   const connectors = [...new Set(normalized.match(/\b(when|while|after|before|as|because|by the time)\b/g) ?? [])]
@@ -425,7 +469,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
     })
   }
 
-  if (challenge?.id === 'intermediate') {
+  if (!advancedMastery && challenge?.id === 'intermediate') {
     if (!hasPastContinuous) {
       corrections.push({
         original: localCopy.backgroundAction,
@@ -443,7 +487,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
         grammarFocus: 'connector',
       })
     }
-  } else if (challenge?.id !== 'beginner') {
+  } else if (!advancedMastery && challenge?.id !== 'beginner' && !hasValidAdvancedStructure) {
     if (!hasPastContinuous) {
       corrections.push({
         original: localCopy.backgroundAction,
@@ -463,7 +507,25 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
     }
   }
 
-  if (!hasPastPerfect && challenge?.id === 'advanced') {
+  if (advancedMastery) {
+    corrections.push(advancedMasteryCorrection(localCopy, challenge, scene))
+  } else if (hasValidAdvancedStructure) {
+    if (needsAdvancedRepair) {
+      corrections.push({
+        original: localCopy.yourStory,
+        suggestion: localCopy.nextAdvancedStructure,
+        reason: localCopy.reasonAdvancedStructure,
+        grammarFocus: 'narrative coherence',
+      })
+    } else if (needsAdvancedTimelineClarity) {
+      corrections.push({
+        original: localCopy.yourStory,
+        suggestion: localCopy.nextAdvancedTimelineClear,
+        reason: localCopy.reasonAdvancedTimelineClear,
+        grammarFocus: 'narrative coherence',
+      })
+    }
+  } else if (!hasPastPerfect && challenge?.id === 'advanced') {
     corrections.push({
       original: localCopy.earlierAction,
       suggestion: localCopy.usePastPerfect,
@@ -472,8 +534,18 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
     })
   }
 
-  const finalCorrections = corrections.length ? corrections.slice(0, 4) : [defaultStretchCorrection(challenge, localCopy)]
-  const englishStatus = hasSimplePast || hasPastContinuous || hasPastPerfect ? 'mostly correct' : 'unclear'
+  const finalCorrections = corrections.length
+    ? corrections.slice(0, 4)
+    : hasValidAdvancedStructure
+    ? [consequenceCorrection(localCopy, features)]
+    : [defaultStretchCorrection(challenge, localCopy)]
+  const clarityScore = getClarityScore(answer)
+  const englishStatus =
+    clarityScore === 2
+      ? 'correct'
+      : hasSimplePast || hasPastContinuous || hasPastPerfect || hasPastPerfectContinuous
+      ? 'mostly correct'
+      : 'unclear'
   const sceneFit = mentionedActions.length ? 'on scene' : 'not scene-based'
   const taskFit = strongestTaskFit(
     challenge?.id === 'beginner' || hasConnector || hasPastPerfect ? 'partly on target' : 'different skill',
@@ -483,14 +555,8 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
   return {
     verdict: localVerdictFor({
       challenge,
-      englishStatus,
-      sceneFit,
-      taskFit,
-      hasPastContinuous,
-      hasSimplePast,
-      hasPastPerfect,
-      hasPastPerfectContinuous,
-      hasConnector,
+      answer,
+      scene,
     }),
     englishStatus,
     sceneFit,
@@ -525,12 +591,19 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
 
 function extractNarrativeExamples(answer) {
   const source = String(answer ?? '').trim()
+  const phrasalUnits = detectPhrasalVerbUnits(source)
 
   return {
-    pastPerfectContinuous: matchNarrativeExample(source, /\bhad\s+(?:not\s+)?been(?:\s+\w+){0,3}\s+\w+ing\b/i),
-    pastPerfect: matchNarrativeExample(source, /\bhad\s+(?!not\s+been\b)(?!been\b)(?:\w+\s+){0,2}\w+(?:ed|en|ne|wn|t)\b/i),
-    pastContinuous: matchNarrativeExample(source, /\b(?:was|were)\s+\w+ing\b/i),
-    simplePast: findSimplePastExample(source),
+    pastPerfectContinuous:
+      findPhrasalNarrativeExample(source, phrasalUnits, 'pastPerfectContinuous') ||
+      matchNarrativeExample(source, /\bhad\s+(?:not\s+)?been(?:\s+\w+){0,3}\s+\w+ing\b/i),
+    pastPerfect:
+      findPhrasalNarrativeExample(source, phrasalUnits, 'pastPerfect') ||
+      matchNarrativeExample(source, /\bhad\s+(?!not\s+been\b)(?!been\b)(?:\w+\s+){0,2}\w+(?:ed|en|ne|wn|t)\b/i),
+    pastContinuous:
+      findPhrasalNarrativeExample(source, phrasalUnits, 'pastContinuous') ||
+      matchNarrativeExample(source, /\b(?:was|were)\s+\w+ing\b/i),
+    simplePast: findSimplePastExample(source, phrasalUnits),
     connector: matchNarrativeExample(source, /\b(when|while|because|after|before|as|by the time|so)\b/i),
   }
 }
@@ -540,19 +613,35 @@ function matchNarrativeExample(source, pattern) {
   return match ? match[0].trim() : ''
 }
 
-function findSimplePastExample(source) {
-  const words = String(source ?? '').match(/\b[\w']+\b/g) ?? []
+function findSimplePastExample(source, phrasalUnits = detectPhralVerbUnitsSafe(source)) {
+  const phrasalSimplePast = phrasalUnits.find((unit) => unit.tense === 'simple past')
 
-  for (const word of words) {
+  if (phrasalSimplePast) {
+    return phrasalSimplePast.surface
+  }
+
+  const words = tokenizeNarrativeWords(String(source ?? ''))
+
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index].value
     const normalized = word.toLowerCase()
+
+    if (isPartOfEarlierPastStructure(words, index)) {
+      continue
+    }
 
     if (isKnownSimplePastVerb(normalized)) {
       return word
     }
   }
 
-  for (const word of words) {
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index].value
     const normalized = word.toLowerCase()
+
+    if (isPartOfEarlierPastStructure(words, index)) {
+      continue
+    }
 
     if (
       /\w+ed\b/.test(normalized) &&
@@ -565,6 +654,164 @@ function findSimplePastExample(source) {
   return ''
 }
 
+function isPartOfEarlierPastStructure(words, index) {
+  let cursor = index - 1
+  let distance = 0
+
+  while (cursor >= 0 && distance < 4) {
+    const token = words[cursor]?.value?.toLowerCase() ?? ''
+    distance += 1
+
+    if (!token) {
+      return false
+    }
+
+    if (earlierPastBridgeWords.has(token) || token === 'been') {
+      cursor -= 1
+      continue
+    }
+
+    return token === 'had'
+  }
+
+  return false
+}
+
+const earlierPastBridgeWords = new Set(['already', 'just', 'not', 'still', 'really', 'almost'])
+
+function detectPhralVerbUnitsSafe(source) {
+  try {
+    return detectPhrasalVerbUnits(source)
+  } catch {
+    return []
+  }
+}
+
+function findPhrasalNarrativeExample(source, phrasalUnits, tense) {
+  const unit = phrasalUnits.find((candidate) => candidate.tense === tense)
+  return unit?.surface || ''
+}
+
+const PHRASAL_VERB_PARTICLES = new Set([
+  'off',
+  'up',
+  'away',
+  'out',
+  'down',
+  'in',
+  'on',
+  'over',
+  'back',
+  'around',
+  'past',
+  'asleep',
+])
+
+const PHRASAL_VERB_FAMILIES = {
+  'go off': ['went off', 'going off', 'gone off'],
+  'go out': ['went out', 'going out', 'gone out'],
+  'run away': ['ran away', 'running away', 'run away'],
+  'roll away': ['rolled away', 'rolling away'],
+  'blow away': ['blew away', 'blowing away', 'blown away'],
+  'fall asleep': ['fell asleep', 'falling asleep', 'fallen asleep'],
+  'wake up': ['woke up', 'waking up', 'woken up'],
+  'pick up': ['picked up', 'picking up', 'picked up'],
+  'turn around': ['turned around', 'turning around'],
+  'hurry past': ['hurried past', 'hurrying past'],
+  'roll in': ['rolled in', 'rolling in'],
+  'slip out': ['slipped out', 'slipping out'],
+  'blow up': ['blew up', 'blowing up', 'blown up'],
+  'sit down': ['sat down', 'sitting down'],
+  'stand up': ['stood up', 'standing up'],
+  'come in': ['came in', 'coming in', 'come in'],
+  'come out': ['came out', 'coming out', 'come out'],
+  'move away': ['moved away', 'moving away'],
+  'run out': ['ran out', 'running out', 'run out'],
+  'break down': ['broke down', 'breaking down', 'broken down'],
+  'open up': ['opened up', 'opening up', 'opened up'],
+}
+
+const PHRASAL_VERB_SURFACES = new Set(Object.values(PHRASAL_VERB_FAMILIES).flat())
+
+function detectPhrasalVerbUnits(source) {
+  const text = String(source ?? '')
+  const tokens = tokenizeNarrativeWords(text)
+  const units = []
+
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    const verb = tokens[index].value.toLowerCase()
+    const particle = tokens[index + 1].value.toLowerCase()
+
+    if (!PHRASAL_VERB_PARTICLES.has(particle)) {
+      continue
+    }
+
+    const surface = `${verb} ${particle}`
+
+    if (!PHRASAL_VERB_SURFACES.has(surface)) {
+      continue
+    }
+
+    units.push({
+      type: 'phrasalVerb',
+      surface,
+      verb,
+      particle,
+      tense: detectPhrasalVerbTense(tokens, index),
+      index,
+    })
+  }
+
+  return dedupePhrasalVerbUnits(units)
+}
+
+function tokenizeNarrativeWords(source) {
+  const tokens = []
+  const matcher = /\b[\p{L}']+\b/gu
+  let match
+
+  while ((match = matcher.exec(String(source ?? '')))) {
+    tokens.push({
+      value: match[0],
+      index: match.index,
+    })
+  }
+
+  return tokens
+}
+
+function detectPhrasalVerbTense(tokens, index) {
+  const current = tokens[index]?.value?.toLowerCase() ?? ''
+  const previous = tokens[index - 1]?.value?.toLowerCase() ?? ''
+  const twoBack = tokens[index - 2]?.value?.toLowerCase() ?? ''
+
+  if (previous === 'been' && twoBack === 'had' && /ing$/.test(current)) {
+    return 'pastPerfectContinuous'
+  }
+
+  if (previous === 'had') {
+    return 'pastPerfect'
+  }
+
+  if ((previous === 'was' || previous === 'were') && /ing$/.test(current)) {
+    return 'pastContinuous'
+  }
+
+  return 'simple past'
+}
+
+function dedupePhrasalVerbUnits(units) {
+  const seen = new Set()
+  return units.filter((unit) => {
+    const key = `${unit.index}:${unit.surface}:${unit.tense}`
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
+}
+
 function buildNarrativeTeachingSummary(answer, challenge, localCopy, features = detectAnswerFeatures(answer)) {
   const strengths = buildNarrativeTeachingStrengths(answer, challenge, localCopy, features)
   return strengths[0] || localCopy.genericSummary
@@ -573,36 +820,50 @@ function buildNarrativeTeachingSummary(answer, challenge, localCopy, features = 
 function buildNarrativeTeachingStrengths(answer, challenge, localCopy, features = detectAnswerFeatures(answer)) {
   const examples = extractNarrativeExamples(answer)
   const strengths = []
-
-  if (features.hasPastContinuous && features.hasSimplePast && examples.pastContinuous && examples.simplePast) {
-    strengths.push(localCopy.describeContrast(examples.pastContinuous, examples.simplePast))
-  } else {
-    if (features.hasPastContinuous && examples.pastContinuous) {
-      strengths.push(localCopy.describeBackground(examples.pastContinuous))
+  const advancedMastery = demonstratesAdvancedMastery(answer, features)
+  const clarityScore = getClarityScore(answer)
+  const hasMajorErrors = detectMajorErrors(answer)
+  const usedDimensions = new Set()
+  const addStrength = (dimension, text) => {
+    if (!text || usedDimensions.has(dimension)) {
+      return
     }
 
-    if (features.hasSimplePast && examples.simplePast) {
-      strengths.push(localCopy.describeMainEvent(examples.simplePast))
-    }
+    strengths.push(text)
+    usedDimensions.add(dimension)
   }
 
-  if (features.hasPastPerfectContinuous && examples.pastPerfectContinuous) {
-    strengths.push(localCopy.describeEarlierOngoing(examples.pastPerfectContinuous))
+  if (advancedMastery && features.hasPastPerfectContinuous && examples.pastPerfectContinuous && examples.simplePast) {
+    addStrength('tense', localCopy.describeEarlierOngoingThenEvent(examples.pastPerfectContinuous, examples.simplePast))
+  } else if (advancedMastery && features.hasPastPerfect && examples.pastPerfect && examples.simplePast) {
+    addStrength('tense', localCopy.describeEarlierThenEvent(examples.pastPerfect, examples.simplePast))
+  } else if (features.hasPastContinuous && features.hasSimplePast && examples.pastContinuous && examples.simplePast) {
+    addStrength('tense', localCopy.describeContrast(examples.pastContinuous, examples.simplePast))
+  } else if (features.hasPastPerfectContinuous && examples.pastPerfectContinuous) {
+    addStrength('tense', localCopy.describeEarlierOngoing(examples.pastPerfectContinuous))
   } else if (features.hasPastPerfect && examples.pastPerfect) {
-    strengths.push(localCopy.describeEarlierPast(examples.pastPerfect))
+    addStrength('tense', localCopy.describeEarlierPast(examples.pastPerfect))
+  } else if (features.hasPastContinuous && examples.pastContinuous) {
+    addStrength('tense', localCopy.describeBackground(examples.pastContinuous))
+  } else if (features.hasSimplePast && examples.simplePast) {
+    addStrength('tense', localCopy.describeMainEvent(examples.simplePast))
   }
 
-  if (challenge?.id === 'intermediate') {
-    if (features.hasWhen) {
-      strengths.push(localCopy.describeConnector('when'))
-    } else if (features.hasWhile) {
-      strengths.push(localCopy.describeConnector('while'))
-    }
-  } else if (challenge?.id === 'advanced' && features.hasPastPerfect && features.hasSimplePast && examples.pastPerfect && examples.simplePast) {
-    strengths.unshift(localCopy.describeEarlierThenEvent(examples.pastPerfect, examples.simplePast))
+  if (features.hasWhen) {
+    addStrength('relationship', localCopy.describeWhenRelationship('when'))
+  } else if (features.hasWhile) {
+    addStrength('relationship', localCopy.describeWhileRelationship('while'))
+  } else if (features.hasCauseResult) {
+    addStrength('relationship', localCopy.describeCauseResult())
+  } else if ((features.hasPastPerfect || features.hasPastPerfectContinuous) && (features.hasSimplePast || features.hasPastContinuous)) {
+    addStrength('relationship', localCopy.describeTimelineSequence())
   }
 
-  return [...new Set(strengths.filter(Boolean))].slice(0, 3)
+  if (clarityScore === 2 && !hasMajorErrors) {
+    addStrength('clarity', localCopy.describeClarity())
+  }
+
+  return strengths.slice(0, 3)
 }
 
 function mentionsNarrativeTeaching(value) {
@@ -659,12 +920,17 @@ function normalizeCorrections(value) {
     })
 }
 
-function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, statuses) {
+function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, statuses, scene = null) {
   const answerFeatures = detectAnswerFeatures(answer)
   const answerWorks =
     statuses.englishStatus === 'correct' &&
     statuses.sceneFit === 'on scene' &&
     statuses.taskFit === 'on target'
+  const advancedMastery = answerWorks && demonstratesAdvancedMastery(answer, answerFeatures)
+
+  if (advancedMastery) {
+    return [advancedMasteryCorrection(localCopy, challenge, scene)]
+  }
 
   if (answerWorks && advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses)) {
     return [consequenceCorrection(localCopy, answerFeatures)]
@@ -737,7 +1003,7 @@ function advancedPastPerfectAlreadyWorks(challenge, features, statuses) {
   )
 }
 
-function sanitizeAdvancedPastPerfectFeedback(feedback, challenge, features, localCopy, answer) {
+function sanitizeAdvancedPastPerfectFeedback(feedback, challenge, features, localCopy) {
   if (!advancedPastPerfectAlreadyWorks(challenge, features, feedback)) {
     return feedback
   }
@@ -762,7 +1028,7 @@ function sanitizeAdvancedPastPerfectFeedback(feedback, challenge, features, loca
     strengths: ensureStrength(feedback.strengths, localCopy.strengthPastPerfect),
     corrections: sanitizedCorrections.length ? sanitizedCorrections : [consequenceCorrection(localCopy, features)],
     rewrite: mentionsPastPerfectContinuousForm(feedback.rewrite) || isPastPerfectContinuousNitpick(feedback.rewrite)
-      ? makeMinimalFallbackRewrite(answer, challenge, null) || localCopy.advancedRewriteFallback
+      ? ''
       : feedback.rewrite,
     detected: {
       ...feedback.detected,
@@ -1005,64 +1271,332 @@ function nextLevelCorrection(challenge, localCopy) {
   }
 }
 
-function normalizeRewrite(value, answer, scene, challenge, localCopy, corrections = []) {
-  if (corrections.some((correction) => correction.suggestion?.toLowerCase().includes('keep this sentence'))) {
-    return polishRewriteSurface(
-      meaningPreservingRewrite(answer) ||
-        repairAdvancedTimelineRewrite(answer, scene, challenge) ||
-        makePolishedFallbackRewrite(answer) ||
-        makeMinimalFallbackRewrite(answer, challenge, scene) ||
-        answer,
-    )
+function advancedMasteryCorrection(localCopy, challenge, scene = null) {
+  return {
+    original: localCopy.yourStory,
+    suggestion: advancedMasteryPrompt(localCopy, scene),
+    reason: localCopy.reasonAdvancedMastery,
+    grammarFocus: 'past perfect',
   }
-
-  const candidates = [
-    isUsableRewrite(value, answer) &&
-    rewriteRespectsLevelRules(value, answer, challenge) &&
-    !changesCausalMeaning(value, answer) &&
-    !removesSuccessfulNarrativeRelationship(value, answer) &&
-    !changesKitchenPancakeMeaning(value, answer) &&
-    !createsAwkwardWhilePastPerfectContinuous(value, answer) ? value : '',
-    corrections.find((correction) =>
-      isUsableRewrite(correction.suggestion, answer) &&
-      rewriteRespectsLevelRules(correction.suggestion, answer, challenge) &&
-      !changesCausalMeaning(correction.suggestion, answer) &&
-      !removesSuccessfulNarrativeRelationship(correction.suggestion, answer) &&
-      !changesKitchenPancakeMeaning(correction.suggestion, answer) &&
-      !createsAwkwardWhilePastPerfectContinuous(correction.suggestion, answer) &&
-      !turnsBoundedResultIntoPastContinuous(correction.suggestion, answer),
-    )?.suggestion,
-    repairAdvancedTimelineRewrite(answer, scene, challenge),
-    meaningPreservingRewrite(answer),
-    makePolishedFallbackRewrite(answer),
-    makeMinimalFallbackRewrite(answer, challenge, scene),
-    polishRewriteSurface(answer),
-  ]
-
-  const rewrite = candidates
-    .map((candidate) => polishRewriteSurface(candidate))
-    .find((candidate) => candidate && rewriteRespectsLevelRules(candidate, answer, challenge) && !sameText(candidate, answer))
-
-  return rewrite || polishRewriteSurface(answer) || polishRewriteSurface(fallbackRewriteFor(challenge, localCopy))
 }
 
-function ensureDistinctRewrite(feedback, answer, challenge, localCopy) {
-  if (!sameText(feedback.rewrite, answer)) {
-    return feedback
+function advancedMasteryPrompt(localCopy, scene = null) {
+  const eventClause = primarySceneEventClause(scene)
+  return localCopy.nextAdvancedMastery(eventClause)
+}
+
+function primarySceneEventClause(scene = null) {
+  const actions = scene?.sceneScript?.coreActions ?? []
+  const relationships = scene?.sceneScript?.relationships ?? []
+  const actionMap = new Map(actions.map((action) => [action.id, action]))
+  const preferredAction =
+    actionMap.get(relationships.find((relationship) => relationship.type === 'interruption')?.interruptingAction) ||
+    actionMap.get(relationships.find((relationship) => relationship.type === 'earlier-past')?.laterAction) ||
+    actions.find((action) => /\b(went out|spilled|fell|opened|died|snapped loose|collapsed|rang|slipped)\b/i.test(action?.recommendedVerbForms?.[0] || '')) ||
+    actions[0]
+
+  if (!preferredAction) {
+    return ''
   }
 
-  const fallback =
-    polishRewriteSurface(meaningPreservingRewrite(answer)) ||
-    polishRewriteSurface(repairAdvancedTimelineRewrite(answer, null, challenge)) ||
-    polishRewriteSurface(makePolishedFallbackRewrite(answer)) ||
-    polishRewriteSurface(makeMinimalFallbackRewrite(answer, challenge, null)) ||
-    polishRewriteSurface(answer) ||
-    polishRewriteSurface(fallbackRewriteFor(challenge, localCopy))
+  return `${lowerCaseSentenceStart(sceneEventActorSubject(preferredAction.actor))} ${preferredAction.recommendedVerbForms?.[0] || 'did something'}`
+}
 
-  return {
-    ...feedback,
-    rewrite: fallback,
+function sceneEventActorSubject(actor = '') {
+  const normalized = String(actor ?? '').trim().toLowerCase()
+
+  if (!normalized) {
+    return 'something'
   }
+
+  if (sceneBareActors.has(normalized)) {
+    return capitalizeFirst(normalized)
+  }
+
+  if (scenePluralActors.has(normalized)) {
+    return capitalizeFirst(normalized)
+  }
+
+  return capitalizeFirst(`the ${normalized}`)
+}
+
+function normalizeRewrite(value, answer, scene, challenge, localCopy, corrections = [], statuses = null) {
+  const mode = selectBetterVersionMode(answer, scene, challenge, statuses)
+
+  if (mode === 'HIDE') {
+    return ''
+  }
+
+  const rewrite =
+    mode === 'POLISH'
+      ? choosePolishRewrite(value, answer, scene, challenge)
+      : mode === 'REPAIR'
+      ? chooseRepairRewrite(value, answer, scene, challenge, corrections)
+      : chooseRebuildRewrite(answer, scene, challenge, localCopy)
+
+  return betterVersionPassesQualityChecks(rewrite, answer, scene, challenge, mode) ? rewrite : ''
+}
+
+function ensureDistinctRewrite(feedback, answer) {
+  if (!feedback.rewrite || !String(feedback.rewrite).trim()) {
+    return {
+      ...feedback,
+      rewrite: '',
+    }
+  }
+
+  if (!hasMeaningfulRewriteChange(feedback.rewrite, answer)) {
+    return {
+      ...feedback,
+      rewrite: '',
+    }
+  }
+
+  return feedback
+}
+
+function selectBetterVersionMode(answer, scene, challenge, statuses = null) {
+  const level = normalizeDifficultyLevel(challenge?.id)
+  const isPastTense = detectPastTense(answer)
+  const isSceneRelevant = checkSceneMatch(answer, scene)
+  const isClearSceneMismatch = isLikelySceneMismatch(answer, scene)
+  const meetsLevelTarget = checkLevelTarget({ level, studentText: answer })
+  const clarityScore = getClarityScore(answer)
+  const hasMajorErrors = detectMajorErrors(answer)
+  const features = detectAnswerFeatures(answer)
+  const wordCount = String(answer ?? '').match(/\b[\p{L}\p{N}']+\b/gu)?.length ?? 0
+  const needsSurfacePolish = needsSceneArticlePolish(answer, scene)
+  const likelyRunOn = isLikelyRunOn(answer, features)
+  const needsAdvancedRepair = level === 'advanced' && needsAdvancedStructureRepair(answer, features)
+  const levelStructureStrong =
+    level === 'beginner'
+      ? true
+      : level === 'intermediate'
+      ? hasExplicitIntermediateConnector(answer)
+      : containsHadOrHadBeen(answer)
+
+  const strongModel =
+    isPastTense &&
+    isSceneRelevant &&
+    meetsLevelTarget &&
+    levelStructureStrong &&
+    clarityScore === 2 &&
+    !hasMajorErrors &&
+    !needsSurfacePolish &&
+    !needsAdvancedRepair &&
+    !likelyRunOn &&
+    statuses?.sceneFit !== 'not scene-based'
+
+  if (strongModel) {
+    return 'HIDE'
+  }
+
+  if (isClearSceneMismatch) {
+    return 'REBUILD'
+  }
+
+  if (level === 'intermediate' && hasMisorderedConnector(answer)) {
+    return 'REPAIR'
+  }
+
+  if (isSceneRelevant && meetsLevelTarget && isPastTense && clarityScore >= 1 && !hasMajorErrors && levelStructureStrong && !likelyRunOn && !needsAdvancedRepair) {
+    return 'POLISH'
+  }
+
+  if (
+    clarityScore >= 1 ||
+    (features.hasAnyPastVerb && wordCount >= 5) ||
+    (isSceneRelevant && wordCount >= 5)
+  ) {
+    return 'REPAIR'
+  }
+
+  return 'REBUILD'
+}
+
+function isLikelySceneMismatch(studentText, sceneModel) {
+  const text = String(studentText ?? '').trim()
+
+  if (!text || !sceneModel) {
+    return true
+  }
+
+  if (checkSceneMatch(text, sceneModel)) {
+    return false
+  }
+
+  const mentionedActions = detectMentionedActions(text, sceneModel)
+  const sceneVocabulary = buildSceneVocabulary(sceneModel)
+  const answerTokens = extractContentTokens(text)
+  const matchedTokens = answerTokens.filter((token) =>
+    sceneVocabulary.has(token) || [...sceneVocabulary].some((sceneToken) => sceneToken.startsWith(token) || token.startsWith(sceneToken)),
+  )
+  const unmatchedTokens = answerTokens.filter((token) => !matchedTokens.includes(token))
+
+  return mentionedActions.length === 0 || unmatchedTokens.length > matchedTokens.length + 1
+}
+
+function choosePolishRewrite(value, answer, scene, challenge) {
+  const candidates = [
+    value,
+    applySceneArticlePolish(answer, scene),
+    meaningPreservingRewrite(answer),
+    makePolishedFallbackRewrite(answer),
+    correctMainNarrationToPast(answer, scene),
+  ]
+
+  return selectRewriteCandidate(candidates, answer, challenge, 'POLISH')
+}
+
+function chooseRepairRewrite(value, answer, scene, challenge, corrections = []) {
+  const preserveAdvancedStructure = challenge?.id === 'advanced' && hasValidAdvancedEarlierPast(answer)
+  const candidates = [
+    value,
+    ...corrections.map((correction) => correction?.suggestion),
+    repairAdvancedTimelineRewrite(answer, scene, challenge),
+    repairWholeAnswerSurface(answer, scene),
+    applySceneArticlePolish(answer, scene),
+    repairRelationshipRewrite(answer, scene, challenge),
+    ...(
+      preserveAdvancedStructure
+        ? []
+        : [
+          buildOrderedAdvancedRewrite(answer, scene, challenge),
+        ]
+    ),
+    correctMainNarrationToPast(answer, scene),
+    meaningPreservingRewrite(answer),
+    makePolishedFallbackRewrite(answer),
+    ...(
+      preserveAdvancedStructure
+        ? []
+        : [
+          makeMinimalFallbackRewrite(answer, challenge, scene),
+          buildSceneModelRewrite(scene, challenge),
+        ]
+    ),
+  ]
+
+  return selectRewriteCandidate(candidates, answer, challenge, 'REPAIR')
+}
+
+function chooseRebuildRewrite(answer, scene, challenge, localCopy) {
+  const candidates = [
+    buildSceneModelRewrite(scene, challenge),
+    fallbackRewriteFor(challenge, localCopy),
+  ]
+
+  return selectRewriteCandidate(candidates, answer, challenge, 'REBUILD')
+}
+
+function selectRewriteCandidate(candidates, answer, challenge, mode) {
+  return candidates
+    .map((candidate) => polishRewriteSurface(candidate))
+    .find((candidate) => isAllowedBetterVersionCandidate(candidate, answer, challenge, mode)) || ''
+}
+
+function isAllowedBetterVersionCandidate(candidate, answer, challenge, mode) {
+  if (!candidate || !String(candidate).trim()) {
+    return false
+  }
+
+  if (!rewriteRespectsLevelRulesForMode(candidate, answer, challenge, mode)) {
+    return false
+  }
+
+  if (containsGenericEarlierTemplate(candidate)) {
+    return false
+  }
+
+  if (turnsBoundedResultIntoPastContinuous(candidate, answer)) {
+    return false
+  }
+
+  if (changesCausalMeaning(candidate, answer)) {
+    return false
+  }
+
+  if (removesSuccessfulNarrativeRelationship(candidate, answer)) {
+    return false
+  }
+
+  if (changesKitchenPancakeMeaning(candidate, answer)) {
+    return false
+  }
+
+  if (createsAwkwardWhilePastPerfectContinuous(candidate, answer)) {
+    return false
+  }
+
+  if (mode !== 'REBUILD' && !hasMeaningfulRewriteChange(candidate, answer)) {
+    return false
+  }
+
+  if (mode === 'POLISH' && wordOverlapRatio(candidate, answer) < 0.7) {
+    return false
+  }
+
+  if (mode === 'REPAIR' && wordOverlapRatio(candidate, answer) < 0.25) {
+    return false
+  }
+
+  return true
+}
+
+function betterVersionPassesQualityChecks(rewrite, answer, scene, challenge, mode) {
+  const candidate = polishRewriteSurface(rewrite)
+
+  if (!candidate) {
+    return false
+  }
+
+  if (!rewriteRespectsLevelRulesForMode(candidate, answer, challenge, mode)) {
+    return false
+  }
+
+  if (mode === 'REBUILD' && scene && !checkSceneMatch(candidate, scene)) {
+    return false
+  }
+
+  if (mode === 'POLISH' && !hasMeaningfulRewriteChange(candidate, answer)) {
+    return false
+  }
+
+  if (challenge?.id === 'advanced' && !advancedBetterVersionRepairsBeforeExtension(candidate, answer)) {
+    return false
+  }
+
+  return true
+}
+
+function rewriteRespectsLevelRulesForMode(value, answer, challenge, mode) {
+  if (mode === 'REBUILD') {
+    return rebuildRewriteRespectsLevelRules(value, challenge)
+  }
+
+  return rewriteRespectsLevelRules(value, answer, challenge)
+}
+
+function rebuildRewriteRespectsLevelRules(value, challenge) {
+  const candidate = detectAnswerFeatures(value)
+
+  if (challenge?.id === 'beginner') {
+    return !candidate.hasPastPerfect && !candidate.hasPastPerfectContinuous && !candidate.hasWhen && !candidate.hasWhile
+  }
+
+  if (challenge?.id === 'intermediate') {
+    return candidate.hasWhen || candidate.hasWhile || candidate.hasRelationshipConnector
+  }
+
+  if (challenge?.id === 'advanced') {
+    return candidate.hasPastPerfect || candidate.hasPastPerfectContinuous
+  }
+
+  return true
+}
+
+function hasMeaningfulRewriteChange(rewrite, answer) {
+  return !sameText(rewrite, answer)
 }
 
 function polishRewriteSurface(value) {
@@ -1251,36 +1785,6 @@ function turnsBoundedResultIntoPastContinuous(value, answer = '') {
   return boundedResultPatterns.some((pattern) => pattern.test(suggestion))
 }
 
-function isUsableRewrite(value, answer) {
-  if (!value || typeof value !== 'string' || sameText(value, answer)) {
-    return false
-  }
-
-  if (isPastPerfectContinuousNitpick(value)) {
-    return false
-  }
-
-  if (turnsBoundedResultIntoPastContinuous(value, answer)) {
-    return false
-  }
-
-  if (!answer.trim()) {
-    return true
-  }
-
-  const answerWords = wordSet(answer)
-  const rewriteWords = wordSet(value)
-
-  if (!answerWords.size || !rewriteWords.size) {
-    return true
-  }
-
-  const sharedWords = [...answerWords].filter((word) => rewriteWords.has(word))
-  const overlap = sharedWords.length / answerWords.size
-
-  return overlap >= 0.45
-}
-
 function wordSet(value) {
   return new Set(
     String(value ?? '')
@@ -1309,11 +1813,14 @@ function makeMinimalFallbackRewrite(answer, challenge, scene = null) {
     const sceneAwareEarlier = sceneAwareEarlierPastSentence(scene)
 
     if (sceneAwareEarlier) {
-      const base = trimmed.endsWith('.') ? trimmed : `${trimmed}.`
-      return `${base} ${sceneAwareEarlier}`
+      const base = correctMainNarrationToPast(trimmed, scene)
+
+      if (base && !sameText(base, sceneAwareEarlier)) {
+        return `${polishRewriteSurface(base)} ${sceneAwareEarlier}`
+      }
     }
 
-    return trimmed.endsWith('.') ? `${trimmed} Something had already happened before that.` : `${trimmed}. Something had already happened before that.`
+    return ''
   }
 
   return ''
@@ -1325,8 +1832,33 @@ function repairAdvancedTimelineRewrite(answer, scene, challenge) {
   }
 
   const trimmed = String(answer ?? '').trim()
+  const features = detectAnswerFeatures(trimmed)
 
   if (!trimmed) {
+    return ''
+  }
+
+  if (hasValidAdvancedEarlierPast(trimmed, features)) {
+    let repaired = trimmed
+      .replace(/\bbucketed\b/gi, 'bucket')
+      .replace(/\s+and\s+when\b/gi, ', and when')
+      .replace(/\bwhen\b([^,.!?]{4,}?)\s+((?:the|a|an)\s+\w+\s+(?:ran|went|came|saw|took|made|found|left|felt|heard|built|caught|brought|fell|broke|blew|wrote|stood|sat|stole|spoke|rang|lit|drove|rose|began|bought|lost|sent|arrived|walked|waited|watched|worked|looked|knocked|opened|spilled|chased|dropped|rushed|carried|pointed|mixed|fixed|burned|weighed)\b)/gi, 'when$1, $2')
+
+    repaired = repairWholeAnswerSurface(repaired, scene) || repaired
+    repaired = polishRewriteSurface(repaired)
+
+    if (
+      repaired &&
+      !sameText(repaired, trimmed) &&
+      rewriteRespectsLevelRules(repaired, answer, challenge) &&
+      !turnsBoundedResultIntoPastContinuous(repaired, answer) &&
+      !changesCausalMeaning(repaired, answer) &&
+      !removesSuccessfulNarrativeRelationship(repaired, answer) &&
+      !changesKitchenPancakeMeaning(repaired, answer)
+    ) {
+      return repaired
+    }
+
     return ''
   }
 
@@ -1348,27 +1880,382 @@ function repairAdvancedTimelineRewrite(answer, scene, challenge) {
     return repaired
   }
 
-  const sceneAwareEarlier = sceneAwareEarlierPastSentence(scene)
+  const sceneAwareEarlier = sceneAwareEarlierPastSentence(scene, trimmed)
 
   if (!sceneAwareEarlier) {
     return ''
   }
 
-  const base = trimmed.endsWith('.') ? trimmed : `${trimmed}.`
-  return `${base} ${sceneAwareEarlier}`
+  const base = correctMainNarrationToPast(trimmed, scene)
+
+  if (!base) {
+    return ''
+  }
+
+  return `${polishRewriteSurface(base)} ${sceneAwareEarlier}`
 }
 
-function sceneAwareEarlierPastSentence(scene) {
-  const earlierRelationship = scene?.sceneScript?.relationships?.find((relationship) => relationship.type === 'earlier-past')
+function sceneAwareEarlierPastSentence(scene, answer = '') {
+  const earlierRelationship = pickRelatedEarlierPastRelationship(scene, answer)
 
   if (earlierRelationship?.modelSentence) {
     return polishRewriteSurface(earlierRelationship.modelSentence)
   }
 
-  const targetRelationship = (scene?.sceneScript?.targetRelationships ?? []).find((sentence) => /\bhad\b/i.test(sentence))
+  const targetRelationship = (scene?.sceneScript?.targetRelationships ?? []).find((sentence) =>
+    /\bhad\b/i.test(sentence) && advancedAddedSentenceMatchesAnswer(sentence, answer, scene),
+  )
 
-  return targetRelationship ? polishRewriteSurface(targetRelationship) : ''
+  if (targetRelationship) {
+    return polishRewriteSurface(targetRelationship)
+  }
+
+  if (!String(answer ?? '').trim()) {
+    const fallbackRelationship = scene?.sceneScript?.relationships?.find((relationship) => relationship.type === 'earlier-past')
+
+    if (fallbackRelationship?.modelSentence) {
+      return polishRewriteSurface(fallbackRelationship.modelSentence)
+    }
+
+    const fallbackTarget = (scene?.sceneScript?.targetRelationships ?? []).find((sentence) => /\bhad\b/i.test(sentence))
+    return fallbackTarget ? polishRewriteSurface(fallbackTarget) : ''
+  }
+
+  return ''
 }
+
+function pickRelatedEarlierPastRelationship(scene, answer = '') {
+  const relationships = (scene?.sceneScript?.relationships ?? []).filter((relationship) => relationship.type === 'earlier-past')
+
+  if (!relationships.length) {
+    return null
+  }
+
+  if (!String(answer ?? '').trim()) {
+    return relationships[0]
+  }
+
+  const actionMap = new Map((scene?.sceneScript?.coreActions ?? []).map((action) => [action.id, action]))
+  const normalizedAnswer = String(answer ?? '').toLowerCase()
+
+  const scored = relationships
+    .map((relationship) => {
+      const earlierAction = actionMap.get(relationship.earlierAction)
+      const laterAction = actionMap.get(relationship.laterAction)
+      let score = tokenOverlapScore(answer, relationship.modelSentence)
+
+      if (earlierAction?.actor && normalizedAnswer.includes(String(earlierAction.actor).toLowerCase())) {
+        score += 2
+      }
+
+      if (laterAction?.actor && normalizedAnswer.includes(String(laterAction.actor).toLowerCase())) {
+        score += 3
+      }
+
+      if ((relationship.usefulConnectors ?? []).some((connector) => normalizedAnswer.includes(String(connector).toLowerCase()))) {
+        score += 1
+      }
+
+      return { relationship, score }
+    })
+    .sort((left, right) => right.score - left.score)
+
+  return scored[0]?.score > 0 ? scored[0].relationship : null
+}
+
+function advancedAddedSentenceMatchesAnswer(candidate, answer = '', scene = null) {
+  const mainText = String(answer ?? '').trim()
+  const addedText = String(candidate ?? '').trim()
+
+  if (!addedText) {
+    return false
+  }
+
+  if (!mainText) {
+    return true
+  }
+
+  if (containsGenericEarlierTemplate(addedText)) {
+    return false
+  }
+
+  if (repeatsMainActionInAnotherTense(mainText, addedText)) {
+    return false
+  }
+
+  const tokenScore = tokenOverlapScore(mainText, addedText)
+  const actorScore = relatedActorScore(mainText, addedText, scene)
+
+  return tokenScore >= 1 || actorScore >= 1
+}
+
+function repeatsMainActionInAnotherTense(mainText, addedText) {
+  const mainTokens = new Set(extractContentTokens(mainText))
+  const addedTokens = new Set(extractContentTokens(addedText))
+
+  if (!mainTokens.size || !addedTokens.size) {
+    return false
+  }
+
+  const shared = [...mainTokens].filter((token) => addedTokens.has(token))
+  const overlap = shared.length / Math.max(1, Math.min(mainTokens.size, addedTokens.size))
+
+  return overlap >= 0.8
+}
+
+function tokenOverlapScore(first, second) {
+  const firstTokens = new Set(extractContentTokens(first))
+  const secondTokens = new Set(extractContentTokens(second))
+
+  if (!firstTokens.size || !secondTokens.size) {
+    return 0
+  }
+
+  return [...firstTokens].filter((token) => secondTokens.has(token)).length
+}
+
+function relatedActorScore(mainText, addedText, scene = null) {
+  const actors = [...new Set((scene?.sceneScript?.coreActions ?? []).map((action) => String(action.actor ?? '').toLowerCase()).filter(Boolean))]
+
+  if (!actors.length) {
+    return 0
+  }
+
+  const normalizedMain = String(mainText ?? '').toLowerCase()
+  const normalizedAdded = String(addedText ?? '').toLowerCase()
+
+  return actors.filter((actor) => normalizedMain.includes(actor) && normalizedAdded.includes(actor)).length
+}
+
+function buildSceneModelRewrite(scene, challenge) {
+  if (!scene) {
+    return ''
+  }
+
+  if (challenge?.id === 'advanced') {
+    return (
+      sceneAwareEarlierPastSentence(scene) ||
+      buildFallbackAdvancedSceneSentence(scene) ||
+      buildSceneRelationshipSentence(scene, 'earlier-past') ||
+      buildSceneCoreActionSentence(scene, 0)
+    )
+  }
+
+  if (challenge?.id === 'intermediate') {
+    return (
+      buildSceneRelationshipSentence(scene, 'interruption') ||
+      buildSceneRelationshipSentence(scene, 'simultaneous-background') ||
+      buildSceneRelationshipSentence(scene, 'cause-result') ||
+      buildSceneCoreActionSentence(scene, 0)
+    )
+  }
+
+  const first = buildSceneCoreActionSentence(scene, 0)
+  const second = buildSceneCoreActionSentence(scene, 1)
+  return [first, second].filter(Boolean).join(' ').trim()
+}
+
+function buildFallbackAdvancedSceneSentence(scene, answer = '') {
+  const actions = scene?.sceneScript?.coreActions ?? []
+  const background = actions.find((action) => /\b(was|were)\b/i.test(action?.recommendedVerbForms?.[0] || '')) || actions[0]
+  const event = actions.find((action) => action.id !== background?.id) || actions[1]
+
+  if (!background || !event) {
+    return ''
+  }
+
+  const backgroundVerb = stripAuxiliary(background.recommendedVerbForms?.[0])
+  const eventVerb = event.recommendedVerbForms?.[0] || 'did something'
+
+  const candidate = polishRewriteSurface(`${sceneActorSubject(background.actor)} had been ${backgroundVerb} before ${lowerCaseSentenceStart(sceneActorSubject(event.actor))} ${eventVerb}.`)
+  return advancedAddedSentenceMatchesAnswer(candidate, answer, scene) || !String(answer ?? '').trim() ? candidate : ''
+}
+
+function stripAuxiliary(value = '') {
+  return String(value ?? '')
+    .replace(/\b(was|were|had been|had|is|are)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim() || 'doing something'
+}
+
+function buildSceneRelationshipSentence(scene, relationshipType) {
+  const relationship = scene?.sceneScript?.relationships?.find((item) => item.type === relationshipType)
+
+  if (relationship?.modelSentence) {
+    return polishRewriteSurface(relationship.modelSentence)
+  }
+
+  const actions = scene?.sceneScript?.coreActions ?? []
+  const background = actions.find((action) => action.id === relationship?.backgroundAction)
+  const event = actions.find((action) => action.id === relationship?.interruptingAction || action.id === relationship?.result || action.id === relationship?.trigger)
+
+  if (!background || !event) {
+    return ''
+  }
+
+  const backgroundSubject = sceneActorSubject(background.actor)
+  const eventSubject = lowerCaseSentenceStart(sceneActorSubject(event.actor))
+
+  if (relationshipType === 'interruption') {
+    return polishRewriteSurface(`${backgroundSubject} ${background.recommendedVerbForms?.[0] || 'was doing something'} when ${eventSubject} ${event.recommendedVerbForms?.[0] || 'did something'}.`)
+  }
+
+  if (relationshipType === 'simultaneous-background') {
+    return polishRewriteSurface(`${backgroundSubject} ${background.recommendedVerbForms?.[0] || 'was doing something'} while ${eventSubject} ${event.recommendedVerbForms?.[0] || 'did something'}.`)
+  }
+
+  if (relationshipType === 'cause-result') {
+    return polishRewriteSurface(`${backgroundSubject} ${background.recommendedVerbForms?.[0] || 'did something'}, so ${eventSubject} ${event.recommendedVerbForms?.[0] || 'did something'}.`)
+  }
+
+  return ''
+}
+
+function buildSceneCoreActionSentence(scene, index = 0) {
+  const action = scene?.sceneScript?.coreActions?.[index]
+
+  if (!action) {
+    return ''
+  }
+
+  return polishRewriteSurface(`${sceneActorSubject(action.actor)} ${action.recommendedVerbForms?.[0] || 'did something'}.`)
+}
+
+function applySceneArticlePolish(answer, scene) {
+  let rewritten = String(answer ?? '').trim()
+  const actors = [...new Set((scene?.sceneScript?.coreActions ?? []).map((action) => String(action.actor ?? '').toLowerCase()).filter(Boolean))]
+
+  if (!rewritten || !actors.length) {
+    return ''
+  }
+
+  for (const actor of actors) {
+    if (scenePluralActors.has(actor) || sceneBareActors.has(actor)) {
+      continue
+    }
+
+    const replacement = sceneActorSubject(actor)
+    const regex = new RegExp(`(^|[.!?]\\s+)(${actor})(?=\\s+(?:was|were|had|ran|went|came|saw|took|made|found|left|felt|heard|built|caught|brought|fell|broke|blew|wrote|stood|sat|stole|spoke|rang|lit|drove|rose|began|bought|lost|sent|arrived|walked|waited|watched|worked|looked|knocked|opened|spilled|chased|dropped|rushed|carried|pointed|mixed|fixed|burned|weighed))`, 'gi')
+    rewritten = rewritten.replace(regex, (_, prefix) => `${prefix}${replacement}`)
+  }
+
+  return sameText(rewritten, answer) ? '' : rewritten
+}
+
+function needsSceneArticlePolish(answer, scene) {
+  return Boolean(applySceneArticlePolish(answer, scene))
+}
+
+function repairWholeAnswerSurface(answer, scene) {
+  let rewritten = String(answer ?? '').trim()
+
+  if (!rewritten) {
+    return ''
+  }
+
+  rewritten = applySceneArticlePolish(rewritten, scene) || rewritten
+  rewritten = rewritten
+    .replace(/\bam\s+(\w+ing)\b/gi, 'was $1')
+    .replace(/\bis\s+(\w+ing)\b/gi, 'was $1')
+    .replace(/\bare\s+(\w+ing)\b/gi, 'were $1')
+    .replace(/\bhas been\s+(\w+ing)\b/gi, 'had been $1')
+
+  rewritten = applyCommonPresentToPastFixes(rewritten)
+  rewritten = applySceneVerbPastFixes(rewritten, scene)
+  rewritten = insertSceneSentenceBreaks(rewritten, scene)
+  rewritten = rewritten.replace(/\b(and)\s+(the|a|an)\s+\w+\s+(?:was|were|had|\w+ed\b|\w+t\b|ran|went|came|saw|took|made|found|left|felt|heard|built|caught|brought|fell|broke|blew|wrote|stood|sat|stole|spoke|rang|lit|drove|rose|began|bought|lost|sent)\b/gi, ', and $2')
+
+  const polished = polishRewriteSurface(rewritten)
+  return sameText(polished, answer) ? '' : polished
+}
+
+function insertSceneSentenceBreaks(answer, scene) {
+  let rewritten = String(answer ?? '')
+  const subjects = [...new Set((scene?.sceneScript?.coreActions ?? []).map((action) => sceneActorSubject(action.actor)).filter(Boolean))]
+
+  for (const subject of subjects) {
+    const escapedSubject = subject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(`(?<![.!?])\\s+(${escapedSubject})(?=\\s+(?:was|were|had|ran|went|came|saw|took|made|found|left|felt|heard|built|caught|brought|fell|broke|blew|wrote|stood|sat|stole|spoke|rang|lit|drove|rose|began|bought|lost|sent|arrived|walked|waited|watched|worked|looked|knocked|opened|spilled|chased|dropped|rushed|carried|pointed|mixed|fixed|burned|weighed))`, 'g')
+    rewritten = rewritten.replace(regex, '. $1')
+  }
+
+  return rewritten
+}
+
+function repairRelationshipRewrite(answer, scene, challenge) {
+  if (challenge?.id !== 'intermediate') {
+    return ''
+  }
+
+  const features = detectAnswerFeatures(answer)
+
+  if (features.hasWhen || features.hasWhile) {
+    return ''
+  }
+
+  const relationshipSentence =
+    buildSceneRelationshipSentence(scene, 'interruption') ||
+    buildSceneRelationshipSentence(scene, 'simultaneous-background')
+
+  if (relationshipSentence) {
+    return relationshipSentence
+  }
+
+  return ''
+}
+
+function sceneActorSubject(actor = '') {
+  const normalized = String(actor ?? '').trim().toLowerCase()
+
+  if (!normalized) {
+    return 'Someone'
+  }
+
+  if (sceneBareActors.has(normalized)) {
+    return capitalizeFirst(normalized)
+  }
+
+  if (scenePluralActors.has(normalized) || (normalized.endsWith('s') && !normalized.endsWith('ss'))) {
+    return capitalizeFirst(normalized)
+  }
+
+  return capitalizeFirst(`the ${normalized}`)
+}
+
+function capitalizeFirst(value = '') {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : ''
+}
+
+function lowerCaseSentenceStart(value = '') {
+  return value ? `${value[0].toLowerCase()}${value.slice(1)}` : ''
+}
+
+const scenePluralActors = new Set([
+  'animals',
+  'children',
+  'clouds',
+  'coworkers',
+  'friends',
+  'guests',
+  'passengers',
+  'people',
+  'students',
+  'vendors',
+  'visitors',
+])
+
+const sceneBareActors = new Set([
+  'dad',
+  'father',
+  'grandfather',
+  'grandma',
+  'grandmother',
+  'grandpa',
+  'lisa',
+  'mom',
+  'mother',
+  'mum',
+])
 
 function rewriteRespectsLevelRules(value, answer, challenge) {
   if (!value || !String(value).trim()) {
@@ -1410,9 +2297,294 @@ function rewriteRespectsLevelRules(value, answer, challenge) {
     if (!candidate.hasPastPerfect && !candidate.hasPastPerfectContinuous) {
       return false
     }
+
+    if (original.hasPastPerfect || original.hasPastPerfectContinuous) {
+      return !hasBrokenEarlierPast(value)
+    }
+
+    if (!orderedAdvancedRewriteIsValid(value, answer)) {
+      return false
+    }
   }
 
   return true
+}
+
+function buildOrderedAdvancedRewrite(answer, scene, challenge) {
+  if (challenge?.id !== 'advanced') {
+    return ''
+  }
+
+  const mainSentence = correctMainNarrationToPast(answer, scene)
+  const earlierSentence = sceneAwareEarlierPastSentence(scene, mainSentence || answer)
+
+  if (!mainSentence || !earlierSentence) {
+    return ''
+  }
+
+  if (!advancedAddedSentenceMatchesAnswer(earlierSentence, mainSentence || answer, scene)) {
+    return ''
+  }
+
+  const combined = `${polishRewriteSurface(mainSentence)} ${earlierSentence}`
+
+  return orderedAdvancedRewriteIsValid(combined, answer) ? combined : ''
+}
+
+function advancedBetterVersionRepairsBeforeExtension(value, answer) {
+  const candidate = String(value ?? '').trim()
+
+  if (!candidate) {
+    return true
+  }
+
+  const answerFeatures = detectAnswerFeatures(answer)
+  const candidateFeatures = detectAnswerFeatures(candidate)
+
+  if (!candidateFeatures.hasPastPerfect && !candidateFeatures.hasPastPerfectContinuous) {
+    return true
+  }
+
+  if (answerFeatures.hasPastPerfect || answerFeatures.hasPastPerfectContinuous) {
+    return !hasBrokenEarlierPast(candidate)
+  }
+
+  return orderedAdvancedRewriteIsValid(candidate, answer)
+}
+
+function orderedAdvancedRewriteIsValid(value, answer) {
+  const sentences = splitIntoSentences(value)
+
+  if (sentences.length < 2) {
+    return false
+  }
+
+  const [firstSentence, ...rest] = sentences
+  const laterText = rest.join(' ')
+  const firstFeatures = detectAnswerFeatures(firstSentence)
+  const laterFeatures = detectAnswerFeatures(laterText)
+
+  if (!firstFeatures.hasAnyPastVerb) {
+    return false
+  }
+
+  if (firstFeatures.hasPastPerfect || firstFeatures.hasPastPerfectContinuous) {
+    return false
+  }
+
+  if (!laterFeatures.hasPastPerfect && !laterFeatures.hasPastPerfectContinuous) {
+    return false
+  }
+
+  if (containsGenericEarlierTemplate(laterText)) {
+    return false
+  }
+
+  if (repeatsMainActionInAnotherTense(firstSentence, laterText)) {
+    return false
+  }
+
+  if (wordOverlapRatio(firstSentence, answer) < 0.35) {
+    return false
+  }
+
+  return true
+}
+
+function correctMainNarrationToPast(answer, scene = null) {
+  const firstSentence = splitIntoSentences(answer)[0] ?? String(answer ?? '').trim()
+
+  if (!firstSentence) {
+    return ''
+  }
+
+  let corrected = firstSentence
+    .replace(/\bhad been ((?:[a-z]+(?:ed|en|wn|ne|t))|ran|came|went|saw|took|made|found|left|felt|heard|built|caught|brought|fell|broke|blew|wrote|stood|sat|stole|spoke|rang|lit|drove|rose|began|bought|lost|sent)\b/gi, (_, verb) => normalizeBrokenEarlierPastVerb(verb))
+    .replace(/\bhad (?!been\b)(ran|came|went|saw|took|made|found|left|felt|heard|built|caught|brought|fell|broke|blew|wrote|stood|sat|stole|spoke|rang|lit|drove|rose|began|bought|lost|sent)\b(?=[^.?!]*(?:before|earlier|already))/gi, (_, verb) => normalizeBrokenEarlierPastVerb(verb))
+    .replace(/\bam\s+(\w+ing)\b/gi, 'was $1')
+    .replace(/\bis\s+(\w+ing)\b/gi, 'was $1')
+    .replace(/\bare\s+(\w+ing)\b/gi, 'were $1')
+    .replace(/\bhas been\s+(\w+ing)\b/gi, 'had been $1')
+
+  corrected = applyCommonPresentToPastFixes(corrected)
+  corrected = applySceneVerbPastFixes(corrected, scene)
+
+  return polishRewriteSurface(corrected)
+}
+
+function normalizeBrokenEarlierPastVerb(verb) {
+  const normalized = String(verb ?? '').toLowerCase()
+  const simplePastMap = commonSimplePastMap()
+
+  return simplePastMap[normalized] || normalized
+}
+
+function applyCommonPresentToPastFixes(value) {
+  let corrected = String(value ?? '')
+  const simplePastMap = commonSimplePastMap()
+
+  for (const [baseForm, pastForm] of Object.entries(simplePastMap)) {
+    const regex = new RegExp(`\\b${baseForm}(?:s|es)?\\b`, 'gi')
+    corrected = corrected.replace(regex, pastForm)
+  }
+
+  return corrected
+}
+
+function applySceneVerbPastFixes(value, scene = null) {
+  let corrected = String(value ?? '')
+  const actions = scene?.sceneScript?.coreActions ?? []
+
+  for (const action of actions) {
+    for (const recommendedVerbForm of action.recommendedVerbForms ?? []) {
+      if (!recommendedVerbForm || /\s/.test(recommendedVerbForm)) {
+        continue
+      }
+
+      const baseForms = possibleBaseFormsForPast(recommendedVerbForm)
+
+      for (const baseForm of baseForms) {
+        const regex = new RegExp(`\\b${baseForm}s?\\b`, 'gi')
+        corrected = corrected.replace(regex, recommendedVerbForm)
+      }
+    }
+  }
+
+  return corrected
+}
+
+function possibleBaseFormsForPast(pastForm) {
+  const normalized = String(pastForm ?? '').toLowerCase()
+  const irregular = {
+    ran: ['run'],
+    came: ['come'],
+    went: ['go'],
+    saw: ['see'],
+    took: ['take'],
+    made: ['make'],
+    found: ['find'],
+    left: ['leave'],
+    felt: ['feel'],
+    heard: ['hear'],
+    built: ['build'],
+    caught: ['catch'],
+    brought: ['bring'],
+    fell: ['fall'],
+    broke: ['break'],
+    blew: ['blow'],
+    wrote: ['write'],
+    stood: ['stand'],
+    sat: ['sit'],
+    stole: ['steal'],
+    spoke: ['speak'],
+    rang: ['ring'],
+    lit: ['light'],
+    drove: ['drive'],
+    rose: ['rise'],
+    began: ['begin'],
+    bought: ['buy'],
+    lost: ['lose'],
+    sent: ['send'],
+  }
+
+  if (irregular[normalized]) {
+    return irregular[normalized]
+  }
+
+  if (normalized.endsWith('ied')) {
+    return [`${normalized.slice(0, -3)}y`]
+  }
+
+  if (normalized.endsWith('ed')) {
+    return [normalized.slice(0, -2)]
+  }
+
+  return []
+}
+
+function commonSimplePastMap() {
+  return {
+    arrive: 'arrived',
+    ask: 'asked',
+    bargain: 'bargained',
+    blow: 'blew',
+    break: 'broke',
+    build: 'built',
+    burn: 'burned',
+    carry: 'carried',
+    catch: 'caught',
+    chase: 'chased',
+    cheer: 'cheered',
+    check: 'checked',
+    close: 'closed',
+    collapse: 'collapsed',
+    cook: 'cooked',
+    drop: 'dropped',
+    fall: 'fell',
+    fix: 'fixed',
+    foam: 'foamed',
+    forget: 'forgot',
+    gather: 'gathered',
+    jump: 'jumped',
+    knock: 'knocked',
+    leave: 'left',
+    look: 'looked',
+    march: 'marched',
+    mix: 'mixed',
+    open: 'opened',
+    point: 'pointed',
+    propose: 'proposed',
+    push: 'pushed',
+    rain: 'rained',
+    read: 'read',
+    repair: 'repaired',
+    ring: 'rang',
+    roll: 'rolled',
+    run: 'ran',
+    rush: 'rushed',
+    sleep: 'slept',
+    spill: 'spilled',
+    start: 'started',
+    steal: 'stole',
+    storm: 'stormed',
+    swerve: 'swerved',
+    touch: 'touched',
+    trail: 'trailed',
+    turn: 'turned',
+    wait: 'waited',
+    walk: 'walked',
+    watch: 'watched',
+    weigh: 'weighed',
+    whisper: 'whispered',
+    work: 'worked',
+  }
+}
+
+function containsGenericEarlierTemplate(value) {
+  const text = String(value ?? '').toLowerCase()
+  return (
+    text.includes('something had already happened before that') ||
+    text.includes('before that, something had already happened') ||
+    text.includes('something had happened before that')
+  )
+}
+
+function splitIntoSentences(value) {
+  return (String(value ?? '').match(/[^.!?]+[.!?]?/g) ?? [])
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+}
+
+function wordOverlapRatio(first, second) {
+  const firstWords = wordSet(first)
+  const secondWords = wordSet(second)
+
+  if (!firstWords.size || !secondWords.size) {
+    return 0
+  }
+
+  const shared = [...firstWords].filter((word) => secondWords.has(word))
+  return shared.length / secondWords.size
 }
 
 function sameText(first, second) {
@@ -1541,141 +2713,512 @@ function meaningPreservingCorrection(suggestion, localCopy) {
 }
 
 function normalizeVerdict(value, statuses, challenge, features, analysis = null) {
-  const verdict = normalizeVerdictValue(value)
-  const featureVerdict = analysis?.verdictFloor ?? verdictFromFeatures(challenge, features, statuses)
-
-  if (
-    statuses.englishStatus === 'correct' &&
-    statuses.sceneFit === 'on scene' &&
-    statuses.taskFit === 'on target' &&
-    analysis?.taskFit !== 'partly on target'
-  ) {
-    return highestVerdict(highestVerdict(verdict, featureVerdict), 'excellent')
-  }
-
-  if (isExcellentFromFeatures(challenge, features, statuses)) {
-    return highestVerdict(highestVerdict(verdict, featureVerdict), 'excellent')
-  }
-
-  if (statuses.englishStatus === 'unclear' || statuses.sceneFit === 'not scene-based' || statuses.taskFit === 'different skill') {
-    return lowestVerdict(verdict, 'good-start')
-  }
-
-  if (analysis?.taskFit === 'partly on target') {
-    return highestVerdict(featureVerdict, verdict === 'excellent' ? 'good-start' : verdict)
-  }
-
-  if (statuses.taskFit === 'on target') {
-    return highestVerdict(highestVerdict(verdict, featureVerdict), 'good-work')
-  }
-
-  return highestVerdict(verdict, featureVerdict)
+  return analysis?.verdictFloor ?? normalizeVerdictValue(value)
 }
 
-function isExcellentFromFeatures(challenge, features, statuses) {
-  if (statuses.sceneFit !== 'on scene' || statuses.taskFit !== 'on target') {
+function verdictFromFeatures(challenge, features, statuses, answer = '', scene = null) {
+  const level = normalizeRatingLevel(challenge)
+  const isPastTense = detectPastTense(answer)
+  const isSceneRelevant = checkSceneMatch(answer, scene)
+  const meetsLevelTarget = checkLevelTarget({ level, studentText: answer })
+  const usesTargetStructure = detectTargetStructure({ level, studentText: answer })
+  const hasRecognizedAdvancedStructure = level === 'advanced' && hasValidAdvancedEarlierPast(answer, features)
+  const hasAdvancedMastery = demonstratesAdvancedMastery(answer, features, { isSceneRelevant })
+  const clarityScore = getClarityScore(answer)
+  const hasMajorErrors = detectMajorErrors(answer)
+  const rating = getRating({
+    level,
+    isPastTense,
+    isSceneRelevant,
+    meetsLevelTarget,
+    clarityScore,
+    hasMajorErrors,
+    usesTargetStructure,
+    hasRecognizedAdvancedStructure,
+    hasAdvancedMastery,
+  })
+
+  assertValidRating({ rating, isPastTense, isSceneRelevant })
+  assertAdvancedRatingConsistency({ challenge, rating, features, answer, isSceneRelevant })
+
+  return mapRatingToVerdict(rating)
+}
+
+function normalizeRatingLevel(challenge) {
+  return normalizeDifficultyLevel(challenge?.id)
+}
+
+function detectPastTense(studentText) {
+  const features = detectAnswerFeatures(studentText)
+  return features.hasAnyPastVerb && !isMostlyPresentNarration(studentText, features)
+}
+
+function checkSceneMatch(studentText, sceneModel) {
+  const text = String(studentText ?? '').trim()
+
+  if (!text || !sceneModel) {
     return false
   }
 
-  if (challenge?.id === 'advanced') {
-    return (
-      features.hasSimplePast &&
-      features.hasPastContinuous &&
-      (features.hasPastPerfect || features.hasPastPerfectContinuous) &&
-      features.hasRelationshipConnector
-    )
+  const sceneVocabulary = buildSceneVocabulary(sceneModel)
+  const answerTokens = extractContentTokens(text)
+
+  if (!answerTokens.length || !sceneVocabulary.size) {
+    return detectMentionedActions(text, sceneModel).length > 0
   }
 
-  if (challenge?.id === 'intermediate') {
-    return features.hasSimplePast && features.hasPastContinuous && features.hasRelationshipConnector
+  const matchedTokens = new Set()
+  const unmatchedTokens = new Set()
+
+  answerTokens.forEach((token) => {
+    if (sceneVocabulary.has(token) || [...sceneVocabulary].some((sceneToken) => sceneToken.startsWith(token) || token.startsWith(sceneToken))) {
+      matchedTokens.add(token)
+    } else {
+      unmatchedTokens.add(token)
+    }
+  })
+
+  if (matchedTokens.size >= 2 && matchedTokens.size > unmatchedTokens.size) {
+    return true
   }
 
-  if (challenge?.id === 'beginner') {
-    return features.hasAnyPastVerb
+  if (matchedTokens.size >= 2 && unmatchedTokens.size <= matchedTokens.size + 1) {
+    return true
+  }
+
+  if (matchedTokens.size === 1) {
+    return unmatchedTokens.size === 0
   }
 
   return false
 }
 
-function verdictFromFeatures(challenge, features, statuses) {
-  if (statuses.englishStatus === 'unclear' || statuses.sceneFit === 'not scene-based') {
-    return 'keep-building'
+function checkLevelTarget({ level, studentText }) {
+  if (level === 'beginner') {
+    return detectPastTense(studentText)
   }
 
-  const hasClearRelationship =
-    (features.hasPastContinuous && features.hasSimplePast && features.hasRelationshipConnector) ||
-    (features.hasPastPerfectContinuous && features.hasSimplePast && features.hasRelationshipConnector) ||
-    features.hasBecause ||
-    features.hasInterruption
+  if (level === 'intermediate') {
+    return detectActionRelationship(studentText)
+  }
+
+  if (level === 'advanced') {
+    const features = detectAnswerFeatures(studentText)
+    return hasValidAdvancedEarlierPast(studentText, features)
+      ? advancedEarlierPastStillUnderstandable(studentText, features)
+      : detectEarlierPast(studentText)
+  }
+
+  return false
+}
+
+function detectTargetStructure({ level, studentText }) {
+  if (level === 'intermediate') {
+    return containsWhenOrWhile(studentText) || hasExplicitTemporalConnector(studentText)
+  }
+
+  if (level === 'advanced') {
+    const features = detectAnswerFeatures(studentText)
+    return hasValidAdvancedEarlierPast(studentText, features)
+  }
+
+  return false
+}
+
+function detectActionRelationship(studentText) {
+  const features = detectAnswerFeatures(studentText)
+
+  return (
+    containsWhenOrWhile(studentText) ||
+    hasExplicitTemporalConnector(studentText) ||
+    (features.hasPastContinuous && features.hasSimplePast)
+  )
+}
+
+function detectEarlierPast(studentText) {
+  return containsHadOrHadBeen(studentText) || hasClearEarlierTimeMeaning(studentText)
+}
+
+function containsWhenOrWhile(studentText) {
+  const features = detectAnswerFeatures(studentText)
+  return features.hasWhen || features.hasWhile
+}
+
+function hasExplicitIntermediateConnector(studentText) {
+  const text = String(studentText ?? '').toLowerCase()
+  return /\b(when|while|before|after|as|by the time)\b/.test(text)
+}
+
+function hasMisorderedConnector(studentText) {
+  const text = String(studentText ?? '').toLowerCase()
+  const simplePastVerb = String.raw`(?:\w+ed|ran|went|came|saw|took|made|found|left|felt|heard|built|caught|brought|fell|broke|blew|wrote|stood|sat|stole|spoke|rang|lit|drove|rose|began|bought|lost|sent|read)`
+
+  return (
+    new RegExp(`\\b${simplePastVerb}\\b[^.?!]*\\bwhen\\b[^.?!]*\\b(?:was|were)\\s+\\w+ing\\b`).test(text) ||
+    new RegExp(`\\b${simplePastVerb}\\b[^.?!]*\\bwhile\\b[^.?!]*\\b(?:was|were)\\s+\\w+ing\\b`).test(text)
+  )
+}
+
+function hasExplicitTemporalConnector(studentText) {
+  const features = detectAnswerFeatures(studentText)
+  return features.hasRelationshipConnector || features.hasCauseResult || features.hasInterruption
+}
+
+function containsHadOrHadBeen(studentText) {
+  const features = detectAnswerFeatures(studentText)
+  return features.hasPastPerfect || features.hasPastPerfectContinuous
+}
+
+function hasClearEarlierTimeMeaning(studentText) {
+  const text = String(studentText ?? '').toLowerCase()
+  return /\b(before|earlier|already|by the time)\b/.test(text) && detectPastTense(studentText)
+}
+
+function getClarityScore(studentText) {
+  const text = String(studentText ?? '').trim()
+  const features = detectAnswerFeatures(text)
+  const words = text.match(/\b[\p{L}\p{N}']+\b/gu) ?? []
+  const sentences = splitIntoSentences(text)
+
+  if (!text || detectMajorErrors(text)) {
+    return 0
+  }
 
   if (
-    challenge?.id === 'advanced' &&
-    hasClearRelationship &&
-    (features.hasPastPerfect || features.hasPastPerfectContinuous)
+    features.hasAnyPastVerb &&
+    words.length >= 7 &&
+    sentences.length >= 1 &&
+    sentences.length <= 3 &&
+    !isMostlyPresentNarration(text, features) &&
+    !isLikelyRunOn(text, features) &&
+    (features.hasRelationshipConnector || features.hasSimplePast || features.hasPastContinuous || features.hasPastPerfect || features.hasPastPerfectContinuous)
   ) {
-    return 'good-work'
+    return 2
   }
 
-  if (hasClearRelationship) {
-    return 'good-work'
+  if (features.hasAnyPastVerb || words.length >= 5) {
+    return 1
   }
 
-  if (features.hasSimplePast || features.hasPastContinuous || features.hasPastPerfect || features.hasPastPerfectContinuous) {
-    return 'good-start'
+  return 0
+}
+
+function detectMajorErrors(studentText) {
+  const text = String(studentText ?? '').trim()
+  const words = text.match(/\b[\p{L}\p{N}']+\b/gu) ?? []
+  const features = detectAnswerFeatures(text)
+
+  if (!text) {
+    return true
   }
 
+  if (words.length < 4) {
+    return true
+  }
+
+  if (hasBrokenEarlierPast(text)) {
+    return true
+  }
+
+  if (hasMixedNarrationTense(text, features)) {
+    return true
+  }
+
+  if (isSeverelyBrokenRunOn(text, features) && !advancedEarlierPastStillUnderstandable(text, features)) {
+    return true
+  }
+
+  if (!features.hasAnyPastVerb && !features.hasRelationshipConnector && words.length < 8) {
+    return true
+  }
+
+  return false
+}
+
+function isLikelyRunOn(studentText, features = detectAnswerFeatures(studentText)) {
+  const text = String(studentText ?? '').trim()
+
+  if (!text || /[.!?]/.test(text) || features.hasRelationshipConnector) {
+    return false
+  }
+
+  return (
+    (features.hasPastContinuous && features.hasSimplePast) ||
+    ((text.match(/\b(was|were|had)\b/gi) ?? []).length >= 2)
+  )
+}
+
+function isSeverelyBrokenRunOn(studentText, features = detectAnswerFeatures(studentText)) {
+  const text = String(studentText ?? '').trim()
+  const words = text.match(/\b[\p{L}\p{N}']+\b/gu) ?? []
+
+  return isLikelyRunOn(text, features) && words.length >= 10
+}
+
+function getRating({
+  level,
+  isPastTense,
+  isSceneRelevant,
+  meetsLevelTarget,
+  clarityScore,
+  hasMajorErrors,
+  usesTargetStructure,
+  hasRecognizedAdvancedStructure = false,
+  hasAdvancedMastery = false,
+}) {
+  let coreFailures = 0
+
+  if (!isSceneRelevant) coreFailures += 1
+  if (!isPastTense) coreFailures += 1
+  if (!meetsLevelTarget) coreFailures += 1
+  if (hasMajorErrors) coreFailures += 1
+
+  if (coreFailures >= 2) {
+    return 'Needs work'
+  }
+
+  if (!isPastTense) {
+    return 'Good start'
+  }
+
+  if (!isSceneRelevant) {
+    return 'Good start'
+  }
+
+  if (!meetsLevelTarget) {
+    return 'Good start'
+  }
+
+  if (hasAdvancedMastery && isPastTense && isSceneRelevant && clarityScore === 2 && !hasMajorErrors) {
+    return 'Excellent'
+  }
+
+  if (level === 'beginner') {
+    if (isPastTense && isSceneRelevant && clarityScore === 2 && !hasMajorErrors) {
+      return 'Excellent'
+    }
+
+    if (isPastTense && isSceneRelevant && clarityScore >= 1) {
+      return 'Good work'
+    }
+
+    return 'Good start'
+  }
+
+  if (level === 'intermediate') {
+    if (isPastTense && isSceneRelevant && usesTargetStructure && clarityScore === 2 && !hasMajorErrors) {
+      return 'Excellent'
+    }
+
+    if (isPastTense && isSceneRelevant && clarityScore >= 1 && meetsLevelTarget) {
+      return 'Good work'
+    }
+
+    return 'Good start'
+  }
+
+  if (level === 'advanced') {
+    if (
+      hasRecognizedAdvancedStructure &&
+      isPastTense &&
+      isSceneRelevant &&
+      meetsLevelTarget
+    ) {
+      if (clarityScore === 2 && !hasMajorErrors && usesTargetStructure) {
+        return 'Excellent'
+      }
+
+      return 'Good work'
+    }
+
+    if (isPastTense && isSceneRelevant && usesTargetStructure && clarityScore === 2 && !hasMajorErrors) {
+      return 'Excellent'
+    }
+
+    if (isPastTense && isSceneRelevant && clarityScore >= 1) {
+      return 'Good work'
+    }
+
+    return 'Good start'
+  }
+
+  return 'Needs work'
+}
+
+function isMostlyPresentNarration(studentText, features = detectAnswerFeatures(studentText)) {
+  const text = String(studentText ?? '').toLowerCase()
+  const presentContinuous = /\b(am|is|are)\s+\w+ing\b/.test(text)
+  const presentPerfect = /\b(has|have)\s+\w+(ed|en|wn|ne|t)\b/.test(text)
+  const presentSimpleSignals = /\b(arrives|talks|reads|runs|knocks|opens|drops|falls|chases|looks|waits|watches|works|walks|points|rings|comes|goes|sleeps|stands|sits)\b/.test(text)
+
+  if (!features.hasAnyPastVerb) {
+    return presentContinuous || presentPerfect || presentSimpleSignals
+  }
+
+  return false
+}
+
+function hasMixedNarrationTense(studentText, features = detectAnswerFeatures(studentText)) {
+  if (!features.hasAnyPastVerb) {
+    return false
+  }
+
+  const text = String(studentText ?? '').toLowerCase()
+  return (
+    /\b(am|is|are)\s+\w+ing\b/.test(text) ||
+    /\b(arrives|talks|reads|runs|knocks|opens|drops|falls|chases|looks|waits|watches|works|walks|points|rings|comes|goes|sleeps|stands|sits)\b/.test(text)
+  )
+}
+
+function hasBrokenEarlierPast(studentText) {
+  const text = String(studentText ?? '').toLowerCase()
+  return /\bhad been (ran|went|came|saw|took|made|found|left|felt|heard|built|caught|brought|fell|broke|blew|wrote|stood|sat|stole|spoke|rang|lit|drove|rose|began|bought|lost|sent)\b/.test(text)
+}
+
+function buildSceneVocabulary(sceneModel) {
+  const values = [
+    sceneModel?.title,
+    sceneModel?.setting,
+    sceneModel?.prompt,
+    ...(sceneModel?.focus ?? []),
+    ...(sceneModel?.objects ?? []),
+    ...(sceneModel?.actions ?? []),
+    sceneModel?.sceneScript?.premise,
+    sceneModel?.sceneScript?.visualStyle,
+    ...(sceneModel?.sceneScript?.characters?.flatMap((character) => [
+      character?.id,
+      character?.description,
+      character?.action,
+    ]) ?? []),
+    ...(sceneModel?.sceneScript?.coreActions?.flatMap((action) => [
+      action?.actor,
+      action?.visibleAs,
+      ...(action?.recommendedVerbForms ?? []),
+    ]) ?? []),
+    ...(sceneModel?.sceneScript?.relationships?.flatMap((relationship) => [
+      relationship?.modelSentence,
+      ...(relationship?.usefulConnectors ?? []),
+    ]) ?? []),
+    ...(sceneModel?.sceneScript?.targetRelationships ?? []),
+  ]
+
+  return new Set(
+    values
+      .flatMap((value) => extractContentTokens(value))
+      .filter(Boolean),
+  )
+}
+
+function extractContentTokens(value) {
+  const text = String(value ?? '').toLowerCase()
+  const tokens = text.match(/\b[\p{L}']+\b/gu) ?? []
+
+  return [...new Set(tokens
+    .map(normalizeSceneToken)
+    .filter((token) => token.length >= 4 && !sceneStopwords.has(token)))]
+}
+
+function normalizeSceneToken(token) {
+  return String(token ?? '')
+    .toLowerCase()
+    .replace(/^somebody$/, 'person')
+    .replace(/^someone$/, 'person')
+    .replace(/^somewhere$/, 'place')
+    .replace(/'s$/u, '')
+    .replace(/ing$/u, '')
+    .replace(/ed$/u, '')
+    .replace(/es$/u, '')
+    .replace(/s$/u, '')
+}
+
+const sceneStopwords = new Set([
+  'about',
+  'across',
+  'after',
+  'along',
+  'another',
+  'around',
+  'before',
+  'beside',
+  'closed',
+  'dark',
+  'from',
+  'have',
+  'into',
+  'near',
+  'next',
+  'onto',
+  'open',
+  'over',
+  'someone',
+  'somebody',
+  'something',
+  'that',
+  'their',
+  'there',
+  'these',
+  'they',
+  'this',
+  'under',
+  'very',
+  'were',
+  'while',
+  'with',
+  'woman',
+  'man',
+  'person',
+])
+
+function mapRatingToVerdict(rating) {
+  if (rating === 'Excellent') return 'excellent'
+  if (rating === 'Good work') return 'good-work'
+  if (rating === 'Good start') return 'good-start'
   return 'keep-building'
+}
+
+function assertValidRating({ rating, isPastTense, isSceneRelevant }) {
+  if (rating === 'Excellent' && (!isPastTense || !isSceneRelevant)) {
+    throw new Error('Invalid rating: contradicts core evaluation')
+  }
+}
+
+function assertAdvancedRatingConsistency({ challenge, rating, features, answer, isSceneRelevant }) {
+  if (
+    challenge?.id === 'advanced' &&
+    hasValidAdvancedEarlierPast(answer, features) &&
+    advancedEarlierPastStillUnderstandable(answer, features) &&
+    isSceneRelevant &&
+    ['Good start', 'Needs work'].includes(rating)
+  ) {
+    throw new Error('Invalid rating: advanced structure was recognized but rated too low')
+  }
 }
 
 function normalizeVerdictValue(value) {
   const allowedVerdicts = ['keep-building', 'good-start', 'good-work', 'excellent']
 
   if (allowedVerdicts.includes(value)) return value
-  if (value === 'basic') return 'keep-building'
+  if (value === 'beginner') return 'keep-building'
   if (value === 'developing') return 'good-start'
   if (value === 'strong') return 'good-work'
 
   return 'good-start'
 }
 
-function highestVerdict(first, second) {
-  const order = ['keep-building', 'good-start', 'good-work', 'excellent']
-  return order.indexOf(first) >= order.indexOf(second) ? first : second
-}
-
-function lowestVerdict(first, second) {
-  const order = ['keep-building', 'good-start', 'good-work', 'excellent']
-  return order.indexOf(first) <= order.indexOf(second) ? first : second
-}
-
 function localVerdictFor({
   challenge,
-  englishStatus,
-  sceneFit,
-  taskFit,
-  hasPastContinuous,
-  hasSimplePast,
-  hasPastPerfect,
-  hasPastPerfectContinuous,
-  hasConnector,
+  answer = '',
+  scene = null,
 }) {
-  if (englishStatus === 'unclear' || sceneFit === 'not scene-based' || taskFit === 'different skill') {
-    return 'keep-building'
+  const features = detectAnswerFeatures(answer)
+  const mentionedActions = detectMentionedActions(answer, scene)
+  const statuses = {
+    englishStatus: getClarityScore(answer) === 0 ? 'unclear' : getClarityScore(answer) === 2 ? 'correct' : 'mostly correct',
+    sceneFit: mentionedActions.length ? 'on scene' : 'not scene-based',
+    taskFit: taskFitFromFeatures(challenge, features),
   }
 
-  if (challenge?.id === 'beginner') {
-    return hasSimplePast || hasPastContinuous || hasPastPerfect || hasPastPerfectContinuous
-      ? 'good-work'
-      : 'good-start'
-  }
-
-  if (challenge?.id === 'advanced') {
-    return hasPastContinuous && hasConnector && (hasPastPerfect || hasPastPerfectContinuous)
-      ? 'good-work'
-      : 'good-start'
-  }
-
-  return hasPastContinuous && hasSimplePast && hasConnector ? 'good-work' : 'good-start'
+  return verdictFromFeatures(challenge, features, statuses, answer, scene)
 }
 
 function generateNextStep({ challenge, feedbackLanguage = 'English', answer = '', scene = null, statuses = {}, features = detectAnswerFeatures(answer) }) {
@@ -1683,6 +3226,11 @@ function generateNextStep({ challenge, feedbackLanguage = 'English', answer = ''
   const target = currentLevelTargetState(challenge, features, statuses)
   const hasAnotherActor = sceneHasAnotherActor(answer, scene)
   const hasAnotherAction = sceneHasAnotherAction(answer, scene)
+  const advancedMastery = demonstratesAdvancedMastery(answer, features, { isSceneRelevant: statuses.sceneFit === 'on scene' || statuses.sceneFit === 'partly on scene' })
+
+  if (advancedMastery) {
+    return advancedMasteryPrompt(copy, scene)
+  }
 
   if (challenge?.id === 'beginner') {
     if (!target.met || target.strength === 'none') {
@@ -1709,12 +3257,12 @@ function generateNextStep({ challenge, feedbackLanguage = 'English', answer = ''
   }
 
   if (challenge?.id === 'advanced') {
-    if (target.met && target.strength === 'clear') {
-      return copy.nextAdvancedEarlierDetail
-    }
+    if (hasValidAdvancedEarlierPast(answer, features)) {
+      if (needsAdvancedStructureRepair(answer, features)) {
+        return copy.nextAdvancedStructure
+      }
 
-    if (features.hasPastPerfect || features.hasPastPerfectContinuous) {
-      return copy.nextAdvancedTimeline
+      return copy.nextAdvancedTimelineClear
     }
 
     return copy.nextAdvanced
@@ -1728,6 +3276,10 @@ function generateLevelReadinessHint({ challenge, feedbackLanguage = 'English', s
   const target = currentLevelTargetState(challenge, features, statuses)
   const errorSeverity = deriveErrorSeverity(statuses)
   const stableAcrossAttempts = hasStableRecentAttempts(recentAttemptHistory, challenge, statuses, features)
+
+  if (demonstratesAdvancedMastery('', features, { isSceneRelevant: statuses.sceneFit === 'on scene' || statuses.sceneFit === 'partly on scene' })) {
+    return null
+  }
 
   if (
     challenge?.id === 'advanced' ||
@@ -1779,7 +3331,7 @@ function currentLevelTargetState(challenge, features, statuses = {}) {
 
   if (challenge?.id === 'advanced') {
     const hasEarlierPast = features.hasPastPerfect || features.hasPastPerfectContinuous
-    const strongEarlierPast = hasEarlierPast && (features.hasSimplePast || features.hasPastContinuous || features.hasRelationshipConnector)
+    const strongEarlierPast = hasAdvancedTimelineLayer(features)
 
     return {
       met: stable && hasEarlierPast,
@@ -1883,13 +3435,18 @@ function recentReadinessHintWasShown(recentAttemptHistory = [], challenge) {
 
 function detectAnswerFeatures(answer) {
   const normalized = String(answer ?? '').toLowerCase()
-  const hasPastPerfectContinuous = /\bhad\s+(?:not\s+)?been(?:\s+\w+){0,3}\s+\w+ing\b/.test(normalized)
-  const hasPastPerfect = /\bhad\s+(?!not\s+been\b)(?!been\b)\w+(ed|en|ne|wn|t)\b/.test(normalized) || /\bhad\s+already\b/.test(normalized)
+  const words = tokenizeNarrativeWords(normalized)
+  const pastPerfectContinuousMatches = normalized.match(/\bhad\s+(?:not\s+)?been(?:\s+\w+){0,3}\s+\w+ing\b/g) ?? []
+  const pastPerfectMatches = normalized.match(/\bhad\s+(?:not\s+)?(?:already\s+|just\s+|still\s+|really\s+|almost\s+)?(?!been\b)\w+(?:ed|en|ne|wn|t)\b/g) ?? []
+  const hasPastPerfectContinuous = pastPerfectContinuousMatches.length > 0
+  const hasPastPerfect = pastPerfectMatches.length > 0
   const hasPastContinuous = /\b(was|were)\s+\w+ing\b/.test(normalized) || /\bwas\s+about\s+to\b/.test(normalized)
-  const simplePastCandidates = normalized.match(/\b\w+(ed|ght|ought|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/g) ?? []
+  const simplePastCandidates = words
+    .filter((_, index) => !isPartOfEarlierPastStructure(words, index))
+    .map((word) => word.value.toLowerCase())
   const hasSimplePast =
-    simplePastCandidates.some(isLikelySimplePastVerb) ||
-    (normalized.match(/\b[a-z]+\b/g) ?? []).some(isKnownSimplePastVerb)
+    simplePastCandidates.some((candidate) => /\b\w+(ed|ght|ought|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/.test(candidate) && isLikelySimplePastVerb(candidate)) ||
+    simplePastCandidates.some(isKnownSimplePastVerb)
   const hasWhen = /\bwhen\b/.test(normalized)
   const hasWhile = /\bwhile\b/.test(normalized)
   const hasBecause = /\bbecause\b/.test(normalized)
@@ -1919,6 +3476,63 @@ function detectAnswerFeatures(answer) {
     hasInterruption,
     hasAnyPastVerb,
   }
+}
+
+function hasAdvancedTimelineLayer(features = {}) {
+  return Boolean(
+    (features.hasPastPerfect || features.hasPastPerfectContinuous) &&
+    (features.hasSimplePast || features.hasPastContinuous || features.hasRelationshipConnector)
+  )
+}
+
+function hasValidAdvancedEarlierPast(answer, features = detectAnswerFeatures(answer)) {
+  return (features.hasPastPerfect || features.hasPastPerfectContinuous) && !hasBrokenEarlierPast(answer)
+}
+
+function advancedEarlierPastStillUnderstandable(answer, features = detectAnswerFeatures(answer)) {
+  if (!hasValidAdvancedEarlierPast(answer, features)) {
+    return false
+  }
+
+  const text = String(answer ?? '').toLowerCase()
+
+  return !(
+    isSeverelyBrokenRunOn(text, features) &&
+    !/\b(and|when|while|before|after|because|so)\b/.test(text) &&
+    !hasAdvancedTimelineLayer(features)
+  )
+}
+
+function demonstratesAdvancedMastery(answer, features = detectAnswerFeatures(answer), options = {}) {
+  const { isSceneRelevant = true } = options
+  const clarityScore = String(answer ?? '').trim() ? getClarityScore(answer) : (features.hasAnyPastVerb ? 2 : 0)
+  const hasMajorErrors = String(answer ?? '').trim() ? detectMajorErrors(answer) : false
+
+  return Boolean(
+    isSceneRelevant &&
+    (features.hasPastPerfect || features.hasPastPerfectContinuous) &&
+    features.hasSimplePast &&
+    (features.hasWhen || features.hasWhile || features.hasRelationshipConnector) &&
+    clarityScore === 2 &&
+    !hasMajorErrors
+  )
+}
+
+function needsAdvancedStructureRepair(answer, features = detectAnswerFeatures(answer)) {
+  if (!hasValidAdvancedEarlierPast(answer, features)) {
+    return false
+  }
+
+  const text = String(answer ?? '').trim()
+
+  return (
+    isLikelyRunOn(text, features) ||
+    /(^|[^,])\s+and\s+when\b/i.test(text) ||
+    /\bbucketed\b/i.test(text) ||
+    /[a-z]\s+[A-Z][a-z]+\s+(ran|went|came|saw|took|made|found|left|felt|heard|built|caught|brought|fell|broke|blew|wrote|stood|sat|stole|spoke|rang|lit|drove|rose|began|bought|lost|sent|arrived|walked|waited|watched|worked|looked|knocked|opened|spilled|chased|dropped|rushed|carried|pointed|mixed|fixed|burned|weighed)\b/.test(text) ||
+    (!/[.!?]$/.test(text) && hasAdvancedTimelineLayer(features)) ||
+    /\bwhen\b[^,.!?]{12,}\b(the|a|an)\b\s+\w+\s+(ran|went|came|saw|took|made|found|left|felt|heard|built|caught|brought|fell|broke|blew|wrote|stood|sat|stole|spoke|rang|lit|drove|rose|began|bought|lost|sent|arrived|walked|waited|watched|worked|looked|knocked|opened|spilled|chased|dropped|rushed|carried|pointed|mixed|fixed|burned|weighed)\b/i.test(text)
+  )
 }
 
 function isLikelySimplePastVerb(candidate) {
@@ -2003,7 +3617,13 @@ function localFeedbackCopy(feedbackLanguage) {
       describeEarlierPast: (earlier) => `Usaste past perfect (${earlier}) para mostrar qué había pasado antes.`,
       describeEarlierThenEvent: (earlier, event) => `Usaste past perfect (${earlier}) para el evento anterior y simple past (${event}) para lo que pasó después.`,
       describeEarlierOngoing: (earlier) => `Usaste past perfect continuous (${earlier}) para una acción que seguía ocurriendo antes de otro momento pasado.`,
-      describeConnector: (connector) => `Usaste ${connector} (${connector}) para mostrar cómo se relacionan las acciones en el tiempo.`,
+      describeEarlierOngoingThenEvent: (earlier, event) => `Usaste past perfect continuous (${earlier}) para la acción anterior en progreso y simple past (${event}) para los eventos principales.`,
+      describeConnector: (connector) => `Usaste el conector '${connector}' para mostrar cómo se relacionan las acciones en el tiempo.`,
+      describeWhenRelationship: (connector) => `Usaste el conector '${connector}' para mostrar cuándo una acción interrumpió otra.`,
+      describeWhileRelationship: (connector) => `Usaste el conector '${connector}' para mostrar que dos acciones ocurrían al mismo tiempo.`,
+      describeCauseResult: () => 'La secuencia de acciones es fácil de seguir.',
+      describeTimelineSequence: () => 'La línea de tiempo entre las acciones se entiende con claridad.',
+      describeClarity: () => 'La oración es clara y natural.',
       backgroundAction: 'una acción de fondo',
       mainEvent: 'un evento principal',
       twoActions: 'dos acciones separadas',
@@ -2051,6 +3671,12 @@ function localFeedbackCopy(feedbackLanguage) {
       nextAdvanced: 'Agrega una oración sobre lo que pasó antes usando had o had been.',
       nextAdvancedTimeline: 'Muestra qué había pasado antes usando had o had been.',
       nextAdvancedEarlierDetail: 'Agrega un detalle anterior más usando had o had been.',
+      nextAdvancedMastery: (eventClause) => eventClause ? `Agrega una oración más sobre lo que había pasado antes de que ${eventClause}.` : 'Agrega una oración más sobre lo que había pasado antes del evento principal.',
+      reasonAdvancedMastery: 'Ya muestras el tiempo de la historia con claridad. Ahora añade una capa anterior más.',
+      nextAdvancedStructure: 'Haz más clara la estructura de la oración para que la línea de tiempo sea más fácil de seguir.',
+      nextAdvancedTimelineClear: 'Haz más claras las acciones anteriores y posteriores en una sola oración.',
+      reasonAdvancedStructure: 'Ya mostraste la acción anterior con had. Ahora haz más clara la estructura de la oración.',
+      reasonAdvancedTimelineClear: 'La siguiente mejora es aclarar la relación entre la acción anterior y la posterior.',
       readinessBasic: 'Si quieres un desafío, intenta conectar dos acciones con when o while.',
       readinessIntermediate: 'Estás conectando acciones con claridad. Ahora intenta agregar qué había pasado antes.',
     }
@@ -2072,7 +3698,13 @@ function localFeedbackCopy(feedbackLanguage) {
       describeEarlierPast: (earlier) => `Du brukte past perfect (${earlier}) for å vise hva som hadde skjedd tidligere.`,
       describeEarlierThenEvent: (earlier, event) => `Du brukte past perfect (${earlier}) for den tidligere hendelsen og simple past (${event}) for det som skjedde etterpå.`,
       describeEarlierOngoing: (earlier) => `Du brukte past perfect continuous (${earlier}) for en handling som pågikk før et annet tidspunkt i fortiden.`,
-      describeConnector: (connector) => `Du brukte ${connector} (${connector}) for å vise hvordan handlingene henger sammen i tid.`,
+      describeEarlierOngoingThenEvent: (earlier, event) => `Du brukte past perfect continuous (${earlier}) for den tidligere pågående handlingen og simple past (${event}) for hovedhendelsene.`,
+      describeConnector: (connector) => `Du brukte koblingen '${connector}' for å vise hvordan handlingene henger sammen i tid.`,
+      describeWhenRelationship: (connector) => `Du brukte koblingen '${connector}' for å vise når én handling avbrøt en annen.`,
+      describeWhileRelationship: (connector) => `Du brukte koblingen '${connector}' for å vise at to handlinger skjedde samtidig.`,
+      describeCauseResult: () => 'Rekkefølgen mellom handlingene er lett å følge.',
+      describeTimelineSequence: () => 'Tidslinjen mellom handlingene er tydelig.',
+      describeClarity: () => 'Setningen er klar og naturlig.',
       backgroundAction: 'en bakgrunnshandling',
       mainEvent: 'en hovedhendelse',
       twoActions: 'to separate handlinger',
@@ -2120,6 +3752,12 @@ function localFeedbackCopy(feedbackLanguage) {
       nextAdvanced: 'Legg til en setning om hva som skjedde før med had eller had been.',
       nextAdvancedTimeline: 'Vis hva som hadde skjedd før med had eller had been.',
       nextAdvancedEarlierDetail: 'Legg til en tidligere detalj til med had eller had been.',
+      nextAdvancedMastery: (eventClause) => eventClause ? `Legg til en setning til om hva som hadde skjedd før ${eventClause}.` : 'Legg til en setning til om hva som hadde skjedd før hovedhendelsen.',
+      reasonAdvancedMastery: 'Du viser allerede tidslinjen tydelig. Nå kan du legge til enda et tidligere lag.',
+      nextAdvancedStructure: 'Gjør setningsstrukturen tydeligere, så tidslinjen blir lettere å følge.',
+      nextAdvancedTimelineClear: 'Gjør den tidligere og den senere handlingen tydeligere i én setning.',
+      reasonAdvancedStructure: 'Du har allerede vist den tidligere handlingen med had. Nå bør du gjøre setningsstrukturen tydeligere.',
+      reasonAdvancedTimelineClear: 'Neste forbedring er å gjøre forholdet mellom den tidligere og den senere handlingen tydeligere.',
       readinessBasic: 'Hvis du vil ha en utfordring, kan du prøve å koble to handlinger med when eller while.',
       readinessIntermediate: 'Du kobler handlingene tydelig. Nå kan du prøve å legge til hva som hadde skjedd før.',
     }
@@ -2140,7 +3778,13 @@ function localFeedbackCopy(feedbackLanguage) {
     describeEarlierPast: (earlier) => `You used past perfect (${earlier}) to show what had happened earlier.`,
     describeEarlierThenEvent: (earlier, event) => `You used past perfect (${earlier}) for the earlier event and simple past (${event}) for what happened next.`,
     describeEarlierOngoing: (earlier) => `You used past perfect continuous (${earlier}) for an ongoing action before another past moment.`,
-    describeConnector: (connector) => `You used ${connector} (${connector}) to show how the actions relate in time.`,
+    describeEarlierOngoingThenEvent: (earlier, event) => `You used past perfect continuous (${earlier}) for the earlier ongoing action and simple past (${event}) for the main events.`,
+    describeConnector: (connector) => `You used the connector '${connector}' to show how the actions relate in time.`,
+    describeWhenRelationship: (connector) => `You used the connector '${connector}' to show when one action interrupted another.`,
+    describeWhileRelationship: (connector) => `You used the connector '${connector}' to show that two actions were happening at the same time.`,
+    describeCauseResult: () => 'The sequence of actions is easy to follow.',
+    describeTimelineSequence: () => 'The timeline between the actions is clear.',
+    describeClarity: () => 'The sentence is clear and natural.',
     backgroundAction: 'a background action',
     mainEvent: 'a main event',
     twoActions: 'two separate actions',
@@ -2188,6 +3832,12 @@ function localFeedbackCopy(feedbackLanguage) {
     nextAdvanced: 'Add one sentence about what happened before using had or had been.',
     nextAdvancedTimeline: 'Show what had happened before using had or had been.',
     nextAdvancedEarlierDetail: 'Add one more earlier detail using had or had been.',
+    nextAdvancedMastery: (eventClause) => eventClause ? `Add one more sentence showing what had happened before ${eventClause}.` : 'Add one more sentence showing what had happened before the main event.',
+    reasonAdvancedMastery: 'You already show the timeline clearly. Now add one more earlier layer.',
+    nextAdvancedStructure: 'Fix the sentence structure so the timeline is easier to follow.',
+    nextAdvancedTimelineClear: 'Make the earlier and later actions clearer in one sentence.',
+    reasonAdvancedStructure: 'You already showed the earlier action with had. Now make the sentence structure clearer.',
+    reasonAdvancedTimelineClear: 'The next improvement is to make the earlier and later actions connect more clearly.',
     readinessBasic: 'You’re describing the scene clearly. Now try connecting two actions using when or while.',
     readinessIntermediate: 'You’re connecting actions clearly. Now try adding what happened before.',
   }
@@ -2204,6 +3854,15 @@ export {
   normalizeFeedback,
   analyzeAnswer,
   detectAnswerFeatures,
+  detectPhrasalVerbUnits,
+  detectPastTense,
+  checkSceneMatch,
+  checkLevelTarget,
+  detectTargetStructure,
+  getClarityScore,
+  detectMajorErrors,
+  getRating,
+  normalizeDifficultyLevel,
   taskFitFromFeatures,
   turnsBoundedResultIntoPastContinuous,
   changesCausalMeaning,

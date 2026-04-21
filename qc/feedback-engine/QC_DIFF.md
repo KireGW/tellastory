@@ -30,11 +30,11 @@
 - **Status:** resolved
 - **What changed:** `nextStep` no longer uses stretch-mode escalation. Stretch is now reserved for `levelReadinessHint`, not the main next action.
 
-### `basic-leaked-higher-level-grammar-by-default`
+### `beginner-leaked-higher-level-grammar-by-default`
 - **Before:** 80 cases
 - **After:** 0 cases
 - **Status:** resolved
-- **What changed:** beginner `nextStep` now stays inside basic narration even when the answer is already strong.
+- **What changed:** beginner `nextStep` now stays inside beginner narration even when the answer is already strong.
 
 ### `better-version-felt-generic-or-artificial`
 - **Before:** 63 cases

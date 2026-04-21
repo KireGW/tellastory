@@ -8,7 +8,7 @@
       "caseId": "midnight-knock__basic__basic-clear-short",
       "sceneId": "midnight-knock",
       "sceneTitle": "The midnight knock",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: knocked.",
@@ -324,7 +324,7 @@
       "caseId": "market-spill__basic__basic-clear-short",
       "sceneId": "market-spill",
       "sceneTitle": "The busy market",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: dropped.",
@@ -656,7 +656,7 @@
       "caseId": "train-platform__basic__basic-clear-short",
       "sceneId": "train-platform",
       "sceneTitle": "Platform 8",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: ran.",
@@ -972,7 +972,7 @@
       "caseId": "kitchen-smoke__basic__basic-clear-short",
       "sceneId": "kitchen-smoke",
       "sceneTitle": "Smoke in the kitchen",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: began to rise.",
@@ -1288,7 +1288,7 @@
       "caseId": "museum-alarm__basic__basic-clear-short",
       "sceneId": "museum-alarm",
       "sceneTitle": "The museum alarm",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: went off.",
@@ -1604,7 +1604,7 @@
       "caseId": "beach-rescue__basic__basic-clear-short",
       "sceneId": "beach-rescue",
       "sceneTitle": "The windy beach",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: snapped loose.",
@@ -1920,7 +1920,7 @@
       "caseId": "office-outage__basic__basic-clear-short",
       "sceneId": "office-outage",
       "sceneTitle": "The office outage",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: went out.",
@@ -2246,7 +2246,7 @@
       "caseId": "campfire-story__basic__basic-clear-short",
       "sceneId": "campfire-story",
       "sceneTitle": "The campfire story",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: opened.",
@@ -2564,7 +2564,7 @@
       "caseId": "hospital-hall__basic__basic-clear-short",
       "sceneId": "hospital-hall",
       "sceneTitle": "The hospital hallway",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: opened.",
@@ -2880,7 +2880,7 @@
       "caseId": "school-lab__basic__basic-clear-short",
       "sceneId": "school-lab",
       "sceneTitle": "The science lab",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: overflowed.",
@@ -3198,7 +3198,7 @@
       "caseId": "airport-delay__basic__basic-clear-short",
       "sceneId": "airport-delay",
       "sceneTitle": "Gate change",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: appeared.",
@@ -3498,7 +3498,7 @@
       "caseId": "farm-storm__basic__basic-clear-short",
       "sceneId": "farm-storm",
       "sceneTitle": "Storm on the farm",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: started.",
@@ -3814,7 +3814,7 @@
       "caseId": "restaurant-proposal__basic__basic-clear-short",
       "sceneId": "restaurant-proposal",
       "sceneTitle": "Dinner surprise",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: broke.",
@@ -4132,7 +4132,7 @@
       "caseId": "library-whisper__basic__basic-clear-short",
       "sceneId": "library-whisper",
       "sceneTitle": "The library whisper",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: collapsed.",
@@ -4446,7 +4446,7 @@
       "caseId": "city-parade__basic__basic-clear-short",
       "sceneId": "city-parade",
       "sceneTitle": "Parade on Main Street",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: lost.",
@@ -4762,7 +4762,7 @@
       "caseId": "garage-repair__basic__basic-clear-short",
       "sceneId": "garage-repair",
       "sceneTitle": "The garage repair",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: started leaking.",
@@ -5076,7 +5076,7 @@
       "caseId": "snowy-bus__basic__basic-clear-short",
       "sceneId": "snowy-bus",
       "sceneTitle": "Snow at the bus stop",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: splashed.",
@@ -5396,7 +5396,7 @@
       "caseId": "garden-party__basic__basic-clear-short",
       "sceneId": "garden-party",
       "sceneTitle": "The garden party",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: blew away.",
@@ -5714,7 +5714,7 @@
       "caseId": "film-set__basic__basic-clear-short",
       "sceneId": "film-set",
       "sceneTitle": "On the film set",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: fell.",
@@ -6030,7 +6030,7 @@
       "caseId": "mountain-trail__basic__basic-clear-short",
       "sceneId": "mountain-trail",
       "sceneTitle": "The mountain trail",
-      "selectedDifficulty": "basic",
+      "selectedDifficulty": "beginner",
       "displayedInstructionText": "Write 2-3 sentences about the scene in the past.",
       "quickHintText": [
         "Look for one finished action. You could use: rolled in.",

@@ -6,7 +6,7 @@
 
 ## Summary
 
-- Cases with phrasing differences: **41**
+- Cases with phrasing differences: **40**
 - Cases with lower specificity in live output: **0**
 - Cases with degraded grammar explanation in live output: **0**
 - Cases with unexpected live-model behavior: **0**
@@ -19,20 +19,20 @@
 - `market-spill__intermediate__intermediate-no-connector`
 - `market-spill__intermediate__intermediate-correct-when`
 - `train-platform__intermediate__intermediate-no-connector`
-- `train-platform__advanced__advanced-no-earlier-event`
 - `kitchen-smoke__basic__basic-clear-short`
 - `kitchen-smoke__intermediate__intermediate-no-connector`
 - `kitchen-smoke__intermediate__intermediate-correct-when`
 - `museum-alarm__intermediate__intermediate-no-connector`
-- `museum-alarm__advanced__advanced-no-earlier-event`
 - `beach-rescue__intermediate__intermediate-no-connector`
 - `beach-rescue__intermediate__intermediate-correct-when`
 - `office-outage__basic__basic-clear-short`
 - `office-outage__intermediate__intermediate-no-connector`
+- `office-outage__advanced__advanced-no-earlier-event`
 - `campfire-story__intermediate__intermediate-no-connector`
 - `hospital-hall__basic__basic-clear-short`
 - `hospital-hall__intermediate__intermediate-no-connector`
 - `hospital-hall__intermediate__intermediate-correct-when`
+- `school-lab__intermediate__intermediate-no-connector`
 
 ## Loss of Specificity
 
