@@ -247,7 +247,7 @@ function App() {
     setFeedback(null)
 
     if (answer.trim().split(/\s+/).length < 8) {
-      setError(copy.errors.tooShort)
+      setError(getTooShortError(copy, challengeMode))
       return
     }
 
@@ -1282,7 +1282,15 @@ function hasMeaningfulRewriteDifference(rewrite, original) {
   const normalizedRewrite = normalizeComparableSentence(rewrite)
   const normalizedOriginal = normalizeComparableSentence(original)
 
-  return Boolean(normalizedRewrite) && normalizedRewrite !== normalizedOriginal
+  if (!normalizedRewrite) {
+    return false
+  }
+
+  if (normalizedRewrite !== normalizedOriginal) {
+    return true
+  }
+
+  return String(rewrite ?? '').trim() !== String(original ?? '').trim()
 }
 
 function normalizeComparableSentence(value) {
@@ -1589,7 +1597,9 @@ const translations = {
     },
     starters: { label: 'Useful story starters' },
     errors: {
-      tooShort: 'Write at least one full sentence so the coach can see the verb relationships.',
+      tooShortBeginner: 'Add a little more detail so the coach has enough to work with.',
+      tooShortIntermediate: 'Add a little more detail so the coach can see how the actions connect.',
+      tooShortAdvanced: 'Add a little more detail so the coach can see what happened earlier and what happened next.',
       checkFailed: 'The coach could not check that answer yet.',
     },
     hints: {
@@ -1731,7 +1741,9 @@ const translations = {
     },
     starters: { label: 'Inicios útiles para historias' },
     errors: {
-      tooShort: 'Escribe al menos una oración completa para que el coach pueda ver la relación entre los verbos.',
+      tooShortBeginner: 'Añade un poco más de detalle para que el coach tenga suficiente para ayudarte.',
+      tooShortIntermediate: 'Añade un poco más de detalle para que el coach pueda ver cómo se conectan las acciones.',
+      tooShortAdvanced: 'Añade un poco más de detalle para que el coach pueda ver qué pasó antes y qué pasó después.',
       checkFailed: 'El coach no pudo revisar esa respuesta todavía.',
     },
     hints: {
@@ -1873,7 +1885,9 @@ const translations = {
     },
     starters: { label: 'Användbara berättelsestarter' },
     errors: {
-      tooShort: 'Skriv minst en hel mening så att coachen kan se relationen mellan verben.',
+      tooShortBeginner: 'Lägg till lite mer detalj så att coachen har tillräckligt att arbeta med.',
+      tooShortIntermediate: 'Lägg till lite mer detalj så att coachen kan se hur handlingarna hänger ihop.',
+      tooShortAdvanced: 'Lägg till lite mer detalj så att coachen kan se vad som hände tidigare och vad som hände sedan.',
       checkFailed: 'Coachen kunde inte kolla svaret ännu.',
     },
     hints: {
@@ -1932,6 +1946,18 @@ const translations = {
       ],
     },
   },
+}
+
+function getTooShortError(copy, challengeMode) {
+  if (challengeMode === 'advanced') {
+    return copy.errors.tooShortAdvanced
+  }
+
+  if (challengeMode === 'intermediate') {
+    return copy.errors.tooShortIntermediate
+  }
+
+  return copy.errors.tooShortBeginner
 }
 
 export default App
