@@ -903,7 +903,7 @@ function App() {
                 rows={storyRows}
                 autoComplete="off"
                 autoCorrect="off"
-                autoCapitalize="off"
+                autoCapitalize="sentences"
                 spellCheck={false}
                 inputMode="text"
                 enterKeyHint="done"
