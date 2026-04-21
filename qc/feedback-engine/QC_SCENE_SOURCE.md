@@ -1,0 +1,32 @@
+# QC Scene Source
+
+- Scene source of truth: [src/data/scenes.js](/Users/erikgw/Documents/tellastory/src/data/scenes.js)
+- Scene count: 20
+- QC uses direct scene-model access from the live app source.
+- App scene loading: the app imports `scenes` from `src/data/scenes.js`, and the feedback request sends the selected scene's `title`, `setting`, `prompt`, `focus`, `sample`, and `sceneScript` to the feedback engine.
+- Available top-level fields per scene:
+  - `id`
+  - `title`
+  - `setting`
+  - `image`
+  - `prompt`
+  - `focus`
+  - `sample`
+  - `palette`
+  - `objects`
+  - `actions`
+  - `sceneScript`
+  - `challengeModes`
+- Available `sceneScript` fields:
+  - `premise`
+  - `visualStyle`
+  - `characters`
+  - `coreActions`
+  - `environmentActions`
+  - `relationships`
+  - `targetRelationships`
+- QC notes:
+  - Scene IDs and scene semantics are loaded directly from the live scene model file.
+  - Displayed instruction text and quick-hint strings are reproduced from the current English UI copy in [src/App.jsx](/Users/erikgw/Documents/tellastory/src/App.jsx) so the QC run reflects the actual lesson framing.
+  - `deterministic_mode` runs the extracted backend function with the local/deterministic path and evaluates every case in `QC_CASES.json`.
+  - `live_model_mode` runs the same feedback function through the real LLM path and uses a cost-controlled subset drawn from `QC_CASES.json` (basic-clear-short, intermediate-no-connector, intermediate-correct-when, advanced-no-earlier-event per scene when present).

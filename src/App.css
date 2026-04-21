@@ -343,7 +343,8 @@ h1,
 }
 
 .challenge-prompt {
-  min-height: 48px;
+  min-height: 0;
+  margin: 0;
 }
 
 .challenge-subprompt {
@@ -660,6 +661,20 @@ button:focus-visible {
   padding: 8px 10px;
 }
 
+.readiness-hint {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(31, 122, 92, 0.08);
+  color: #43534c;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.readiness-hint span {
+  color: #1f7a5c;
+  font-weight: 800;
+}
+
 .scene-bank {
   padding: 24px 18px 44px;
   overflow-anchor: none;
@@ -769,22 +784,22 @@ h2 {
   color: #41534c;
   font-size: 13px;
   line-height: 1.4;
+  white-space: pre-line;
 }
 
 .modal-close {
   min-height: 30px;
   min-width: 30px;
   border: 1px solid #bfd0c8;
-  padding: 0 8px;
+  padding: 0;
   background: #ffffff;
   color: #263630;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .connector-hint-modal .modal-close {
   min-width: 30px;
-  padding: 0;
-  font-size: 22px;
-  line-height: 1;
 }
 
 .grammar-list {

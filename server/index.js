@@ -11,7 +11,7 @@ const openai = process.env.OPENAI_API_KEY
 app.use(express.json({ limit: '1mb' }))
 
 app.post('/api/feedback', async (request, response) => {
-  const { answer, scene, challenge, feedbackLanguage = 'English' } = request.body ?? {}
+  const { answer, scene, challenge, feedbackLanguage = 'English', recentAttemptHistory = [] } = request.body ?? {}
 
   if (!answer || !scene?.title) {
     response.status(400).json({ error: 'Missing answer or scene.' })
@@ -19,40 +19,56 @@ app.post('/api/feedback', async (request, response) => {
   }
 
   try {
-    if (!openai) {
-      response.json(localFeedback(answer, scene, challenge, feedbackLanguage))
-      return
-    }
-
-    const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? 'gpt-4.1-mini',
-      temperature: 0.2,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content: coachSystemPrompt(),
-        },
-        {
-          role: 'user',
-          content: JSON.stringify({
-            scene,
-            challenge,
-            feedbackLanguage,
-            studentAnswer: answer,
-            task:
-              `Evaluate the student answer as a past-tense narration. Write all coaching, explanations, and next-step text in ${feedbackLanguage}. Keep corrected English example sentences, verb-form names, and quoted student text in English. Use a qualitative coaching verdict. Do not return or mention numeric ratings.`,
-          }),
-        },
-      ],
-    })
-
-    response.json(normalizeFeedback(JSON.parse(completion.choices[0].message.content), scene, challenge, feedbackLanguage, answer))
+    response.json(await generateFeedback({ answer, scene, challenge, feedbackLanguage, recentAttemptHistory }))
   } catch (error) {
     console.error(error)
     response.status(500).json({ error: 'Could not generate feedback.' })
   }
 })
+
+async function generateFeedback({
+  answer,
+  scene,
+  challenge,
+  feedbackLanguage = 'English',
+  recentAttemptHistory = [],
+}) {
+  if (!openai) {
+    return localFeedback(answer, scene, challenge, feedbackLanguage, recentAttemptHistory)
+  }
+
+  const completion = await openai.chat.completions.create({
+    model: process.env.OPENAI_MODEL ?? 'gpt-4.1-mini',
+    temperature: 0.2,
+    response_format: { type: 'json_object' },
+    messages: [
+      {
+        role: 'system',
+        content: coachSystemPrompt(),
+      },
+      {
+        role: 'user',
+        content: JSON.stringify({
+          scene,
+          challenge,
+          feedbackLanguage,
+          studentAnswer: answer,
+          task:
+            `Evaluate the student answer as a past-tense narration. Write all coaching, explanations, and next-step text in ${feedbackLanguage}. Keep corrected English example sentences, verb-form names, and quoted student text in English. Use a qualitative coaching verdict. Do not return or mention numeric ratings.`,
+        }),
+      },
+    ],
+  })
+
+  return normalizeFeedback(
+    JSON.parse(completion.choices[0].message.content),
+    scene,
+    challenge,
+    feedbackLanguage,
+    answer,
+    recentAttemptHistory,
+  )
+}
 
 function coachSystemPrompt() {
   return `
@@ -103,6 +119,19 @@ Be generous with valid partial narration. Do not penalize omitted visual details
 Focus on one useful next improvement. Do not overwhelm the learner.
 Preserve the student's intended meaning.
 Explain grammar in terms of narrative time, not abstract labels only.
+Every feedback message should teach verb choice, not just correctness.
+For the summary, strengths, and correction reasons:
+- name the verb form when possible
+- quote the student's own words in parentheses when possible
+- connect form to meaning in the story
+- highlight the relationship between actions
+Prefer short contrasts such as "past continuous (was blowing) for the background vs simple past (chased) for the main event."
+Use these meanings consistently:
+- past continuous -> background or ongoing action
+- simple past -> main event or completed action
+- past perfect -> earlier event
+- past perfect continuous -> ongoing action before another past moment
+Keep each explanation to 1-2 short sentences.
 In the summary, strengths, corrections, and rewrite, focus on the student's verb forms and time relationships. Do not mention whether a plausible scene event is directly visible unless there is a clear scene mismatch.
 Never use the word "prompt" in user-facing feedback. If you mean the selected exercise instruction, say "task". If you mean the picture, say "scene".
 Write user-facing coaching text in the requested feedbackLanguage. Keep English examples, corrected sentences, verb-form names, and quoted student phrases in English.
@@ -126,8 +155,13 @@ Preserve the student's cause-and-effect meaning. Do not add because, so, therefo
 Do not turn an incidental earlier detail into the reason for the whole scene. For example, do not rewrite "People were running everywhere. Somebody had forgotten his suitcase..." as "People were running everywhere because somebody had forgotten his suitcase..." unless the student clearly meant the suitcase caused the running.
 Choose only the most important improvement: fix the main verb form, add one useful connector, clarify one time relationship, or correct one unclear phrase.
 Do not add several new actions or replace the student's story with a different scene description.
-If the student's answer is already fully correct, the rewrite must still be different by making one gentle improvement: add a natural connector or clarify the time relationship without changing the story.
-Never return the student's exact answer unchanged in the "rewrite" field.
+Do not rewrite the whole answer unless necessary.
+If the student's answer is already correct and natural, keep it very close and make only a small improvement. If no safe improvement is available, prefer a surface polish or a near-identical version over adding unnecessary new grammar.
+Apply these level rules:
+- Beginner: improve clarity, grammar, wording, or detail, but do not force when, while, had, or had been if the student did not already use them.
+- Intermediate: improve the relationship between actions, and you may add or refine when or while when useful, but do not add had or had been unless the student already used them.
+- Advanced: include or refine had or had been to show what happened before, while preserving the student's main narration.
+If a student already uses higher-level grammar correctly in a lower level, keep it and improve it naturally. Do not remove it just because the selected level is lower.
 
 The "challenge" field must be a short imperative task for the learner, not a corrected sentence.
 The "challenge" field must not ask the learner to use a form, connector, or relationship that is already clearly present in the student's answer.
@@ -164,7 +198,7 @@ Return only valid JSON with this exact shape:
 `.trim()
 }
 
-function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'English', answer = '') {
+function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'English', answer = '', recentAttemptHistory = []) {
   const localCopy = localFeedbackCopy(feedbackLanguage)
   const corrections = normalizeCorrections(feedback.corrections)
   const analysis = analyzeAnswer(answer, scene, challenge)
@@ -214,13 +248,14 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
     strengths: arrayOfStrings(feedback.strengths).map(cleanFeedbackText).slice(0, 3),
     corrections: usefulCorrections,
     rewrite: cleanFeedbackText(normalizeRewrite(feedback.rewrite, answer, scene, challenge, localCopy, usefulCorrections)),
-    challenge: cleanFeedbackText(normalizeChallenge(feedback.challenge, challenge, feedbackLanguage, answer)),
+    challenge: cleanFeedbackText(generateNextStep({ challenge, feedbackLanguage, answer, scene, statuses, features: answerFeatures })),
     detected: {
       mentionedActions: arrayOfStrings(feedback.detected?.mentionedActions),
       verbForms: arrayOfStrings(feedback.detected?.verbForms),
       connectors: arrayOfStrings(feedback.detected?.connectors),
       timeRelationships: arrayOfStrings(feedback.detected?.timeRelationships),
     },
+    levelReadinessHint: null,
   }
 
   normalized.detected.mentionedActions = mergeDetectedValues(
@@ -228,8 +263,24 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
     analysis.mentionedActions,
   )
 
+  const teachingStrengths = buildNarrativeTeachingStrengths(answer, challenge, localCopy, answerFeatures)
+
+  if (
+    statuses.sceneFit !== 'not scene-based' &&
+    statuses.englishStatus !== 'unclear' &&
+    teachingStrengths.length
+  ) {
+    normalized.summary = buildNarrativeTeachingSummary(answer, challenge, localCopy, answerFeatures)
+    normalized.strengths = teachingStrengths
+  } else if (
+    teachingStrengths.length &&
+    !normalized.strengths.some(hasSpecificNarrativeTeaching)
+  ) {
+    normalized.strengths = mergeDetectedValues(teachingStrengths, normalized.strengths).slice(0, 3)
+  }
+
   if (!normalized.strengths.length) {
-    normalized.strengths.push(localCopy.defaultStrength)
+    normalized.strengths.push(...(teachingStrengths.length ? teachingStrengths : [localCopy.defaultStrength]))
   }
 
   if (!normalized.corrections.length) {
@@ -244,9 +295,19 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
   }
 
   const sanitized = sanitizeAdvancedPastPerfectFeedback(normalized, challenge, answerFeatures, localCopy, answer)
+  const withReadinessHint = {
+    ...sanitized,
+    levelReadinessHint: generateLevelReadinessHint({
+      challenge,
+      feedbackLanguage,
+      statuses: sanitized,
+      features: answerFeatures,
+      recentAttemptHistory,
+    }),
+  }
 
   return ensureDistinctRewrite(
-    applyFeedbackConsistencyCaps(sanitized),
+    applyFeedbackConsistencyCaps(withReadinessHint),
     answer,
     challenge,
     localCopy,
@@ -318,16 +379,14 @@ function cleanFeedbackText(value) {
   return String(value ?? '').replace(/\bprompt\b/gi, 'task')
 }
 
-function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
+function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', recentAttemptHistory = []) {
   const localCopy = localFeedbackCopy(feedbackLanguage)
   const normalized = answer.toLowerCase()
-  const hasPastContinuous = /\b(was|were)\s+\w+ing\b/.test(normalized)
-  const simplePastCandidates = normalized.match(/\b\w+(ed|ght|ought|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/g) ?? []
-  const hasSimplePast =
-    simplePastCandidates.some(isLikelySimplePastVerb) ||
-    (normalized.match(/\b[a-z]+\b/g) ?? []).some(isKnownSimplePastVerb)
-  const hasPastPerfect = /\bhad\s+(?!not\s+been\b)(?!been\b)\w+(ed|en|ne|wn|t)\b/.test(normalized)
-  const hasPastPerfectContinuous = /\bhad\s+(?:not\s+)?been(?:\s+\w+){0,3}\s+\w+ing\b/.test(normalized)
+  const features = detectAnswerFeatures(answer)
+  const hasPastContinuous = features.hasPastContinuous
+  const hasSimplePast = features.hasSimplePast
+  const hasPastPerfect = features.hasPastPerfect
+  const hasPastPerfectContinuous = features.hasPastPerfectContinuous
   const hasConnector = /\b(when|while|after|before|as|because)\b/.test(normalized)
   const hasAnyPastVerb = hasSimplePast || hasPastContinuous || hasPastPerfect || hasPastPerfectContinuous
   const connectors = [...new Set(normalized.match(/\b(when|while|after|before|as|because|by the time)\b/g) ?? [])]
@@ -346,18 +405,10 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
   ].filter(Boolean)
 
   const corrections = []
-  const strengths = []
+  const strengths = buildNarrativeTeachingStrengths(answer, challenge, localCopy, features)
 
   if (challenge?.id === 'beginner') {
-    if (hasAnyPastVerb) {
-      if (hasPastContinuous) {
-        strengths.push(localCopy.strengthPastContinuous)
-      } else if (hasPastPerfect || hasPastPerfectContinuous) {
-        strengths.push(localCopy.strengthPastPerfect)
-      } else if (hasSimplePast) {
-        strengths.push(localCopy.strengthSimplePast)
-      }
-    } else {
+    if (!hasAnyPastVerb) {
       corrections.push({
         original: localCopy.mainEvent,
         suggestion: localCopy.usePastNarration,
@@ -365,9 +416,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
         grammarFocus: 'narrative coherence',
       })
     }
-  } else if (hasSimplePast) {
-    strengths.push(localCopy.strengthSimplePast)
-  } else {
+  } else if (!hasSimplePast) {
     corrections.push({
       original: localCopy.mainEvent,
       suggestion: localCopy.useSimplePast,
@@ -377,9 +426,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
   }
 
   if (challenge?.id === 'intermediate') {
-    if (hasPastContinuous) {
-      strengths.push(localCopy.strengthPastContinuous)
-    } else {
+    if (!hasPastContinuous) {
       corrections.push({
         original: localCopy.backgroundAction,
         suggestion: localCopy.usePastContinuous,
@@ -388,9 +435,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
       })
     }
 
-    if (/\b(when|while)\b/.test(normalized)) {
-      strengths.push(localCopy.strengthWhenWhile)
-    } else {
+    if (!/\b(when|while)\b/.test(normalized)) {
       corrections.push({
         original: localCopy.twoActions,
         suggestion: localCopy.useWhenWhile,
@@ -399,9 +444,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
       })
     }
   } else if (challenge?.id !== 'beginner') {
-    if (hasPastContinuous) {
-      strengths.push(localCopy.strengthPastContinuous)
-    } else {
+    if (!hasPastContinuous) {
       corrections.push({
         original: localCopy.backgroundAction,
         suggestion: localCopy.usePastContinuous,
@@ -410,9 +453,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
       })
     }
 
-    if (hasConnector) {
-      strengths.push(localCopy.strengthConnector)
-    } else {
+    if (!hasConnector) {
       corrections.push({
         original: localCopy.twoActions,
         suggestion: localCopy.useConnector,
@@ -454,18 +495,124 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
     englishStatus,
     sceneFit,
     taskFit,
-    summary: localCopy.summary,
+    summary: buildNarrativeTeachingSummary(answer, challenge, localCopy, features),
     strengths: strengths.length ? strengths.slice(0, 3) : [localCopy.defaultStrength],
     corrections: finalCorrections,
     rewrite: normalizeRewrite(scene.sample, answer, scene, challenge, localCopy, finalCorrections),
-    challenge: nextChallengeFor(challenge, feedbackLanguage, answer),
+    challenge: generateNextStep({
+      challenge,
+      feedbackLanguage,
+      answer,
+      scene,
+      statuses: { englishStatus, sceneFit, taskFit },
+      features,
+    }),
     detected: {
       mentionedActions,
       verbForms,
       connectors,
       timeRelationships,
     },
+    levelReadinessHint: generateLevelReadinessHint({
+      challenge,
+      feedbackLanguage,
+      statuses: { englishStatus, sceneFit, taskFit },
+      features,
+      recentAttemptHistory,
+    }),
   }
+}
+
+function extractNarrativeExamples(answer) {
+  const source = String(answer ?? '').trim()
+
+  return {
+    pastPerfectContinuous: matchNarrativeExample(source, /\bhad\s+(?:not\s+)?been(?:\s+\w+){0,3}\s+\w+ing\b/i),
+    pastPerfect: matchNarrativeExample(source, /\bhad\s+(?!not\s+been\b)(?!been\b)(?:\w+\s+){0,2}\w+(?:ed|en|ne|wn|t)\b/i),
+    pastContinuous: matchNarrativeExample(source, /\b(?:was|were)\s+\w+ing\b/i),
+    simplePast: findSimplePastExample(source),
+    connector: matchNarrativeExample(source, /\b(when|while|because|after|before|as|by the time|so)\b/i),
+  }
+}
+
+function matchNarrativeExample(source, pattern) {
+  const match = String(source ?? '').match(pattern)
+  return match ? match[0].trim() : ''
+}
+
+function findSimplePastExample(source) {
+  const words = String(source ?? '').match(/\b[\w']+\b/g) ?? []
+
+  for (const word of words) {
+    const normalized = word.toLowerCase()
+
+    if (isKnownSimplePastVerb(normalized)) {
+      return word
+    }
+  }
+
+  for (const word of words) {
+    const normalized = word.toLowerCase()
+
+    if (
+      /\w+ed\b/.test(normalized) &&
+      isLikelySimplePastVerb(normalized)
+    ) {
+      return word
+    }
+  }
+
+  return ''
+}
+
+function buildNarrativeTeachingSummary(answer, challenge, localCopy, features = detectAnswerFeatures(answer)) {
+  const strengths = buildNarrativeTeachingStrengths(answer, challenge, localCopy, features)
+  return strengths[0] || localCopy.genericSummary
+}
+
+function buildNarrativeTeachingStrengths(answer, challenge, localCopy, features = detectAnswerFeatures(answer)) {
+  const examples = extractNarrativeExamples(answer)
+  const strengths = []
+
+  if (features.hasPastContinuous && features.hasSimplePast && examples.pastContinuous && examples.simplePast) {
+    strengths.push(localCopy.describeContrast(examples.pastContinuous, examples.simplePast))
+  } else {
+    if (features.hasPastContinuous && examples.pastContinuous) {
+      strengths.push(localCopy.describeBackground(examples.pastContinuous))
+    }
+
+    if (features.hasSimplePast && examples.simplePast) {
+      strengths.push(localCopy.describeMainEvent(examples.simplePast))
+    }
+  }
+
+  if (features.hasPastPerfectContinuous && examples.pastPerfectContinuous) {
+    strengths.push(localCopy.describeEarlierOngoing(examples.pastPerfectContinuous))
+  } else if (features.hasPastPerfect && examples.pastPerfect) {
+    strengths.push(localCopy.describeEarlierPast(examples.pastPerfect))
+  }
+
+  if (challenge?.id === 'intermediate') {
+    if (features.hasWhen) {
+      strengths.push(localCopy.describeConnector('when'))
+    } else if (features.hasWhile) {
+      strengths.push(localCopy.describeConnector('while'))
+    }
+  } else if (challenge?.id === 'advanced' && features.hasPastPerfect && features.hasSimplePast && examples.pastPerfect && examples.simplePast) {
+    strengths.unshift(localCopy.describeEarlierThenEvent(examples.pastPerfect, examples.simplePast))
+  }
+
+  return [...new Set(strengths.filter(Boolean))].slice(0, 3)
+}
+
+function mentionsNarrativeTeaching(value) {
+  const text = String(value ?? '').toLowerCase()
+  return /\b(simple past|past continuous|past perfect|past perfect continuous|background|main event|earlier event|earlier action|ongoing action)\b/.test(text)
+}
+
+function hasSpecificNarrativeTeaching(value) {
+  const text = String(value ?? '')
+  return mentionsNarrativeTeaching(text) && /\([^()]+\)/.test(text)
 }
 
 function detectMentionedActions(answer, scene) {
@@ -557,6 +704,10 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
       return false
     }
 
+    if (!correctionRespectsLevelRules(correction, answer, challenge)) {
+      return false
+    }
+
     if (turnsBoundedResultIntoPastContinuous(correction.suggestion, answer)) {
       return false
     }
@@ -611,7 +762,7 @@ function sanitizeAdvancedPastPerfectFeedback(feedback, challenge, features, loca
     strengths: ensureStrength(feedback.strengths, localCopy.strengthPastPerfect),
     corrections: sanitizedCorrections.length ? sanitizedCorrections : [consequenceCorrection(localCopy, features)],
     rewrite: mentionsPastPerfectContinuousForm(feedback.rewrite) || isPastPerfectContinuousNitpick(feedback.rewrite)
-      ? makeMinimalFallbackRewrite(answer, challenge) || localCopy.advancedRewriteFallback
+      ? makeMinimalFallbackRewrite(answer, challenge, null) || localCopy.advancedRewriteFallback
       : feedback.rewrite,
     detected: {
       ...feedback.detected,
@@ -858,36 +1009,41 @@ function normalizeRewrite(value, answer, scene, challenge, localCopy, correction
   if (corrections.some((correction) => correction.suggestion?.toLowerCase().includes('keep this sentence'))) {
     return polishRewriteSurface(
       meaningPreservingRewrite(answer) ||
+        repairAdvancedTimelineRewrite(answer, scene, challenge) ||
         makePolishedFallbackRewrite(answer) ||
-        makeMinimalFallbackRewrite(answer, challenge),
+        makeMinimalFallbackRewrite(answer, challenge, scene) ||
+        answer,
     )
   }
 
   const candidates = [
     isUsableRewrite(value, answer) &&
+    rewriteRespectsLevelRules(value, answer, challenge) &&
     !changesCausalMeaning(value, answer) &&
     !removesSuccessfulNarrativeRelationship(value, answer) &&
     !changesKitchenPancakeMeaning(value, answer) &&
     !createsAwkwardWhilePastPerfectContinuous(value, answer) ? value : '',
     corrections.find((correction) =>
       isUsableRewrite(correction.suggestion, answer) &&
+      rewriteRespectsLevelRules(correction.suggestion, answer, challenge) &&
       !changesCausalMeaning(correction.suggestion, answer) &&
       !removesSuccessfulNarrativeRelationship(correction.suggestion, answer) &&
       !changesKitchenPancakeMeaning(correction.suggestion, answer) &&
       !createsAwkwardWhilePastPerfectContinuous(correction.suggestion, answer) &&
       !turnsBoundedResultIntoPastContinuous(correction.suggestion, answer),
     )?.suggestion,
+    repairAdvancedTimelineRewrite(answer, scene, challenge),
     meaningPreservingRewrite(answer),
     makePolishedFallbackRewrite(answer),
-    makeMinimalFallbackRewrite(answer, challenge),
-    fallbackRewriteFor(challenge, localCopy),
+    makeMinimalFallbackRewrite(answer, challenge, scene),
+    polishRewriteSurface(answer),
   ]
 
   const rewrite = candidates
     .map((candidate) => polishRewriteSurface(candidate))
-    .find((candidate) => candidate && !sameText(candidate, answer))
+    .find((candidate) => candidate && rewriteRespectsLevelRules(candidate, answer, challenge) && !sameText(candidate, answer))
 
-  return rewrite || polishRewriteSurface(fallbackRewriteFor(challenge, localCopy))
+  return rewrite || polishRewriteSurface(answer) || polishRewriteSurface(fallbackRewriteFor(challenge, localCopy))
 }
 
 function ensureDistinctRewrite(feedback, answer, challenge, localCopy) {
@@ -897,13 +1053,15 @@ function ensureDistinctRewrite(feedback, answer, challenge, localCopy) {
 
   const fallback =
     polishRewriteSurface(meaningPreservingRewrite(answer)) ||
+    polishRewriteSurface(repairAdvancedTimelineRewrite(answer, null, challenge)) ||
     polishRewriteSurface(makePolishedFallbackRewrite(answer)) ||
-    polishRewriteSurface(makeMinimalFallbackRewrite(answer, challenge)) ||
+    polishRewriteSurface(makeMinimalFallbackRewrite(answer, challenge, null)) ||
+    polishRewriteSurface(answer) ||
     polishRewriteSurface(fallbackRewriteFor(challenge, localCopy))
 
   return {
     ...feedback,
-    rewrite: sameText(fallback, answer) ? polishRewriteSurface(fallbackRewriteFor(challenge, localCopy)) : fallback,
+    rewrite: fallback,
   }
 }
 
@@ -1131,7 +1289,7 @@ function wordSet(value) {
   )
 }
 
-function makeMinimalFallbackRewrite(answer, challenge) {
+function makeMinimalFallbackRewrite(answer, challenge, scene = null) {
   const trimmed = String(answer ?? '').trim()
   const features = detectAnswerFeatures(trimmed)
 
@@ -1140,18 +1298,121 @@ function makeMinimalFallbackRewrite(answer, challenge) {
   }
 
   if (challenge?.id === 'beginner') {
-    return trimmed.endsWith('.') ? `${trimmed} Then another action happened.` : `${trimmed}. Then another action happened.`
+    return ''
   }
 
   if (challenge?.id === 'advanced') {
     if (features.hasPastPerfect || features.hasPastPerfectContinuous) {
-      return trimmed.endsWith('.') ? `${trimmed} As a result, the scene became more chaotic.` : `${trimmed}. As a result, the scene became more chaotic.`
+      return ''
     }
 
-    return trimmed.endsWith('.') ? `${trimmed} Before that, something had already happened.` : `${trimmed}. Before that, something had already happened.`
+    const sceneAwareEarlier = sceneAwareEarlierPastSentence(scene)
+
+    if (sceneAwareEarlier) {
+      const base = trimmed.endsWith('.') ? trimmed : `${trimmed}.`
+      return `${base} ${sceneAwareEarlier}`
+    }
+
+    return trimmed.endsWith('.') ? `${trimmed} Something had already happened before that.` : `${trimmed}. Something had already happened before that.`
   }
 
-  return trimmed.endsWith('.') ? `${trimmed} This shows why the next action happened.` : `${trimmed}. This shows why the next action happened.`
+  return ''
+}
+
+function repairAdvancedTimelineRewrite(answer, scene, challenge) {
+  if (challenge?.id !== 'advanced') {
+    return ''
+  }
+
+  const trimmed = String(answer ?? '').trim()
+
+  if (!trimmed) {
+    return ''
+  }
+
+  let repaired = trimmed
+    .replace(/\bhad been ([a-z]+(?:ed|en|wn|ne|t))\b/gi, 'had $1')
+    .replace(/\b(was|were) ([a-z]+(?:ed|en|wn|ne|t))\b(?=[^.?!]*(?:before|earlier|already))/gi, 'had $2')
+
+  repaired = polishRewriteSurface(repaired)
+
+  if (
+    repaired &&
+    !sameText(repaired, trimmed) &&
+    rewriteRespectsLevelRules(repaired, answer, challenge) &&
+    !turnsBoundedResultIntoPastContinuous(repaired, answer) &&
+    !changesCausalMeaning(repaired, answer) &&
+    !removesSuccessfulNarrativeRelationship(repaired, answer) &&
+    !changesKitchenPancakeMeaning(repaired, answer)
+  ) {
+    return repaired
+  }
+
+  const sceneAwareEarlier = sceneAwareEarlierPastSentence(scene)
+
+  if (!sceneAwareEarlier) {
+    return ''
+  }
+
+  const base = trimmed.endsWith('.') ? trimmed : `${trimmed}.`
+  return `${base} ${sceneAwareEarlier}`
+}
+
+function sceneAwareEarlierPastSentence(scene) {
+  const earlierRelationship = scene?.sceneScript?.relationships?.find((relationship) => relationship.type === 'earlier-past')
+
+  if (earlierRelationship?.modelSentence) {
+    return polishRewriteSurface(earlierRelationship.modelSentence)
+  }
+
+  const targetRelationship = (scene?.sceneScript?.targetRelationships ?? []).find((sentence) => /\bhad\b/i.test(sentence))
+
+  return targetRelationship ? polishRewriteSurface(targetRelationship) : ''
+}
+
+function rewriteRespectsLevelRules(value, answer, challenge) {
+  if (!value || !String(value).trim()) {
+    return false
+  }
+
+  const original = detectAnswerFeatures(answer)
+  const candidate = detectAnswerFeatures(value)
+
+  if (challenge?.id === 'beginner') {
+    if (!original.hasWhen && candidate.hasWhen) {
+      return false
+    }
+
+    if (!original.hasWhile && candidate.hasWhile) {
+      return false
+    }
+
+    if (!original.hasPastPerfect && candidate.hasPastPerfect) {
+      return false
+    }
+
+    if (!original.hasPastPerfectContinuous && candidate.hasPastPerfectContinuous) {
+      return false
+    }
+  }
+
+  if (challenge?.id === 'intermediate') {
+    if (!original.hasPastPerfect && candidate.hasPastPerfect) {
+      return false
+    }
+
+    if (!original.hasPastPerfectContinuous && candidate.hasPastPerfectContinuous) {
+      return false
+    }
+  }
+
+  if (challenge?.id === 'advanced') {
+    if (!candidate.hasPastPerfect && !candidate.hasPastPerfectContinuous) {
+      return false
+    }
+  }
+
+  return true
 }
 
 function sameText(first, second) {
@@ -1202,6 +1463,46 @@ function defaultStretchCorrection(challenge, localCopy) {
     reason: localCopy.reasonConnector,
     grammarFocus: 'connector',
   }
+}
+
+function correctionRespectsLevelRules(correction, answer, challenge) {
+  const suggestion = `${correction?.suggestion ?? ''} ${correction?.reason ?? ''}`.trim()
+  const features = detectAnswerFeatures(answer)
+  const lower = suggestion.toLowerCase()
+
+  if (challenge?.id === 'beginner') {
+    if (!features.hasWhen && /\bwhen\b/.test(lower)) {
+      return false
+    }
+
+    if (!features.hasWhile && /\bwhile\b/.test(lower)) {
+      return false
+    }
+
+    if (!features.hasPastPerfect && /\b(had|past perfect)\b/.test(lower)) {
+      return false
+    }
+
+    if (!features.hasPastPerfectContinuous && /\b(had been|past perfect continuous)\b/.test(lower)) {
+      return false
+    }
+
+    if (/\bsimple past\b/.test(lower) && !features.hasSimplePast) {
+      return false
+    }
+  }
+
+  if (challenge?.id === 'intermediate') {
+    if (!features.hasPastPerfect && /\bpast perfect\b/.test(lower) && !features.hasPastPerfectContinuous) {
+      return false
+    }
+
+    if (!features.hasPastPerfectContinuous && /\bpast perfect continuous\b/.test(lower)) {
+      return false
+    }
+  }
+
+  return true
 }
 
 function consequenceCorrection(localCopy, features = {}) {
@@ -1377,62 +1678,207 @@ function localVerdictFor({
   return hasPastContinuous && hasSimplePast && hasConnector ? 'good-work' : 'good-start'
 }
 
-function nextChallengeFor(challenge, feedbackLanguage = 'English', answer = '') {
+function generateNextStep({ challenge, feedbackLanguage = 'English', answer = '', scene = null, statuses = {}, features = detectAnswerFeatures(answer) }) {
   const copy = localFeedbackCopy(feedbackLanguage)
-  const features = detectAnswerFeatures(answer)
-
-  if (features.hasPastPerfect || features.hasPastPerfectContinuous) {
-    return features.hasCauseResult ? copy.nextWhatHappenedNext : copy.nextConsequence
-  }
-
-  if (features.hasWhen && features.hasPastContinuous && features.hasSimplePast) {
-    return features.hasCauseResult ? copy.nextWhatHappenedNext : copy.nextResult
-  }
-
-  if (features.hasCauseResult) {
-    return copy.nextWhatHappenedNext
-  }
+  const target = currentLevelTargetState(challenge, features, statuses)
+  const hasAnotherActor = sceneHasAnotherActor(answer, scene)
+  const hasAnotherAction = sceneHasAnotherAction(answer, scene)
 
   if (challenge?.id === 'beginner') {
-    return copy.nextBeginner
+    if (!target.met || target.strength === 'none') {
+      return hasAnotherAction ? copy.nextBasicMoreAction : copy.nextBasicMoreDetail
+    }
+
+    if (hasAnotherActor) {
+      return copy.nextBasicAnotherPerson
+    }
+
+    return features.hasAnyPastVerb ? copy.nextBasicNext : copy.nextBasicMoreAction
+  }
+
+  if (challenge?.id === 'intermediate') {
+    if (!target.met || target.strength === 'none') {
+      return copy.nextIntermediateConnect
+    }
+
+    if (features.hasWhen || features.hasWhile || features.hasRelationshipConnector) {
+      return copy.nextIntermediateOneMore
+    }
+
+    return copy.nextIntermediateConnect
   }
 
   if (challenge?.id === 'advanced') {
+    if (target.met && target.strength === 'clear') {
+      return copy.nextAdvancedEarlierDetail
+    }
+
+    if (features.hasPastPerfect || features.hasPastPerfectContinuous) {
+      return copy.nextAdvancedTimeline
+    }
+
     return copy.nextAdvanced
   }
 
-  return copy.nextIntermediate
+  return copy.nextIntermediateConnect
 }
 
-function normalizeChallenge(value, challenge, feedbackLanguage = 'English', answer = '') {
-  if (!value || typeof value !== 'string') {
-    return nextChallengeFor(challenge, feedbackLanguage, answer)
+function generateLevelReadinessHint({ challenge, feedbackLanguage = 'English', statuses = {}, features = {}, recentAttemptHistory = [] }) {
+  const copy = localFeedbackCopy(feedbackLanguage)
+  const target = currentLevelTargetState(challenge, features, statuses)
+  const errorSeverity = deriveErrorSeverity(statuses)
+  const stableAcrossAttempts = hasStableRecentAttempts(recentAttemptHistory, challenge, statuses, features)
+
+  if (
+    challenge?.id === 'advanced' ||
+    !target.met ||
+    target.strength !== 'clear' ||
+    !stableAcrossAttempts ||
+    !['low', 'none'].includes(errorSeverity)
+  ) {
+    return null
   }
 
-  const trimmed = value.trim()
-  const lower = trimmed.toLowerCase()
-  const features = detectAnswerFeatures(answer)
-  const startsLikeTask = /^(add|rewrite|try|use|describe|explain|connect|include|change|make|practice)\b/.test(lower)
-  const containsStoryVerb = /\b(was|were|had|dropped|swerved|knocked|jumped|stole|slept|weighed|weighing|sleeping|falling|rolling)\b/.test(lower)
-  const asksForEarlierPast =
-    /\b(had|had been|had or had been|past perfect|past perfect continuous|earlier past|already happened|happened before|what happened earlier|what had happened|before)\b/.test(lower) ||
-    /\bhad\b[^.?!]*\bhad been\b/.test(lower)
-  const asksForCauseResult =
-    /\b(because|so|so that|result|consequence|cause|why|explain why|caused|led to)\b/.test(lower)
-  const repeatsExistingSkill =
-    ((features.hasPastPerfect || features.hasPastPerfectContinuous) && asksForEarlierPast) ||
-    (features.hasPastPerfectContinuous && /\b(had been|past perfect continuous)\b/.test(lower)) ||
-    (features.hasWhen && /\bwhen\b/.test(lower)) ||
-    (features.hasBecause && /\bbecause\b/.test(lower)) ||
-    (features.hasCauseResult && asksForCauseResult) ||
-    (features.hasWhile && /\bwhile\b/.test(lower)) ||
-    (features.hasInterruption && /\b(interrupt|interruption|sudden event|suddenly)\b/.test(lower))
-
-  if ((containsStoryVerb && !startsLikeTask) || repeatsExistingSkill) {
-    return nextChallengeFor(challenge, feedbackLanguage, answer)
+  if (recentReadinessHintWasShown(recentAttemptHistory, challenge)) {
+    return null
   }
 
-  return trimmed
+  if (challenge?.id === 'beginner') {
+    return copy.readinessBasic
+  }
+
+  if (challenge?.id === 'intermediate') {
+    return copy.readinessIntermediate
+  }
+
+  return null
+}
+
+function currentLevelTargetState(challenge, features, statuses = {}) {
+  const stable = statuses.englishStatus !== 'unclear'
+
+  if (challenge?.id === 'beginner') {
+    return {
+      met: stable && features.hasAnyPastVerb,
+      strength: stable && features.hasAnyPastVerb ? 'clear' : 'none',
+    }
+  }
+
+  if (challenge?.id === 'intermediate') {
+    const hasConnection =
+      ((features.hasWhen || features.hasWhile) &&
+        (features.hasPastContinuous || features.hasSimplePast || features.hasAnyConnector)) ||
+      (features.hasRelationshipConnector && features.hasPastContinuous && features.hasSimplePast)
+    const hasPartialRelationship = features.hasRelationshipConnector || features.hasCauseResult
+
+    return {
+      met: stable && (hasConnection || hasPartialRelationship),
+      strength: stable && hasConnection ? 'clear' : stable && hasPartialRelationship ? 'partial' : 'none',
+    }
+  }
+
+  if (challenge?.id === 'advanced') {
+    const hasEarlierPast = features.hasPastPerfect || features.hasPastPerfectContinuous
+    const strongEarlierPast = hasEarlierPast && (features.hasSimplePast || features.hasPastContinuous || features.hasRelationshipConnector)
+
+    return {
+      met: stable && hasEarlierPast,
+      strength: stable && strongEarlierPast ? 'clear' : stable && hasEarlierPast ? 'partial' : 'none',
+    }
+  }
+
+  return { met: false, strength: 'none' }
+}
+
+function deriveErrorSeverity(statuses = {}) {
+  if (statuses.englishStatus === 'unclear' || statuses.sceneFit === 'not scene-based') {
+    return 'high'
+  }
+
+  if (statuses.englishStatus === 'mostly correct' || statuses.sceneFit === 'partly on scene') {
+    return 'low'
+  }
+
+  return 'none'
+}
+
+function sceneHasAnotherActor(answer, scene) {
+  const normalized = String(answer ?? '').toLowerCase()
+  const actors = [...new Set((scene?.sceneScript?.coreActions ?? []).map((action) => action.actor?.toLowerCase()).filter(Boolean))]
+
+  return actors.some((actor) => actor.length > 2 && !normalized.includes(actor))
+}
+
+function sceneHasAnotherAction(answer, scene) {
+  const mentioned = new Set(detectMentionedActions(answer, scene))
+  const actions = scene?.sceneScript?.coreActions ?? []
+
+  return actions.some((action) => !mentioned.has(action.id))
+}
+
+function hasStableRecentAttempts(recentAttemptHistory = [], challenge, statuses = {}, features = {}) {
+  const challengeId = challenge?.id
+
+  if (!challengeId) {
+    return false
+  }
+
+  const currentTarget = currentLevelTargetState(challenge, features, statuses)
+  const currentErrorSeverity = deriveErrorSeverity(statuses)
+
+  if (!currentTarget.met || currentTarget.strength !== 'clear' || !['low', 'none'].includes(currentErrorSeverity)) {
+    return false
+  }
+
+  const matchingAttempts = recentAttemptHistory
+    .map((attempt) => normalizeAttemptHistoryItem(attempt))
+    .filter((attempt) => attempt.challengeId === challengeId)
+    .slice(-3)
+
+  const stableMatches = matchingAttempts.filter((attempt) =>
+    attempt.currentLevelTargetMet &&
+    attempt.currentLevelTargetStrength === 'clear' &&
+    ['low', 'none'].includes(attempt.errorSeverity),
+  )
+
+  return stableMatches.length >= 1
+}
+
+function normalizeAttemptHistoryItem(attempt) {
+  const challengeId =
+    attempt?.selectedDifficulty ||
+    attempt?.challenge?.id ||
+    attempt?.challengeId ||
+    ''
+  const englishStatus = attempt?.englishStatus ?? 'mostly correct'
+  const sceneFit = attempt?.sceneFit ?? 'on scene'
+  const taskFit = attempt?.taskFit ?? 'partly on target'
+  const features = attempt?.detectedFeatures ?? attempt?.features ?? {}
+  const statuses = { englishStatus, sceneFit, taskFit }
+  const target = attempt?.currentLevelTargetMet === true || attempt?.currentLevelTargetStrength
+    ? {
+      met: Boolean(attempt?.currentLevelTargetMet),
+      strength: attempt?.currentLevelTargetStrength ?? 'none',
+    }
+    : currentLevelTargetState({ id: challengeId }, features, statuses)
+
+  return {
+    challengeId,
+    currentLevelTargetMet: target.met,
+    currentLevelTargetStrength: target.strength,
+    errorSeverity: attempt?.errorSeverity ?? deriveErrorSeverity(statuses),
+    levelReadinessHintShown: Boolean(attempt?.levelReadinessHintShown || attempt?.levelReadinessHint),
+  }
+}
+
+function recentReadinessHintWasShown(recentAttemptHistory = [], challenge) {
+  const challengeId = challenge?.id
+
+  return recentAttemptHistory
+    .map((attempt) => normalizeAttemptHistoryItem(attempt))
+    .filter((attempt) => attempt.challengeId === challengeId)
+    .slice(-2)
+    .some((attempt) => attempt.levelReadinessHintShown)
 }
 
 function detectAnswerFeatures(answer) {
@@ -1551,6 +1997,13 @@ function localFeedbackCopy(feedbackLanguage) {
       strengthPastPerfect: 'Usaste past perfect para mostrar una acción anterior.',
       strengthWhenWhile: 'Usaste when o while para conectar acciones en el pasado.',
       strengthConnector: 'Usaste un conector para mostrar cómo dos acciones se relacionan en el tiempo.',
+      describeContrast: (background, event) => `Usaste past continuous (${background}) para el fondo y simple past (${event}) para el evento principal.`,
+      describeBackground: (background) => `Usaste past continuous (${background}) para mostrar una acción en progreso en el fondo.`,
+      describeMainEvent: (event) => `Usaste simple past (${event}) para mostrar el evento principal o terminado.`,
+      describeEarlierPast: (earlier) => `Usaste past perfect (${earlier}) para mostrar qué había pasado antes.`,
+      describeEarlierThenEvent: (earlier, event) => `Usaste past perfect (${earlier}) para el evento anterior y simple past (${event}) para lo que pasó después.`,
+      describeEarlierOngoing: (earlier) => `Usaste past perfect continuous (${earlier}) para una acción que seguía ocurriendo antes de otro momento pasado.`,
+      describeConnector: (connector) => `Usaste ${connector} (${connector}) para mostrar cómo se relacionan las acciones en el tiempo.`,
       backgroundAction: 'una acción de fondo',
       mainEvent: 'un evento principal',
       twoActions: 'dos acciones separadas',
@@ -1587,16 +2040,23 @@ function localFeedbackCopy(feedbackLanguage) {
       beginnerRewriteFallback: 'A person did one clear action, and then another visible action happened.',
       intermediateRewriteFallback: 'One action was happening when another action suddenly changed the scene.',
       advancedRewriteFallback: 'One action had already happened before another past action changed the scene.',
-      nextBeginner: 'Ahora conecta dos acciones con when o while.',
-      nextAdvanced: 'Ahora agrega una oración que contraste una acción en progreso con un evento repentino.',
-      nextIntermediate: 'Ahora agrega una oración con had o had been para mostrar qué pasó antes.',
-      nextConsequence: 'Ahora agrega una oración que muestre la consecuencia o reacción.',
-      nextResult: 'Ahora agrega una oración con so o because para mostrar el resultado.',
-      nextWhatHappenedNext: 'Ahora agrega una oración sobre lo que pasó después.',
+      nextBasicNext: 'Agrega una oración más sobre lo que pasó después.',
+      nextBasicAnotherPerson: 'Agrega una oración más sobre lo que otra persona estaba haciendo.',
+      nextBasicMoreDetail: 'Agrega un detalle más sobre lo que estaba pasando en la escena.',
+      nextBasicMoreAction: 'Muestra una acción más en pasado.',
+      nextBasicStretch: 'Intenta conectar dos acciones usando when o while.',
+      nextIntermediateConnect: 'Conecta dos acciones usando when o while.',
+      nextIntermediateOneMore: 'Agrega una oración más que conecte acciones claramente.',
+      nextIntermediateStretch: 'Intenta agregar una oración sobre lo que había pasado antes.',
+      nextAdvanced: 'Agrega una oración sobre lo que pasó antes usando had o had been.',
+      nextAdvancedTimeline: 'Muestra qué había pasado antes usando had o had been.',
+      nextAdvancedEarlierDetail: 'Agrega un detalle anterior más usando had o had been.',
+      readinessBasic: 'Si quieres un desafío, intenta conectar dos acciones con when o while.',
+      readinessIntermediate: 'Estás conectando acciones con claridad. Ahora intenta agregar qué había pasado antes.',
     }
   }
 
-  if (feedbackLanguage === 'Norwegian') {
+  if (feedbackLanguage === 'Norwegian' || feedbackLanguage === 'Swedish') {
     return {
       summary: 'Denne lokale coachen sjekket hovedmønstrene for fortelling i fortid. OpenAI-tilbakemelding blir mer presis og scene-bevisst.',
       genericSummary: 'Du bygger en historie i fortid. Gjør tidsforholdene tydelige.',
@@ -1606,6 +2066,13 @@ function localFeedbackCopy(feedbackLanguage) {
       strengthPastPerfect: 'Du brukte past perfect for å vise en tidligere handling.',
       strengthWhenWhile: 'Du brukte when eller while for å koble handlinger i fortid.',
       strengthConnector: 'Du brukte en kobling for å vise hvordan to handlinger henger sammen i tid.',
+      describeContrast: (background, event) => `Du brukte past continuous (${background}) for bakgrunnen og simple past (${event}) for hovedhendelsen.`,
+      describeBackground: (background) => `Du brukte past continuous (${background}) for å vise en handling som allerede var i gang.`,
+      describeMainEvent: (event) => `Du brukte simple past (${event}) for å vise hovedhendelsen eller en avsluttet handling.`,
+      describeEarlierPast: (earlier) => `Du brukte past perfect (${earlier}) for å vise hva som hadde skjedd tidligere.`,
+      describeEarlierThenEvent: (earlier, event) => `Du brukte past perfect (${earlier}) for den tidligere hendelsen og simple past (${event}) for det som skjedde etterpå.`,
+      describeEarlierOngoing: (earlier) => `Du brukte past perfect continuous (${earlier}) for en handling som pågikk før et annet tidspunkt i fortiden.`,
+      describeConnector: (connector) => `Du brukte ${connector} (${connector}) for å vise hvordan handlingene henger sammen i tid.`,
       backgroundAction: 'en bakgrunnshandling',
       mainEvent: 'en hovedhendelse',
       twoActions: 'to separate handlinger',
@@ -1642,12 +2109,19 @@ function localFeedbackCopy(feedbackLanguage) {
       beginnerRewriteFallback: 'A person did one clear action, and then another visible action happened.',
       intermediateRewriteFallback: 'One action was happening when another action suddenly changed the scene.',
       advancedRewriteFallback: 'One action had already happened before another past action changed the scene.',
-      nextBeginner: 'Koble nå to handlinger med when eller while.',
-      nextAdvanced: 'Legg nå til en setning som kontrasterer en pågående handling med en plutselig hendelse.',
-      nextIntermediate: 'Legg nå til en setning med had eller had been for å vise hva som skjedde før.',
-      nextConsequence: 'Legg nå til en setning som viser konsekvensen eller reaksjonen.',
-      nextResult: 'Legg nå til en setning med so eller because for å vise resultatet.',
-      nextWhatHappenedNext: 'Legg nå til en setning om hva som skjedde etterpå.',
+      nextBasicNext: 'Legg til en setning til om hva som skjedde etterpå.',
+      nextBasicAnotherPerson: 'Legg til en setning til om hva en annen person gjorde.',
+      nextBasicMoreDetail: 'Legg til en detalj til om hva som skjedde i scenen.',
+      nextBasicMoreAction: 'Vis en handling til i fortid.',
+      nextBasicStretch: 'Prøv å koble to handlinger med when eller while.',
+      nextIntermediateConnect: 'Koble to handlinger med when eller while.',
+      nextIntermediateOneMore: 'Legg til en setning til som kobler handlinger tydelig.',
+      nextIntermediateStretch: 'Prøv å legge til en setning om hva som hadde skjedd før.',
+      nextAdvanced: 'Legg til en setning om hva som skjedde før med had eller had been.',
+      nextAdvancedTimeline: 'Vis hva som hadde skjedd før med had eller had been.',
+      nextAdvancedEarlierDetail: 'Legg til en tidligere detalj til med had eller had been.',
+      readinessBasic: 'Hvis du vil ha en utfordring, kan du prøve å koble to handlinger med when eller while.',
+      readinessIntermediate: 'Du kobler handlingene tydelig. Nå kan du prøve å legge til hva som hadde skjedd før.',
     }
   }
 
@@ -1660,6 +2134,13 @@ function localFeedbackCopy(feedbackLanguage) {
     strengthPastPerfect: 'You used past perfect to show an earlier event.',
     strengthWhenWhile: 'You used when or while to connect actions in the past.',
     strengthConnector: 'You used a connector to show how two actions relate in time.',
+    describeContrast: (background, event) => `You used past continuous (${background}) for the background and simple past (${event}) for the main event.`,
+    describeBackground: (background) => `You used past continuous (${background}) to show an action already in progress in the background.`,
+    describeMainEvent: (event) => `You used simple past (${event}) for the main event or completed action.`,
+    describeEarlierPast: (earlier) => `You used past perfect (${earlier}) to show what had happened earlier.`,
+    describeEarlierThenEvent: (earlier, event) => `You used past perfect (${earlier}) for the earlier event and simple past (${event}) for what happened next.`,
+    describeEarlierOngoing: (earlier) => `You used past perfect continuous (${earlier}) for an ongoing action before another past moment.`,
+    describeConnector: (connector) => `You used ${connector} (${connector}) to show how the actions relate in time.`,
     backgroundAction: 'a background action',
     mainEvent: 'a main event',
     twoActions: 'two separate actions',
@@ -1696,12 +2177,19 @@ function localFeedbackCopy(feedbackLanguage) {
     beginnerRewriteFallback: 'A person did one clear action, and then another visible action happened.',
     intermediateRewriteFallback: 'One action was happening when another action suddenly changed the scene.',
     advancedRewriteFallback: 'One action had already happened before another past action changed the scene.',
-    nextBeginner: 'Now connect two of your actions with when or while.',
-    nextAdvanced: 'Now add one more sentence that contrasts an ongoing past action with a sudden event.',
-    nextIntermediate: 'Now add one sentence with had or had been to show what happened earlier.',
-    nextConsequence: 'Now add one sentence that shows the consequence or reaction.',
-    nextResult: 'Now add one sentence with so or because to show the result.',
-    nextWhatHappenedNext: 'Now add one sentence about what happened next.',
+    nextBasicNext: 'Add one more sentence about what happened next.',
+    nextBasicAnotherPerson: 'Add one more sentence about what another person was doing.',
+    nextBasicMoreDetail: 'Add one more detail about what was happening in the scene.',
+    nextBasicMoreAction: 'Show one more action in the past.',
+    nextBasicStretch: 'Try connecting two actions using when or while.',
+    nextIntermediateConnect: 'Connect two actions using when or while.',
+    nextIntermediateOneMore: 'Add one more sentence that connects actions clearly.',
+    nextIntermediateStretch: 'Try adding one sentence about what happened before.',
+    nextAdvanced: 'Add one sentence about what happened before using had or had been.',
+    nextAdvancedTimeline: 'Show what had happened before using had or had been.',
+    nextAdvancedEarlierDetail: 'Add one more earlier detail using had or had been.',
+    readinessBasic: 'You’re describing the scene clearly. Now try connecting two actions using when or while.',
+    readinessIntermediate: 'You’re connecting actions clearly. Now try adding what happened before.',
   }
 }
 
@@ -1712,6 +2200,7 @@ if (process.env.VERCEL !== '1') {
 }
 
 export {
+  generateFeedback,
   normalizeFeedback,
   analyzeAnswer,
   detectAnswerFeatures,

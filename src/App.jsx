@@ -8,7 +8,9 @@ function App() {
   const [challengeMode, setChallengeMode] = useState(getStoredChallengeMode)
   const [uiLanguage, setUiLanguage] = useState('en')
   const [answer, setAnswer] = useState('')
+  const [submittedAnswer, setSubmittedAnswer] = useState('')
   const [feedback, setFeedback] = useState(null)
+  const [recentAttemptHistory, setRecentAttemptHistory] = useState([])
   const [isChecking, setIsChecking] = useState(false)
   const [isGrammarOpen, setIsGrammarOpen] = useState(false)
   const [isBeginnerPastHintOpen, setIsBeginnerPastHintOpen] = useState(false)
@@ -98,6 +100,10 @@ function App() {
       : copy.app.scenePrompt
   const showMobileGhostText = isMobileViewport && !answer.trim() && !feedback
   const showMobileInlineHint = isMobileViewport && Boolean(activeHint) && Boolean(answer.trim()) && !feedback
+  const showBetterVersion = Boolean(
+    feedback?.rewrite &&
+    hasMeaningfulRewriteDifference(feedback.rewrite, submittedAnswer),
+  )
 
   useEffect(() => {
     if (!isMobileViewport) {
@@ -248,12 +254,13 @@ function App() {
     const shouldExitFocusAfterFeedback = isMobileFocusMode
 
     setIsChecking(true)
+    const checkedAnswer = answer
     try {
       const response = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          answer,
+          answer: checkedAnswer,
           scene: {
             title: activeScene.title,
             setting: activeScene.setting,
@@ -268,6 +275,7 @@ function App() {
             label: activeChallenge.label ?? submittedChallenge.label,
           },
           feedbackLanguage: languageOptions[uiLanguage].feedbackName,
+          recentAttemptHistory,
         }),
       })
 
@@ -275,7 +283,31 @@ function App() {
         throw new Error(copy.errors.checkFailed)
       }
 
-      setFeedback(await response.json())
+      const nextFeedback = await response.json()
+      setSubmittedAnswer(checkedAnswer)
+      setFeedback(nextFeedback)
+      setRecentAttemptHistory((history) => [
+        ...history.slice(-3),
+        {
+          selectedDifficulty: challengeMode,
+          currentLevelTargetMet: nextFeedback.taskFit === 'on target',
+          currentLevelTargetStrength: nextFeedback.taskFit === 'on target'
+            ? 'clear'
+            : nextFeedback.taskFit === 'partly on target'
+            ? 'partial'
+            : 'none',
+          englishStatus: nextFeedback.englishStatus,
+          sceneFit: nextFeedback.sceneFit,
+          taskFit: nextFeedback.taskFit,
+          errorSeverity:
+            nextFeedback.englishStatus === 'unclear' || nextFeedback.sceneFit === 'not scene-based'
+              ? 'high'
+              : nextFeedback.englishStatus === 'mostly correct' || nextFeedback.sceneFit === 'partly on scene'
+              ? 'low'
+              : 'none',
+          levelReadinessHintShown: Boolean(nextFeedback.levelReadinessHint),
+        },
+      ])
 
       if (shouldExitFocusAfterFeedback) {
         pendingFeedbackAnchorRef.current = true
@@ -305,6 +337,7 @@ function App() {
       setSceneTrackIndex(nextSceneIndex + 1)
     }
     setAnswer('')
+    setSubmittedAnswer('')
     setFeedback(null)
     setHintIndex(null)
     setError('')
@@ -631,6 +664,7 @@ function App() {
 
   function clearStory() {
     setAnswer('')
+    setSubmittedAnswer('')
     setError('')
     setHintIndex(null)
     requestAnimationFrame(() => {
@@ -915,7 +949,6 @@ function App() {
                       <p className="verdict-label">{copy.feedback.verdict}</p>
                       <strong>{feedbackTone.label}</strong>
                     </div>
-                    <span className="level-pill">{feedbackTone.detail}</span>
                   </div>
                   <p>{feedback.summary}</p>
 
@@ -942,7 +975,9 @@ function App() {
                     </section>
                   </div>
 
-                  <p className="rewrite"><span>{copy.feedback.betterVersion}</span> {feedback.rewrite}</p>
+                  {showBetterVersion ? (
+                    <p className="rewrite"><span>{copy.feedback.betterVersion}</span> {feedback.rewrite}</p>
+                  ) : null}
 
                   <div className="detected-panel">
                     <p className="section-kicker">{copy.feedback.detected}</p>
@@ -963,6 +998,12 @@ function App() {
                       {copy.feedback.editStory}
                     </button>
                   </div>
+
+                  {feedback.levelReadinessHint ? (
+                    <p className="readiness-hint">
+                      <span>{copy.feedback.readiness}</span> {feedback.levelReadinessHint}
+                    </p>
+                  ) : null}
                 </section>
               ) : activeHint && !isMobileViewport ? (
                 <aside className="hint-panel" aria-live="polite">
@@ -1056,7 +1097,7 @@ function App() {
                 <h2 id="grammar-modal-title">{copy.grammar.title}</h2>
               </div>
               <button type="button" className="modal-close" aria-label={copy.grammar.close} onClick={() => setIsGrammarOpen(false)}>
-                {copy.grammar.close}
+                ×
               </button>
             </div>
 
@@ -1215,6 +1256,20 @@ function getStoredChallengeMode() {
   const storedChallengeMode = window.localStorage.getItem(storageKeys.challengeMode)
 
   return Object.hasOwn(defaultChallengeModes, storedChallengeMode) ? storedChallengeMode : 'intermediate'
+}
+
+function hasMeaningfulRewriteDifference(rewrite, original) {
+  const normalizedRewrite = normalizeComparableSentence(rewrite)
+  const normalizedOriginal = normalizeComparableSentence(original)
+
+  return Boolean(normalizedRewrite) && normalizedRewrite !== normalizedOriginal
+}
+
+function normalizeComparableSentence(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
 }
 
 function getStoredSceneTrackIndex() {
@@ -1453,14 +1508,14 @@ const translations = {
     },
     connectorHint: {
       kicker: 'Quick hint',
-      title: 'when and while',
+      title: 'when / while',
       when: {
         title: 'when',
-        text: 'Use when when one action happens during another action that is already in progress.',
+        text: 'Something happens\n(a moment)',
       },
       while: {
         title: 'while',
-        text: 'Use while when two actions are happening at the same time.',
+        text: 'Things are happening\n(a longer time)',
       },
     },
     pastPerfectHint: {
@@ -1498,6 +1553,7 @@ const translations = {
       betterVersion: 'Better version:',
       detected: 'Detected',
       next: 'Next step:',
+      readiness: 'Optional challenge:',
       editStory: 'Edit story',
       waitingTitle: 'Feedback appears here',
       waitingText: 'Write your story and check your verbs to see coaching without leaving the scene.',
@@ -1639,6 +1695,7 @@ const translations = {
       betterVersion: 'Mejor versión:',
       detected: 'Detectado',
       next: 'Siguiente paso:',
+      readiness: 'Desafío opcional:',
       editStory: 'Editar historia',
       waitingTitle: 'Aquí aparecerá la retroalimentación',
       waitingText: 'Escribe tu historia y revisa tus verbos para ver la ayuda sin salir de la escena.',
@@ -1780,6 +1837,7 @@ const translations = {
       betterVersion: 'Bättre version:',
       detected: 'Upptäckt',
       next: 'Nästa steg:',
+      readiness: 'Valfri utmaning:',
       editStory: 'Redigera historien',
       waitingTitle: 'Feedbacken visas här',
       waitingText: 'Skriv din historia och kolla den för att se coachning utan att lämna scenen.',

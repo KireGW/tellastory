@@ -1,0 +1,2008 @@
+{
+  "generatedAt": "2026-04-21T04:28:53.810Z",
+  "mode": "live_model_mode",
+  "totalCases": 80,
+  "evaluations": [
+    {
+      "caseId": "midnight-knock__basic__basic-clear-short",
+      "sceneId": "midnight-knock",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "midnight-knock__intermediate__intermediate-no-connector",
+      "sceneId": "midnight-knock",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "midnight-knock__intermediate__intermediate-correct-when",
+      "sceneId": "midnight-knock",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "midnight-knock__advanced__advanced-no-earlier-event",
+      "sceneId": "midnight-knock",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "market-spill__basic__basic-clear-short",
+      "sceneId": "market-spill",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "market-spill__intermediate__intermediate-no-connector",
+      "sceneId": "market-spill",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "market-spill__intermediate__intermediate-correct-when",
+      "sceneId": "market-spill",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "market-spill__advanced__advanced-no-earlier-event",
+      "sceneId": "market-spill",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "train-platform__basic__basic-clear-short",
+      "sceneId": "train-platform",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "train-platform__intermediate__intermediate-no-connector",
+      "sceneId": "train-platform",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "train-platform__intermediate__intermediate-correct-when",
+      "sceneId": "train-platform",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "train-platform__advanced__advanced-no-earlier-event",
+      "sceneId": "train-platform",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "kitchen-smoke__basic__basic-clear-short",
+      "sceneId": "kitchen-smoke",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "kitchen-smoke__intermediate__intermediate-no-connector",
+      "sceneId": "kitchen-smoke",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "kitchen-smoke__intermediate__intermediate-correct-when",
+      "sceneId": "kitchen-smoke",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "kitchen-smoke__advanced__advanced-no-earlier-event",
+      "sceneId": "kitchen-smoke",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "museum-alarm__basic__basic-clear-short",
+      "sceneId": "museum-alarm",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "museum-alarm__intermediate__intermediate-no-connector",
+      "sceneId": "museum-alarm",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "museum-alarm__intermediate__intermediate-correct-when",
+      "sceneId": "museum-alarm",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "museum-alarm__advanced__advanced-no-earlier-event",
+      "sceneId": "museum-alarm",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "beach-rescue__basic__basic-clear-short",
+      "sceneId": "beach-rescue",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "beach-rescue__intermediate__intermediate-no-connector",
+      "sceneId": "beach-rescue",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "beach-rescue__intermediate__intermediate-correct-when",
+      "sceneId": "beach-rescue",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "beach-rescue__advanced__advanced-no-earlier-event",
+      "sceneId": "beach-rescue",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "office-outage__basic__basic-clear-short",
+      "sceneId": "office-outage",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "office-outage__intermediate__intermediate-no-connector",
+      "sceneId": "office-outage",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "office-outage__intermediate__intermediate-correct-when",
+      "sceneId": "office-outage",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "office-outage__advanced__advanced-no-earlier-event",
+      "sceneId": "office-outage",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "campfire-story__basic__basic-clear-short",
+      "sceneId": "campfire-story",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "campfire-story__intermediate__intermediate-no-connector",
+      "sceneId": "campfire-story",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "campfire-story__intermediate__intermediate-correct-when",
+      "sceneId": "campfire-story",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "campfire-story__advanced__advanced-no-earlier-event",
+      "sceneId": "campfire-story",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "hospital-hall__basic__basic-clear-short",
+      "sceneId": "hospital-hall",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "hospital-hall__intermediate__intermediate-no-connector",
+      "sceneId": "hospital-hall",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "hospital-hall__intermediate__intermediate-correct-when",
+      "sceneId": "hospital-hall",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "hospital-hall__advanced__advanced-no-earlier-event",
+      "sceneId": "hospital-hall",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "school-lab__basic__basic-clear-short",
+      "sceneId": "school-lab",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "school-lab__intermediate__intermediate-no-connector",
+      "sceneId": "school-lab",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "school-lab__intermediate__intermediate-correct-when",
+      "sceneId": "school-lab",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "school-lab__advanced__advanced-no-earlier-event",
+      "sceneId": "school-lab",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "airport-delay__basic__basic-clear-short",
+      "sceneId": "airport-delay",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "airport-delay__intermediate__intermediate-no-connector",
+      "sceneId": "airport-delay",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "airport-delay__intermediate__intermediate-correct-when",
+      "sceneId": "airport-delay",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "airport-delay__advanced__advanced-no-earlier-event",
+      "sceneId": "airport-delay",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "farm-storm__basic__basic-clear-short",
+      "sceneId": "farm-storm",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "farm-storm__intermediate__intermediate-no-connector",
+      "sceneId": "farm-storm",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "farm-storm__intermediate__intermediate-correct-when",
+      "sceneId": "farm-storm",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "farm-storm__advanced__advanced-no-earlier-event",
+      "sceneId": "farm-storm",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "restaurant-proposal__basic__basic-clear-short",
+      "sceneId": "restaurant-proposal",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "restaurant-proposal__intermediate__intermediate-no-connector",
+      "sceneId": "restaurant-proposal",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "restaurant-proposal__intermediate__intermediate-correct-when",
+      "sceneId": "restaurant-proposal",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "restaurant-proposal__advanced__advanced-no-earlier-event",
+      "sceneId": "restaurant-proposal",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "library-whisper__basic__basic-clear-short",
+      "sceneId": "library-whisper",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "library-whisper__intermediate__intermediate-no-connector",
+      "sceneId": "library-whisper",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "library-whisper__intermediate__intermediate-correct-when",
+      "sceneId": "library-whisper",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "library-whisper__advanced__advanced-no-earlier-event",
+      "sceneId": "library-whisper",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "city-parade__basic__basic-clear-short",
+      "sceneId": "city-parade",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "city-parade__intermediate__intermediate-no-connector",
+      "sceneId": "city-parade",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "city-parade__intermediate__intermediate-correct-when",
+      "sceneId": "city-parade",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "city-parade__advanced__advanced-no-earlier-event",
+      "sceneId": "city-parade",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "garage-repair__basic__basic-clear-short",
+      "sceneId": "garage-repair",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "garage-repair__intermediate__intermediate-no-connector",
+      "sceneId": "garage-repair",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "garage-repair__intermediate__intermediate-correct-when",
+      "sceneId": "garage-repair",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "garage-repair__advanced__advanced-no-earlier-event",
+      "sceneId": "garage-repair",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "snowy-bus__basic__basic-clear-short",
+      "sceneId": "snowy-bus",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "snowy-bus__intermediate__intermediate-no-connector",
+      "sceneId": "snowy-bus",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "snowy-bus__intermediate__intermediate-correct-when",
+      "sceneId": "snowy-bus",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "snowy-bus__advanced__advanced-no-earlier-event",
+      "sceneId": "snowy-bus",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "garden-party__basic__basic-clear-short",
+      "sceneId": "garden-party",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "garden-party__intermediate__intermediate-no-connector",
+      "sceneId": "garden-party",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "garden-party__intermediate__intermediate-correct-when",
+      "sceneId": "garden-party",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "garden-party__advanced__advanced-no-earlier-event",
+      "sceneId": "garden-party",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "film-set__basic__basic-clear-short",
+      "sceneId": "film-set",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "film-set__intermediate__intermediate-no-connector",
+      "sceneId": "film-set",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "film-set__intermediate__intermediate-correct-when",
+      "sceneId": "film-set",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "film-set__advanced__advanced-no-earlier-event",
+      "sceneId": "film-set",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "mountain-trail__basic__basic-clear-short",
+      "sceneId": "mountain-trail",
+      "selectedDifficulty": "basic",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "mountain-trail__intermediate__intermediate-no-connector",
+      "sceneId": "mountain-trail",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "mountain-trail__intermediate__intermediate-correct-when",
+      "sceneId": "mountain-trail",
+      "selectedDifficulty": "intermediate",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    },
+    {
+      "caseId": "mountain-trail__advanced__advanced-no-earlier-event",
+      "sceneId": "mountain-trail",
+      "selectedDifficulty": "advanced",
+      "difficultySystem": {
+        "levelClarity": "PASS",
+        "levelBoundarySafety": "PASS",
+        "levelProgression": "PASS",
+        "toleranceOfStrongerStudents": "PASS",
+        "betterVersionLevelSafety": "PASS",
+        "nextStepLevelSafety": "PASS",
+        "readinessHintDiscipline": "PASS",
+        "findings": []
+      },
+      "feedbackEngine": {
+        "grammarFunctionLink": "PASS",
+        "specificity": "PASS",
+        "classroomUsefulness": "PASS",
+        "sceneRelevance": "PASS",
+        "betterVersionQuality": "PASS",
+        "nextStepQuality": "PASS",
+        "readinessHintQuality": "PASS",
+        "findings": []
+      }
+    }
+  ],
+  "failurePatterns": []
+}
