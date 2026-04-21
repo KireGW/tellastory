@@ -205,11 +205,14 @@
 .language-stack {
   display: grid;
   gap: 4px;
+  justify-items: end;
+  text-align: right;
 }
 
 .language-control {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
   color: #53665f;
   font-size: 12px;
@@ -231,6 +234,7 @@
   color: #6a7b74;
   font-size: 12px;
   line-height: 1.35;
+  text-align: right;
 }
 
 .title-reset {
@@ -277,7 +281,6 @@ h1,
   position: relative;
   margin-top: 0;
   padding: 10px;
-  min-height: 154px;
   border: 1px solid rgba(31, 122, 92, 0.18);
   border-radius: 8px;
   background: #f7fbf8;
@@ -341,6 +344,14 @@ h1,
 
 .challenge-prompt {
   min-height: 48px;
+}
+
+.challenge-subprompt {
+  margin: 4px 0 0;
+  color: #5f716a;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: pre-line;
 }
 
 .grammar-inline-link {
@@ -725,11 +736,55 @@ h2 {
   text-align: left;
 }
 
+.connector-hint-modal {
+  width: min(420px, 100%);
+}
+
+.connector-hint-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.quick-hint-grid-single {
+  grid-template-columns: 1fr;
+}
+
+.connector-hint-grid article {
+  padding: 10px;
+  border: 1px solid #dce5df;
+  border-radius: 8px;
+  background: #f7fbf8;
+}
+
+.connector-hint-grid h3 {
+  margin: 0 0 4px;
+  color: #17211d;
+  font-size: 15px;
+}
+
+.connector-hint-grid p {
+  margin: 0;
+  color: #41534c;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .modal-close {
   min-height: 30px;
+  min-width: 30px;
   border: 1px solid #bfd0c8;
+  padding: 0 8px;
   background: #ffffff;
   color: #263630;
+}
+
+.connector-hint-modal .modal-close {
+  min-width: 30px;
+  padding: 0;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .grammar-list {
@@ -923,6 +978,11 @@ h2 {
     min-height: 0;
     margin: 0;
     font-size: 13px;
+  }
+
+  .mobile-settings .challenge-subprompt {
+    margin-top: 4px;
+    font-size: 12px;
   }
 
   .scene-pane {

@@ -93,8 +93,8 @@ Do not mark sceneFit as "partly on scene" only because the learner assigns a pla
 When a learner attempts a richer relationship than the selected difficulty requires, preserve it if it works or mostly works. Do not simplify away a correct because, so, when, while, had, or had been relationship just to match a lower-level task. Improve the learner's attempt instead.
 
 Set the verdict relative to the selected difficulty:
-- Beginner: clear simple past sentences about visible actions can receive "excellent". Do not require connectors, past continuous, or past perfect.
-- Intermediate: reward clear relationships between actions. Accept natural relationships expressed with when, while, as, because, so, after, before, in order to, or other clear wording. Do not require only "when" or "while".
+- Beginner: clear past-tense sentences about visible actions can receive "excellent". Do not require simple past specifically. Past continuous is also acceptable when it naturally helps describe the scene in the past. Do not require connectors or past perfect.
+- Intermediate: reward clear relationships between actions with when or while. If the learner uses other connectors such as because, so, after, or before, treat that as useful past narration, but usually only "partly on target" for this specific task unless when or while is also present.
 - Advanced: reward layered narration with background action, main event, earlier past, consequence, and natural connectors. A good past perfect phrase with had + past participle can fully satisfy the earlier-past part of the task; do not penalize it just because it is not past perfect continuous.
 For advanced answers, if the learner uses past continuous for background and had + past participle for an earlier event, the task can be on target even without any past perfect continuous.
 Use "good-start" only when a core timeline relationship still needs work. If the answer is on scene and on target, use "good-work" or "excellent".
@@ -291,7 +291,7 @@ function analyzeAnswer(answer, scene, challenge) {
 
 function taskFitFromFeatures(challenge, features) {
   if (challenge?.id === 'beginner') {
-    return features.hasSimplePast ? 'on target' : 'partly on target'
+    return features.hasAnyPastVerb ? 'on target' : 'partly on target'
   }
 
   if (challenge?.id === 'advanced') {
@@ -301,9 +301,12 @@ function taskFitFromFeatures(challenge, features) {
   }
 
   if (
-    (features.hasPastContinuous && features.hasSimplePast && features.hasRelationshipConnector) ||
-    (features.hasPastPerfectContinuous && features.hasSimplePast && features.hasRelationshipConnector) ||
-    features.hasBecause
+    (features.hasWhen || features.hasWhile) &&
+    (
+      (features.hasPastContinuous && features.hasSimplePast) ||
+      (features.hasPastPerfectContinuous && features.hasSimplePast) ||
+      (features.hasAnyPastVerb && features.hasRelationshipConnector)
+    )
   ) {
     return 'on target'
   }
@@ -326,6 +329,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
   const hasPastPerfect = /\bhad\s+(?!not\s+been\b)(?!been\b)\w+(ed|en|ne|wn|t)\b/.test(normalized)
   const hasPastPerfectContinuous = /\bhad\s+(?:not\s+)?been(?:\s+\w+){0,3}\s+\w+ing\b/.test(normalized)
   const hasConnector = /\b(when|while|after|before|as|because)\b/.test(normalized)
+  const hasAnyPastVerb = hasSimplePast || hasPastContinuous || hasPastPerfect || hasPastPerfectContinuous
   const connectors = [...new Set(normalized.match(/\b(when|while|after|before|as|because|by the time)\b/g) ?? [])]
   const mentionedActions = detectMentionedActions(answer, scene)
   const verbForms = [
@@ -344,7 +348,24 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
   const corrections = []
   const strengths = []
 
-  if (hasSimplePast) {
+  if (challenge?.id === 'beginner') {
+    if (hasAnyPastVerb) {
+      if (hasPastContinuous) {
+        strengths.push(localCopy.strengthPastContinuous)
+      } else if (hasPastPerfect || hasPastPerfectContinuous) {
+        strengths.push(localCopy.strengthPastPerfect)
+      } else if (hasSimplePast) {
+        strengths.push(localCopy.strengthSimplePast)
+      }
+    } else {
+      corrections.push({
+        original: localCopy.mainEvent,
+        suggestion: localCopy.usePastNarration,
+        reason: localCopy.reasonPastNarration,
+        grammarFocus: 'narrative coherence',
+      })
+    }
+  } else if (hasSimplePast) {
     strengths.push(localCopy.strengthSimplePast)
   } else {
     corrections.push({
@@ -355,7 +376,29 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English') {
     })
   }
 
-  if (challenge?.id !== 'beginner') {
+  if (challenge?.id === 'intermediate') {
+    if (hasPastContinuous) {
+      strengths.push(localCopy.strengthPastContinuous)
+    } else {
+      corrections.push({
+        original: localCopy.backgroundAction,
+        suggestion: localCopy.usePastContinuous,
+        reason: localCopy.reasonPastContinuous,
+        grammarFocus: 'past continuous',
+      })
+    }
+
+    if (/\b(when|while)\b/.test(normalized)) {
+      strengths.push(localCopy.strengthWhenWhile)
+    } else {
+      corrections.push({
+        original: localCopy.twoActions,
+        suggestion: localCopy.useWhenWhile,
+        reason: localCopy.reasonWhenWhile,
+        grammarFocus: 'connector',
+      })
+    }
+  } else if (challenge?.id !== 'beginner') {
     if (hasPastContinuous) {
       strengths.push(localCopy.strengthPastContinuous)
     } else {
@@ -788,9 +831,9 @@ function nextLevelCorrection(challenge, localCopy) {
   if (challenge?.id === 'beginner') {
     return {
       original: localCopy.yourStory,
-      suggestion: localCopy.keepAndAddSimplePast,
-      reason: localCopy.reasonKeepAndAddSimplePast,
-      grammarFocus: 'simple past',
+      suggestion: localCopy.keepAndAddPastSentence,
+      reason: localCopy.reasonKeepAndAddPastSentence,
+      grammarFocus: 'narrative coherence',
     }
   }
 
@@ -1140,7 +1183,7 @@ function defaultStretchCorrection(challenge, localCopy) {
       original: localCopy.yourStory,
       suggestion: localCopy.stretchBeginner,
       reason: localCopy.reasonStretchBeginner,
-      grammarFocus: 'simple past',
+      grammarFocus: 'narrative coherence',
     }
   }
 
@@ -1247,7 +1290,7 @@ function isExcellentFromFeatures(challenge, features, statuses) {
   }
 
   if (challenge?.id === 'beginner') {
-    return features.hasSimplePast
+    return features.hasAnyPastVerb
   }
 
   return false
@@ -1320,7 +1363,9 @@ function localVerdictFor({
   }
 
   if (challenge?.id === 'beginner') {
-    return hasSimplePast ? 'good-work' : 'good-start'
+    return hasSimplePast || hasPastContinuous || hasPastPerfect || hasPastPerfectContinuous
+      ? 'good-work'
+      : 'good-start'
   }
 
   if (challenge?.id === 'advanced') {
@@ -1504,20 +1549,25 @@ function localFeedbackCopy(feedbackLanguage) {
       strengthPastContinuous: 'Usaste past continuous para una acción que ya estaba en progreso.',
       strengthSimplePast: 'Usaste simple past para eventos terminados de la historia.',
       strengthPastPerfect: 'Usaste past perfect para mostrar una acción anterior.',
+      strengthWhenWhile: 'Usaste when o while para conectar acciones en el pasado.',
       strengthConnector: 'Usaste un conector para mostrar cómo dos acciones se relacionan en el tiempo.',
       backgroundAction: 'una acción de fondo',
       mainEvent: 'un evento principal',
       twoActions: 'dos acciones separadas',
       earlierAction: 'una acción anterior',
       yourStory: 'tu historia',
+      usePastNarration: 'Escribe sobre la escena en pasado.',
       usePastContinuous: 'Usa was/were + -ing para algo que ya estaba ocurriendo.',
       useSimplePast: 'Usa simple past para la acción que ocurrió o interrumpió la escena.',
+      useWhenWhile: 'Usa when o while para conectar dos acciones en el pasado.',
       useConnector: 'Une las acciones con when, while, because, before o after.',
       usePastPerfect: 'Agrega had + past participle o had been + -ing.',
-      stretchBeginner: 'Agrega otra oración en simple past sobre una acción visible.',
+      stretchBeginner: 'Agrega otra oración en pasado sobre una acción visible.',
       tryEarlierDetail: 'Prueba agregar un detalle anterior con had o had been.',
+      reasonPastNarration: 'El nivel principiante busca una narración clara en pasado, no solo simple past.',
       reasonPastContinuous: 'Past continuous ayuda a sentir la escena en progreso antes del evento principal.',
       reasonSimplePast: 'Simple past hace avanzar la historia.',
+      reasonWhenWhile: 'Eso deja más clara la relación entre una acción en progreso y otra acción en el pasado.',
       reasonConnector: 'El conector muestra si las acciones ocurrieron juntas, se interrumpieron o una pasó antes.',
       reasonPastPerfect: 'El reto avanzado te pide mostrar qué pasó antes de otro momento en pasado.',
       pastPerfectAlreadyWorksSummary: 'Tu forma con had ya muestra claramente una capa anterior de la historia. Usa past perfect continuous solo cuando la acción anterior realmente estaba ocurriendo durante un tiempo.',
@@ -1525,8 +1575,8 @@ function localFeedbackCopy(feedbackLanguage) {
       sceneSynonymSummary: 'Tu narración está anclada en la escena. Making pancakes y cooking pancakes describen la misma acción; ahora concéntrate en aclarar la relación temporal entre los verbos.',
       reasonStretchBeginner: 'Eso mantiene la práctica dentro del nivel principiante sin exigir conectores.',
       reasonEarlierDetail: 'Eso hará que la línea de tiempo sea más rica y narrativa.',
-      keepAndAddSimplePast: 'Mantén esta oración. Agrega una oración más en simple past sobre lo que pasó después.',
-      reasonKeepAndAddSimplePast: 'La relación verbal ya funciona. El siguiente paso es continuar la narración con otro evento pasado.',
+      keepAndAddPastSentence: 'Mantén esta oración. Agrega una oración más en pasado sobre lo que pasó después.',
+      reasonKeepAndAddPastSentence: 'La relación verbal ya funciona. El siguiente paso es continuar la narración en pasado.',
       keepAndAddResult: 'Mantén esta oración. Agrega un resultado con so o because.',
       reasonKeepAndAddResult: 'La relación temporal ya está clara. Ahora puedes mostrar la consecuencia.',
       keepAndAddNextEvent: 'Mantén esta oración. Agrega una oración breve sobre lo que pasó después.',
@@ -1554,20 +1604,25 @@ function localFeedbackCopy(feedbackLanguage) {
       strengthPastContinuous: 'Du brukte past continuous for en handling som allerede var i gang.',
       strengthSimplePast: 'Du brukte simple past for avsluttede hendelser i historien.',
       strengthPastPerfect: 'Du brukte past perfect for å vise en tidligere handling.',
+      strengthWhenWhile: 'Du brukte when eller while for å koble handlinger i fortid.',
       strengthConnector: 'Du brukte en kobling for å vise hvordan to handlinger henger sammen i tid.',
       backgroundAction: 'en bakgrunnshandling',
       mainEvent: 'en hovedhendelse',
       twoActions: 'to separate handlinger',
       earlierAction: 'en tidligere handling',
       yourStory: 'historien din',
+      usePastNarration: 'Skriv om scenen i fortid.',
       usePastContinuous: 'Bruk was/were + -ing for noe som allerede foregikk.',
       useSimplePast: 'Bruk simple past for handlingen som skjedde eller avbrøt scenen.',
+      useWhenWhile: 'Bruk when eller while for å koble to handlinger i fortid.',
       useConnector: 'Koble handlingene med when, while, because, before eller after.',
       usePastPerfect: 'Legg til had + past participle eller had been + -ing.',
-      stretchBeginner: 'Legg til en setning til i simple past om en synlig handling.',
+      stretchBeginner: 'Legg til en setning til i fortid om en synlig handling.',
       tryEarlierDetail: 'Prøv å legge til en tidligere detalj med had eller had been.',
+      reasonPastNarration: 'Nybegynnernivået ber om tydelig fortelling i fortid, ikke bare simple past.',
       reasonPastContinuous: 'Past continuous hjelper lytteren å kjenne den pågående scenen før hovedhendelsen.',
       reasonSimplePast: 'Simple past driver historien fremover.',
+      reasonWhenWhile: 'Det gjør forholdet tydeligere mellom en handling som pågikk og en annen handling i fortid.',
       reasonConnector: 'Koblingen viser om handlingene skjedde samtidig, avbrøt hverandre, eller om én skjedde før.',
       reasonPastPerfect: 'Den avanserte oppgaven ber deg vise hva som skjedde før et annet tidspunkt i fortiden.',
       pastPerfectAlreadyWorksSummary: 'Formen med had viser allerede tydelig et tidligere lag i historien. Bruk past perfect continuous bare når den tidligere handlingen faktisk pågikk over tid.',
@@ -1575,8 +1630,8 @@ function localFeedbackCopy(feedbackLanguage) {
       sceneSynonymSummary: 'Fortellingen din er forankret i scenen. Making pancakes og cooking pancakes beskriver samme handling; fokuser nå på å gjøre tidsforholdet mellom verbene tydelig.',
       reasonStretchBeginner: 'Det holder øvingen på nybegynnernivå uten å kreve koblinger.',
       reasonEarlierDetail: 'Det gjør tidslinjen rikere og mer fortellende.',
-      keepAndAddSimplePast: 'Behold denne setningen. Legg til en setning til i simple past om hva som skjedde etterpå.',
-      reasonKeepAndAddSimplePast: 'Verbforholdet fungerer allerede. Neste steg er å fortsette fortellingen med en ny hendelse i fortid.',
+      keepAndAddPastSentence: 'Behold denne setningen. Legg til en setning til i fortid om hva som skjedde etterpå.',
+      reasonKeepAndAddPastSentence: 'Verbforholdet fungerer allerede. Neste steg er å fortsette fortellingen i fortid.',
       keepAndAddResult: 'Behold denne setningen. Legg til et resultat med so eller because.',
       reasonKeepAndAddResult: 'Tidsforholdet er allerede tydelig. Nå kan du vise konsekvensen.',
       keepAndAddNextEvent: 'Behold denne setningen. Legg til en kort setning om hva som skjedde etterpå.',
@@ -1603,20 +1658,25 @@ function localFeedbackCopy(feedbackLanguage) {
     strengthPastContinuous: 'You used past continuous for an action that was already in progress.',
     strengthSimplePast: 'You used simple past for completed story events.',
     strengthPastPerfect: 'You used past perfect to show an earlier event.',
+    strengthWhenWhile: 'You used when or while to connect actions in the past.',
     strengthConnector: 'You used a connector to show how two actions relate in time.',
     backgroundAction: 'a background action',
     mainEvent: 'a main event',
     twoActions: 'two separate actions',
     earlierAction: 'an earlier past action',
     yourStory: 'your story',
+    usePastNarration: 'Write about the scene in the past.',
     usePastContinuous: 'Use was/were + -ing for something already happening.',
     useSimplePast: 'Use simple past for the action that happened or interrupted the scene.',
+    useWhenWhile: 'Use when or while to connect two actions in the past.',
     useConnector: 'Join them with when, while, because, before, or after.',
     usePastPerfect: 'Add had + past participle or had been + -ing.',
-    stretchBeginner: 'Add one more simple past sentence about a visible action.',
+    stretchBeginner: 'Add one more past-tense sentence about a visible action.',
     tryEarlierDetail: 'Try adding one earlier past detail with had or had been.',
+    reasonPastNarration: 'Beginner level asks for clear past narration, not only simple past.',
     reasonPastContinuous: 'Past continuous helps the listener feel the ongoing scene before the main event happens.',
     reasonSimplePast: 'Simple past moves the story forward.',
+    reasonWhenWhile: 'That makes the relationship clearer between one action in progress and another past action.',
     reasonConnector: 'The connector tells the reader whether actions happened together, interrupted each other, or happened earlier.',
     reasonPastPerfect: 'The advanced challenge asks you to show what happened before another past moment.',
     pastPerfectAlreadyWorksSummary: 'Your form with had already shows an earlier layer of the story clearly. Use past perfect continuous only when the earlier action was genuinely ongoing for a period of time.',
@@ -1624,8 +1684,8 @@ function localFeedbackCopy(feedbackLanguage) {
     sceneSynonymSummary: 'Your narration is anchored in the scene. Making pancakes and cooking pancakes describe the same action; now focus on making the time relationship between the verbs clear.',
     reasonStretchBeginner: 'That keeps the practice at beginner level without requiring connectors.',
     reasonEarlierDetail: 'That will make the timeline richer and more narrative.',
-    keepAndAddSimplePast: 'Keep this sentence. Add one more simple past sentence about what happened next.',
-    reasonKeepAndAddSimplePast: 'The verb relationship already works. The next step is to continue the narration with another past event.',
+    keepAndAddPastSentence: 'Keep this sentence. Add one more past-tense sentence about what happened next.',
+    reasonKeepAndAddPastSentence: 'The verb relationship already works. The next step is to continue the narration in the past.',
     keepAndAddResult: 'Keep this sentence. Add a result with so or because.',
     reasonKeepAndAddResult: 'The time relationship is already clear. Now you can show the consequence.',
     keepAndAddNextEvent: 'Keep this sentence. Add one short sentence about what happened next.',

@@ -11,6 +11,9 @@ function App() {
   const [feedback, setFeedback] = useState(null)
   const [isChecking, setIsChecking] = useState(false)
   const [isGrammarOpen, setIsGrammarOpen] = useState(false)
+  const [isBeginnerPastHintOpen, setIsBeginnerPastHintOpen] = useState(false)
+  const [isConnectorHintOpen, setIsConnectorHintOpen] = useState(false)
+  const [isPastPerfectHintOpen, setIsPastPerfectHintOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isStoryFocused, setIsStoryFocused] = useState(false)
   const [isFocusSceneExpanded, setIsFocusSceneExpanded] = useState(false)
@@ -87,6 +90,7 @@ function App() {
   )
   const storyRows = isMobileFocusMode ? 2 : feedback ? 3 : 8
   const challengePromptParts = getChallengePromptParts(copy, challengeMode, activeChallenge)
+  const challengeSubprompt = copy.challengeSubprompts?.[challengeMode] ?? ''
   const mobileGhostText = activeHint && !answer.trim()
     ? activeHint
     : isMobileFocusMode
@@ -701,8 +705,17 @@ function App() {
               ))}
             </div>
             <p className="challenge-prompt">
-              {renderChallengePrompt(challengePromptParts, () => setIsGrammarOpen(true))}
+              {renderChallengePrompt(challengePromptParts, {
+                challengeMode,
+                openGrammar: () => setIsGrammarOpen(true),
+                openBeginnerPastHint: () => setIsBeginnerPastHintOpen(true),
+                openConnectorHint: () => setIsConnectorHintOpen(true),
+                openPastPerfectHint: () => setIsPastPerfectHintOpen(true),
+              })}
             </p>
+            {challengeSubprompt ? (
+              <p className="challenge-subprompt">{challengeSubprompt}</p>
+            ) : null}
           </section>
         </div>
 
@@ -809,8 +822,17 @@ function App() {
               ))}
             </div>
             <p className="challenge-prompt">
-              {renderChallengePrompt(challengePromptParts, () => setIsGrammarOpen(true))}
+              {renderChallengePrompt(challengePromptParts, {
+                challengeMode,
+                openGrammar: () => setIsGrammarOpen(true),
+                openBeginnerPastHint: () => setIsBeginnerPastHintOpen(true),
+                openConnectorHint: () => setIsConnectorHintOpen(true),
+                openPastPerfectHint: () => setIsPastPerfectHintOpen(true),
+              })}
             </p>
+            {challengeSubprompt ? (
+              <p className="challenge-subprompt">{challengeSubprompt}</p>
+            ) : null}
           </section>
 
           <form onSubmit={submitStory} className="story-form" autoComplete="off">
@@ -1050,6 +1072,112 @@ function App() {
           </section>
         </div>
       ) : null}
+
+      {isBeginnerPastHintOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setIsBeginnerPastHintOpen(false)}>
+          <section
+            className="grammar-modal connector-hint-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="beginner-hint-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-heading">
+              <div>
+                <p className="section-kicker">{copy.beginnerPastHint.kicker}</p>
+                <h2 id="beginner-hint-title">{copy.beginnerPastHint.title}</h2>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                aria-label={copy.grammar.close}
+                onClick={() => setIsBeginnerPastHintOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="connector-hint-grid quick-hint-grid-single">
+              <article>
+                <p>{copy.beginnerPastHint.text}</p>
+              </article>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {isConnectorHintOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setIsConnectorHintOpen(false)}>
+          <section
+            className="grammar-modal connector-hint-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="connector-hint-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-heading">
+              <div>
+                <p className="section-kicker">{copy.connectorHint.kicker}</p>
+                <h2 id="connector-hint-title">{copy.connectorHint.title}</h2>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                aria-label={copy.grammar.close}
+                onClick={() => setIsConnectorHintOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="connector-hint-grid">
+              <article>
+                <h3>{copy.connectorHint.when.title}</h3>
+                <p>{copy.connectorHint.when.text}</p>
+              </article>
+              <article>
+                <h3>{copy.connectorHint.while.title}</h3>
+                <p>{copy.connectorHint.while.text}</p>
+              </article>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {isPastPerfectHintOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setIsPastPerfectHintOpen(false)}>
+          <section
+            className="grammar-modal connector-hint-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="past-perfect-hint-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-heading">
+              <div>
+                <p className="section-kicker">{copy.pastPerfectHint.kicker}</p>
+                <h2 id="past-perfect-hint-title">{copy.pastPerfectHint.title}</h2>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                aria-label={copy.grammar.close}
+                onClick={() => setIsPastPerfectHintOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="connector-hint-grid">
+              <article>
+                <h3>{copy.pastPerfectHint.had.title}</h3>
+                <p>{copy.pastPerfectHint.had.text}</p>
+              </article>
+              <article>
+                <h3>{copy.pastPerfectHint.hadBeen.title}</h3>
+                <p>{copy.pastPerfectHint.hadBeen.text}</p>
+              </article>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   )
 }
@@ -1234,18 +1362,51 @@ function getChallengePromptParts(copy, challengeMode, activeChallenge) {
   return parts
 }
 
-function renderChallengePrompt(parts, openGrammar) {
+function renderChallengePrompt(parts, {
+  challengeMode,
+  openGrammar,
+  openBeginnerPastHint,
+  openConnectorHint,
+  openPastPerfectHint,
+}) {
   return parts.map((part, index) => {
     if (part.type !== 'grammar') {
       return <span key={`text-${index}`}>{part.value}</span>
     }
+
+    const opensBeginnerPastHint =
+      challengeMode === 'beginner' &&
+      part.value === 'in the past'
+    const opensConnectorHint =
+      challengeMode === 'intermediate' &&
+      (part.value === 'when' || part.value === 'while')
+    const opensPastPerfectHint =
+      challengeMode === 'advanced' &&
+      (part.value === 'had' || part.value === 'had been')
 
     return (
       <button
         key={`grammar-${part.value}-${index}`}
         type="button"
         className="grammar-inline-link"
-        onClick={openGrammar}
+        onClick={() => {
+          if (opensBeginnerPastHint) {
+            openBeginnerPastHint()
+            return
+          }
+
+          if (opensConnectorHint) {
+            openConnectorHint()
+            return
+          }
+
+          if (opensPastPerfectHint) {
+            openPastPerfectHint()
+            return
+          }
+
+          openGrammar()
+        }}
       >
         {part.value}
       </button>
@@ -1280,9 +1441,39 @@ const translations = {
     task: { title: 'Choose a difficulty level', level: 'Challenge level' },
     challengeLabels: { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' },
     challengePrompts: {
-      beginner: 'Write two or three simple past sentences about the scene.',
-      intermediate: 'Use when or while to connect an action in progress with a completed event.',
-      advanced: 'Use had for an earlier event, or had been for an earlier action that continued for some time.',
+      beginner: 'Write 2-3 sentences about the scene in the past.',
+      intermediate: 'Use when or while to connect actions in the past.',
+      advanced: 'Add what happened before using had or had been.',
+    },
+    challengeSubprompts: {},
+    beginnerPastHint: {
+      kicker: 'Quick hint',
+      title: 'in the past',
+      text: 'Describe what people did and what was happening.',
+    },
+    connectorHint: {
+      kicker: 'Quick hint',
+      title: 'when and while',
+      when: {
+        title: 'when',
+        text: 'Use when when one action happens during another action that is already in progress.',
+      },
+      while: {
+        title: 'while',
+        text: 'Use while when two actions are happening at the same time.',
+      },
+    },
+    pastPerfectHint: {
+      kicker: 'Quick hint',
+      title: 'had and had been',
+      had: {
+        title: 'had',
+        text: 'A finished action before.',
+      },
+      hadBeen: {
+        title: 'had been',
+        text: 'An ongoing action before.',
+      },
     },
     form: {
       label: 'Your story',
@@ -1392,8 +1583,38 @@ const translations = {
     challengeLabels: { beginner: 'Principiante', intermediate: 'Intermedio', advanced: 'Avanzado' },
     challengePrompts: {
       beginner: 'Escribe dos o tres oraciones en simple past sobre la escena.',
-      intermediate: 'Usa when o while para conectar una acción en progreso con un evento terminado.',
-      advanced: 'Usa had para un evento anterior, o had been para una acción anterior que continuó durante un tiempo.',
+      intermediate: 'Usa when o while para conectar acciones en el pasado.',
+      advanced: 'Añade lo que pasó antes usando had o had been.',
+    },
+    challengeSubprompts: {},
+    beginnerPastHint: {
+      kicker: 'Pista rápida',
+      title: 'in the past',
+      text: 'Describe lo que hizo la gente y lo que estaba pasando.',
+    },
+    connectorHint: {
+      kicker: 'Pista rápida',
+      title: 'when y while',
+      when: {
+        title: 'when',
+        text: 'Usa when cuando una acción ocurre durante otra que ya estaba en progreso.',
+      },
+      while: {
+        title: 'while',
+        text: 'Usa while cuando dos acciones están ocurriendo al mismo tiempo.',
+      },
+    },
+    pastPerfectHint: {
+      kicker: 'Pista rápida',
+      title: 'had y had been',
+      had: {
+        title: 'had',
+        text: 'Una acción terminada antes.',
+      },
+      hadBeen: {
+        title: 'had been',
+        text: 'Una acción en progreso antes.',
+      },
     },
     form: {
       label: 'Tu historia',
@@ -1503,8 +1724,38 @@ const translations = {
     challengeLabels: { beginner: 'Nybörjare', intermediate: 'Medel', advanced: 'Avancerad' },
     challengePrompts: {
       beginner: 'Skriv två eller tre meningar i simple past om scenen.',
-      intermediate: 'Använd when eller while för att koppla en pågående handling till en avslutad händelse.',
-      advanced: 'Använd had för en tidigare händelse, eller had been för en tidigare handling som pågick en stund.',
+      intermediate: 'Använd when eller while för att koppla handlingar i dåtid.',
+      advanced: 'Lägg till vad som hände tidigare med had eller had been.',
+    },
+    challengeSubprompts: {},
+    beginnerPastHint: {
+      kicker: 'Snabb ledtråd',
+      title: 'in the past',
+      text: 'Beskriv vad människor gjorde och vad som pågick.',
+    },
+    connectorHint: {
+      kicker: 'Snabb ledtråd',
+      title: 'when och while',
+      when: {
+        title: 'when',
+        text: 'Använd when när en handling händer under en annan som redan pågår.',
+      },
+      while: {
+        title: 'while',
+        text: 'Använd while när två handlingar händer samtidigt.',
+      },
+    },
+    pastPerfectHint: {
+      kicker: 'Snabb ledtråd',
+      title: 'had och had been',
+      had: {
+        title: 'had',
+        text: 'En avslutad handling tidigare.',
+      },
+      hadBeen: {
+        title: 'had been',
+        text: 'En pågående handling tidigare.',
+      },
     },
     form: {
       label: 'Din historia',
