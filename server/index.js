@@ -39,9 +39,10 @@ async function generateFeedback({
   recentAttemptHistory = [],
 }) {
   const normalizedChallenge = normalizeChallenge(challenge)
+  const normalizedFeedbackLanguage = normalizeFeedbackLanguage(feedbackLanguage)
 
   if (!openai) {
-    return localFeedback(answer, scene, normalizedChallenge, feedbackLanguage, recentAttemptHistory)
+    return localFeedback(answer, scene, normalizedChallenge, normalizedFeedbackLanguage, recentAttemptHistory)
   }
 
   const completion = await openai.chat.completions.create({
@@ -58,26 +59,29 @@ async function generateFeedback({
         content: JSON.stringify({
           scene,
           challenge: normalizedChallenge,
-          feedbackLanguage,
+          feedbackLanguage: 'English',
           studentAnswer: answer,
           task:
-            `Evaluate the student answer as a past-tense narration. Write all coaching, explanations, and next-step text in ${feedbackLanguage}. Keep corrected English example sentences, verb-form names, and quoted student text in English. Use a qualitative coaching verdict. Do not return or mention numeric ratings.`,
+            'Evaluate the student answer as a past-tense narration. Write all coaching, explanations, and next-step text in English. Keep corrected English example sentences, verb-form names, and quoted student text in English. Use a qualitative coaching verdict. Do not return or mention numeric ratings. Translation happens after evaluation, so keep this response canonical and stable.',
         }),
       },
     ],
   })
 
-  return normalizeFeedback(
+  const canonicalFeedback = normalizeFeedback(
     JSON.parse(completion.choices[0].message.content),
     scene,
     normalizedChallenge,
-    feedbackLanguage,
+    'English',
     answer,
     recentAttemptHistory,
   )
+
+  return translateFeedbackOutput(canonicalFeedback, normalizedFeedbackLanguage)
 }
 
 const VALID_LEVELS = ['beginner', 'intermediate', 'advanced']
+const VALID_FEEDBACK_LANGUAGES = ['English', 'Spanish', 'Swedish']
 
 function normalizeChallenge(challenge) {
   const level = normalizeDifficultyLevel(challenge?.id)
@@ -95,6 +99,167 @@ function normalizeDifficultyLevel(level) {
   }
 
   return normalizedLevel
+}
+
+function normalizeFeedbackLanguage(feedbackLanguage) {
+  const normalized = String(feedbackLanguage ?? '').trim()
+  return VALID_FEEDBACK_LANGUAGES.includes(normalized) ? normalized : 'English'
+}
+
+async function translateFeedbackOutput(feedback, feedbackLanguage) {
+  const normalizedFeedbackLanguage = normalizeFeedbackLanguage(feedbackLanguage)
+
+  if (normalizedFeedbackLanguage === 'English') {
+    return feedback
+  }
+
+  return translateFeedbackOutputLocally(feedback, normalizedFeedbackLanguage)
+}
+
+function translateFeedbackOutputLocally(feedback, feedbackLanguage) {
+  const copy = localFeedbackCopy(feedbackLanguage)
+
+  return {
+    ...feedback,
+    summary: cleanFeedbackText(translateCanonicalFeedbackText(feedback.summary, copy)),
+    strengths: arrayOfStrings(feedback.strengths)
+      .map((item) => cleanFeedbackText(translateCanonicalFeedbackText(item, copy)))
+      .slice(0, 3),
+    corrections: (feedback.corrections ?? []).map((correction) => ({
+      ...correction,
+      suggestion: cleanFeedbackText(translateCanonicalFeedbackText(correction.suggestion, copy)),
+      reason: cleanFeedbackText(translateCanonicalFeedbackText(correction.reason, copy)),
+    })),
+    challenge: cleanFeedbackText(translateCanonicalFeedbackText(feedback.challenge, copy)),
+    levelReadinessHint: feedback.levelReadinessHint
+      ? cleanFeedbackText(translateCanonicalFeedbackText(feedback.levelReadinessHint, copy))
+      : feedback.levelReadinessHint,
+  }
+}
+
+function translateCanonicalFeedbackText(value, localCopy) {
+  const text = String(value ?? '').trim()
+
+  if (!text) {
+    return text
+  }
+
+  const exact = canonicalFeedbackTextMap(localCopy).get(text)
+
+  if (exact) {
+    return exact
+  }
+
+  let match = text.match(/^You used past continuous \((.+)\) for the background and simple past \((.+)\) for the main event\.$/)
+  if (match) {
+    return localCopy.describeContrast(match[1], match[2])
+  }
+
+  match = text.match(/^You used past continuous \((.+)\) to show an action already in progress in the background\.$/)
+  if (match) {
+    return localCopy.describeBackground(match[1])
+  }
+
+  match = text.match(/^You used simple past \((.+)\) for the main event or completed action\.$/)
+  if (match) {
+    return localCopy.describeMainEvent(match[1])
+  }
+
+  match = text.match(/^You used past perfect \((.+)\) to show what had happened earlier\.$/)
+  if (match) {
+    return localCopy.describeEarlierPast(match[1])
+  }
+
+  match = text.match(/^You used past perfect \((.+)\) for the earlier event and simple past \((.+)\) for what happened next\.$/)
+  if (match) {
+    return localCopy.describeEarlierThenEvent(match[1], match[2])
+  }
+
+  match = text.match(/^You used past perfect continuous \((.+)\) for an ongoing action before another past moment\.$/)
+  if (match) {
+    return localCopy.describeEarlierOngoing(match[1])
+  }
+
+  match = text.match(/^You used past perfect continuous \((.+)\) for the earlier ongoing action and simple past \((.+)\) for the main events\.$/)
+  if (match) {
+    return localCopy.describeEarlierOngoingThenEvent(match[1], match[2])
+  }
+
+  match = text.match(/^You used the connector '(.+)' to show how the actions relate in time\.$/)
+  if (match) {
+    return localCopy.describeConnector(match[1])
+  }
+
+  match = text.match(/^You used the connector '(.+)' to show when one action interrupted another\.$/)
+  if (match) {
+    return localCopy.describeWhenRelationship(match[1])
+  }
+
+  match = text.match(/^You used the connector '(.+)' to show that two actions were happening at the same time\.$/)
+  if (match) {
+    return localCopy.describeWhileRelationship(match[1])
+  }
+
+  match = text.match(/^Add one more sentence about what had happened before (.+)\.$/)
+  if (match) {
+    return localCopy.nextAdvancedMastery(match[1])
+  }
+
+  return text
+}
+
+function canonicalFeedbackTextMap(localCopy) {
+  return new Map([
+    ['The sequence of actions is easy to follow.', localCopy.describeCauseResult()],
+    ['The timeline between the actions is clear.', localCopy.describeTimelineSequence()],
+    ['The sentence is clear and natural.', localCopy.describeClarity()],
+    ['Write about the scene in the past.', localCopy.usePastNarration],
+    ['Use was/were + -ing for something already happening.', localCopy.usePastContinuous],
+    ['Use simple past for the action that happened or interrupted the scene.', localCopy.useSimplePast],
+    ['Use when or while to connect two actions in the past.', localCopy.useWhenWhile],
+    ['Join them with when, while, because, before, or after.', localCopy.useConnector],
+    ['Add had + past participle or had been + -ing.', localCopy.usePastPerfect],
+    ['Add one more past-tense sentence about a visible action.', localCopy.stretchBeginner],
+    ['Try adding one earlier past detail with had or had been.', localCopy.tryEarlierDetail],
+    ['Beginner level asks for clear past narration, not only simple past.', localCopy.reasonPastNarration],
+    ['Past continuous helps the listener feel the ongoing scene before the main event happens.', localCopy.reasonPastContinuous],
+    ['Simple past moves the story forward.', localCopy.reasonSimplePast],
+    ['That makes the relationship clearer between one action in progress and another past action.', localCopy.reasonWhenWhile],
+    ['The connector tells the reader whether actions happened together, interrupted each other, or happened earlier.', localCopy.reasonConnector],
+    ['The advanced challenge asks you to show what happened before another past moment.', localCopy.reasonPastPerfect],
+    ['Your form with had already shows an earlier layer of the story clearly. Use past perfect continuous only when the earlier action was genuinely ongoing for a period of time.', localCopy.pastPerfectAlreadyWorksSummary],
+    ['Your narration is anchored in the scene and uses a reasonable interpretation. Now focus on making the time relationship between the verbs clear.', localCopy.sceneInferenceSummary],
+    ['Your narration is anchored in the scene. Making pancakes and cooking pancakes describe the same action; now focus on making the time relationship between the verbs clear.', localCopy.sceneSynonymSummary],
+    ['That keeps the practice at beginner level without requiring connectors.', localCopy.reasonStretchBeginner],
+    ['That will make the timeline richer and more narrative.', localCopy.reasonEarlierDetail],
+    ['Keep this sentence. Add one more past-tense sentence about what happened next.', localCopy.keepAndAddPastSentence],
+    ['The verb relationship already works. The next step is to continue the narration in the past.', localCopy.reasonKeepAndAddPastSentence],
+    ['Keep this sentence. Add a result with so or because.', localCopy.keepAndAddResult],
+    ['The time relationship is already clear. Now you can show the consequence.', localCopy.reasonKeepAndAddResult],
+    ['Keep this sentence. Add one short sentence about what happened next.', localCopy.keepAndAddNextEvent],
+    ['The cause-result relationship already works. The next step is to continue the narration.', localCopy.reasonKeepAndAddNextEvent],
+    ['Keep this sentence. Add what had already happened before.', localCopy.keepAndAddEarlierPast],
+    ['The sentence works. The next level is to add an earlier layer of the story with had.', localCopy.reasonKeepAndAddEarlierPast],
+    ['This keeps your idea and only improves clarity and natural word order.', localCopy.reasonMeaningPreservingPolish],
+    ['Add one more sentence about what happened next.', localCopy.nextBasicNext],
+    ['Add one more sentence about what another person was doing.', localCopy.nextBasicAnotherPerson],
+    ['Add one more detail about what was happening in the scene.', localCopy.nextBasicMoreDetail],
+    ['Show one more action in the past.', localCopy.nextBasicMoreAction],
+    ['Try connecting two actions using when or while.', localCopy.nextBasicStretch],
+    ['Connect two actions using when or while.', localCopy.nextIntermediateConnect],
+    ['Add one more sentence that connects actions clearly.', localCopy.nextIntermediateOneMore],
+    ['Try adding one sentence about what had happened before.', localCopy.nextIntermediateStretch],
+    ['Add one sentence about what happened before using had or had been.', localCopy.nextAdvanced],
+    ['Show what had happened before using had or had been.', localCopy.nextAdvancedTimeline],
+    ['Add one more earlier detail using had or had been.', localCopy.nextAdvancedEarlierDetail],
+    ['You already show the timeline clearly. Now add one more earlier layer.', localCopy.reasonAdvancedMastery],
+    ['Make the sentence structure clearer so the timeline is easier to follow.', localCopy.nextAdvancedStructure],
+    ['Make the earlier and later actions clearer in one sentence.', localCopy.nextAdvancedTimelineClear],
+    ['You already showed the earlier action with had. Now make the sentence structure clearer.', localCopy.reasonAdvancedStructure],
+    ['The next improvement is to make the relationship between the earlier and later action clearer.', localCopy.reasonAdvancedTimelineClear],
+    ['If you want a challenge, try connecting two actions using when or while.', localCopy.readinessBasic],
+    ["You're connecting actions clearly. Now try adding what happened before.", localCopy.readinessIntermediate],
+  ])
 }
 
 function coachSystemPrompt() {
@@ -161,7 +326,7 @@ Use these meanings consistently:
 Keep each explanation to 1-2 short sentences.
 In the summary, strengths, corrections, and rewrite, focus on the student's verb forms and time relationships. Do not mention whether a plausible scene event is directly visible unless there is a clear scene mismatch.
 Never use the word "prompt" in user-facing feedback. If you mean the selected exercise instruction, say "task". If you mean the picture, say "scene".
-Write user-facing coaching text in the requested feedbackLanguage. Keep English examples, corrected sentences, verb-form names, and quoted student phrases in English.
+Write user-facing coaching text in English. Keep English examples, corrected sentences, verb-form names, and quoted student phrases in English. Translation happens later.
 
 The "corrections" field powers the UI section called "Try this". It must contain the next useful learning move, not merely a different possible sentence.
 Use this hierarchy:
@@ -298,8 +463,13 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
   )
 
   const teachingStrengths = buildNarrativeTeachingStrengths(answer, challenge, localCopy, answerFeatures)
+  const tenseMismatchFeedback = buildTenseMismatchFeedback(answer, scene, localCopy, answerFeatures)
 
-  if (
+  if (tenseMismatchFeedback) {
+    normalized.summary = tenseMismatchFeedback.summary
+    normalized.strengths = tenseMismatchFeedback.strengths
+    normalized.corrections = [tenseMismatchFeedback.correction]
+  } else if (
     statuses.sceneFit !== 'not scene-based' &&
     statuses.englishStatus !== 'unclear' &&
     teachingStrengths.length
@@ -447,6 +617,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
     hasPastPerfect && 'earlier past',
     /\b(while|as)\b/.test(normalized) && 'simultaneous actions',
   ].filter(Boolean)
+  const tenseMismatchFeedback = buildTenseMismatchFeedback(answer, scene, localCopy, features)
 
   const corrections = []
   const strengths = buildNarrativeTeachingStrengths(answer, challenge, localCopy, features)
@@ -561,9 +732,9 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
     englishStatus,
     sceneFit,
     taskFit,
-    summary: buildNarrativeTeachingSummary(answer, challenge, localCopy, features),
-    strengths: strengths.length ? strengths.slice(0, 3) : [localCopy.defaultStrength],
-    corrections: finalCorrections,
+    summary: tenseMismatchFeedback?.summary || buildNarrativeTeachingSummary(answer, challenge, localCopy, features),
+    strengths: tenseMismatchFeedback?.strengths || (strengths.length ? strengths.slice(0, 3) : [localCopy.defaultStrength]),
+    corrections: tenseMismatchFeedback ? [tenseMismatchFeedback.correction] : finalCorrections,
     rewrite: normalizeRewrite(scene.sample, answer, scene, challenge, localCopy, finalCorrections),
     challenge: generateNextStep({
       challenge,
@@ -586,6 +757,47 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
       features,
       recentAttemptHistory,
     }),
+  }
+}
+
+function buildTenseMismatchFeedback(answer, scene, localCopy, features = detectAnswerFeatures(answer)) {
+  const tenseStatus = detectNarrationTenseStatus(answer, features)
+
+  if (tenseStatus === 'past') {
+    return null
+  }
+
+  const mentionedActions = detectMentionedActions(answer, scene)
+  const strengths = []
+
+  if (mentionedActions.length) {
+    strengths.push(localCopy.describeSceneActions())
+  }
+
+  if (getClarityScore(answer) >= 1) {
+    strengths.push(localCopy.describeClarity())
+  }
+
+  if (!strengths.length) {
+    strengths.push(localCopy.defaultStrength)
+  }
+
+  return {
+    summary:
+      tenseStatus === 'present'
+        ? mentionedActions.length
+          ? localCopy.presentTenseSceneSummary
+          : localCopy.presentTenseSummary
+        : mentionedActions.length
+        ? localCopy.notClearlyPastSceneSummary
+        : localCopy.notClearlyPastSummary,
+    strengths: strengths.slice(0, 3),
+    correction: {
+      original: localCopy.yourStory,
+      suggestion: localCopy.usePastTenseInstead,
+      reason: tenseStatus === 'present' ? localCopy.reasonPastTenseMismatch : localCopy.reasonPastTenseUnclear,
+      grammarFocus: 'simple past',
+    },
   }
 }
 
@@ -823,6 +1035,7 @@ function buildNarrativeTeachingStrengths(answer, challenge, localCopy, features 
   const advancedMastery = demonstratesAdvancedMastery(answer, features)
   const clarityScore = getClarityScore(answer)
   const hasMajorErrors = detectMajorErrors(answer)
+  const tenseStatus = detectNarrationTenseStatus(answer, features)
   const usedDimensions = new Set()
   const addStrength = (dimension, text) => {
     if (!text || usedDimensions.has(dimension)) {
@@ -831,6 +1044,14 @@ function buildNarrativeTeachingStrengths(answer, challenge, localCopy, features 
 
     strengths.push(text)
     usedDimensions.add(dimension)
+  }
+
+  if (tenseStatus !== 'past') {
+    if (clarityScore >= 1 && !hasMajorErrors) {
+      addStrength('clarity', localCopy.describeClarity())
+    }
+
+    return strengths.slice(0, 3)
   }
 
   if (advancedMastery && features.hasPastPerfectContinuous && examples.pastPerfectContinuous && examples.simplePast) {
@@ -864,6 +1085,22 @@ function buildNarrativeTeachingStrengths(answer, challenge, localCopy, features 
   }
 
   return strengths.slice(0, 3)
+}
+
+function detectNarrationTenseStatus(studentText, features = detectAnswerFeatures(studentText)) {
+  if (features.hasAnyPastVerb && !isMostlyPresentNarration(studentText, features) && !hasMixedNarrationTense(studentText, features)) {
+    return 'past'
+  }
+
+  if (features.presentSignals?.hasExplicitPresent) {
+    return 'present'
+  }
+
+  if (features.presentSignals?.hasUnclearBaseForms) {
+    return 'unclear'
+  }
+
+  return features.hasAnyPastVerb ? 'past' : 'unclear'
 }
 
 function mentionsNarrativeTeaching(value) {
@@ -2750,7 +2987,7 @@ function normalizeRatingLevel(challenge) {
 
 function detectPastTense(studentText) {
   const features = detectAnswerFeatures(studentText)
-  return features.hasAnyPastVerb && !isMostlyPresentNarration(studentText, features)
+  return features.hasAnyPastVerb && !isMostlyPresentNarration(studentText, features) && !hasMixedNarrationTense(studentText, features)
 }
 
 function checkSceneMatch(studentText, sceneModel) {
@@ -2799,7 +3036,7 @@ function checkLevelTarget({ level, studentText }) {
   }
 
   if (level === 'intermediate') {
-    return detectActionRelationship(studentText)
+    return detectPastTense(studentText) && detectActionRelationship(studentText)
   }
 
   if (level === 'advanced') {
@@ -2896,7 +3133,7 @@ function getClarityScore(studentText) {
     return 2
   }
 
-  if (features.hasAnyPastVerb || words.length >= 5) {
+  if (features.hasAnyPastVerb || features.presentSignals?.hasExplicitPresent || words.length >= 5) {
     return 1
   }
 
@@ -2928,7 +3165,7 @@ function detectMajorErrors(studentText) {
     return true
   }
 
-  if (!features.hasAnyPastVerb && !features.hasRelationshipConnector && words.length < 8) {
+  if (!features.hasAnyPastVerb && !features.presentSignals?.hasExplicitPresent && !features.hasRelationshipConnector && words.length < 8) {
     return true
   }
 
@@ -3046,28 +3283,19 @@ function getRating({
 }
 
 function isMostlyPresentNarration(studentText, features = detectAnswerFeatures(studentText)) {
-  const text = String(studentText ?? '').toLowerCase()
-  const presentContinuous = /\b(am|is|are)\s+\w+ing\b/.test(text)
-  const presentPerfect = /\b(has|have)\s+\w+(ed|en|wn|ne|t)\b/.test(text)
-  const presentSimpleSignals = /\b(arrives|talks|reads|runs|knocks|opens|drops|falls|chases|looks|waits|watches|works|walks|points|rings|comes|goes|sleeps|stands|sits)\b/.test(text)
-
   if (!features.hasAnyPastVerb) {
-    return presentContinuous || presentPerfect || presentSimpleSignals
+    return Boolean(features.presentSignals?.hasExplicitPresent)
   }
 
-  return false
+  return Boolean(features.presentSignals?.hasExplicitPresent)
 }
 
 function hasMixedNarrationTense(studentText, features = detectAnswerFeatures(studentText)) {
-  if (!features.hasAnyPastVerb) {
+  if (!features.hasAnyPastVerb || !features.presentSignals?.hasExplicitPresent) {
     return false
   }
 
-  const text = String(studentText ?? '').toLowerCase()
-  return (
-    /\b(am|is|are)\s+\w+ing\b/.test(text) ||
-    /\b(arrives|talks|reads|runs|knocks|opens|drops|falls|chases|looks|waits|watches|works|walks|points|rings|comes|goes|sleeps|stands|sits)\b/.test(text)
-  )
+  return true
 }
 
 function hasBrokenEarlierPast(studentText) {
@@ -3227,6 +3455,11 @@ function generateNextStep({ challenge, feedbackLanguage = 'English', answer = ''
   const hasAnotherActor = sceneHasAnotherActor(answer, scene)
   const hasAnotherAction = sceneHasAnotherAction(answer, scene)
   const advancedMastery = demonstratesAdvancedMastery(answer, features, { isSceneRelevant: statuses.sceneFit === 'on scene' || statuses.sceneFit === 'partly on scene' })
+  const tenseStatus = detectNarrationTenseStatus(answer, features)
+
+  if (tenseStatus !== 'past') {
+    return copy.nextUsePastTense
+  }
 
   if (advancedMastery) {
     return advancedMasteryPrompt(copy, scene)
@@ -3436,6 +3669,7 @@ function recentReadinessHintWasShown(recentAttemptHistory = [], challenge) {
 function detectAnswerFeatures(answer) {
   const normalized = String(answer ?? '').toLowerCase()
   const words = tokenizeNarrativeWords(normalized)
+  const presentSignals = detectPresentNarrationSignals(normalized)
   const pastPerfectContinuousMatches = normalized.match(/\bhad\s+(?:not\s+)?been(?:\s+\w+){0,3}\s+\w+ing\b/g) ?? []
   const pastPerfectMatches = normalized.match(/\bhad\s+(?:not\s+)?(?:already\s+|just\s+|still\s+|really\s+|almost\s+)?(?!been\b)\w+(?:ed|en|ne|wn|t)\b/g) ?? []
   const hasPastPerfectContinuous = pastPerfectContinuousMatches.length > 0
@@ -3475,7 +3709,89 @@ function detectAnswerFeatures(answer) {
     hasRelationshipConnector,
     hasInterruption,
     hasAnyPastVerb,
+    presentSignals,
   }
+}
+
+function detectPresentNarrationSignals(studentText) {
+  const text = String(studentText ?? '').toLowerCase()
+  const tokens = tokenizeNarrativeWords(text)
+  const simplePastMap = commonSimplePastMap()
+  const baseForms = new Set(Object.keys(simplePastMap))
+  const thirdPersonForms = new Map()
+
+  for (const baseForm of baseForms) {
+    thirdPersonForms.set(toThirdPersonSingular(baseForm), baseForm)
+  }
+
+  const explicitPresentExamples = []
+  const unclearBaseExamples = []
+  const hasPresentContinuous = /\b(am|is|are)\s+\w+ing\b/.test(text)
+  const hasPresentPerfect = /\b(has|have)\s+\w+(ed|en|wn|ne|t)\b/.test(text)
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const current = tokens[index].value.toLowerCase()
+    const previous = tokens[index - 1]?.value?.toLowerCase() ?? ''
+    const next = tokens[index + 1]?.value?.toLowerCase() ?? ''
+
+    if (previous === 'to' || previous === 'will' || previous === 'would' || previous === 'can' || previous === 'could') {
+      continue
+    }
+
+    if ((current === 'am' || current === 'is' || current === 'are') && /ing$/.test(next)) {
+      explicitPresentExamples.push(`${current} ${next}`)
+      continue
+    }
+
+    if ((current === 'has' || current === 'have') && /(?:ed|en|wn|ne|t)$/.test(next) && next !== 'been') {
+      explicitPresentExamples.push(`${current} ${next}`)
+      continue
+    }
+
+    if (thirdPersonForms.has(current)) {
+      explicitPresentExamples.push(current)
+      continue
+    }
+
+    if (
+      baseForms.has(current) &&
+      current !== simplePastMap[current] &&
+      previous !== 'had' &&
+      previous !== 'was' &&
+      previous !== 'were' &&
+      previous !== 'did'
+    ) {
+      unclearBaseExamples.push(current)
+    }
+  }
+
+  return {
+    hasExplicitPresent: hasPresentContinuous || hasPresentPerfect || explicitPresentExamples.length > 0,
+    hasUnclearBaseForms: unclearBaseExamples.length > 0,
+    explicitExamples: [...new Set(explicitPresentExamples)].slice(0, 3),
+    unclearExamples: [...new Set(unclearBaseExamples)].slice(0, 3),
+  }
+}
+
+function toThirdPersonSingular(baseForm) {
+  const value = String(baseForm ?? '').toLowerCase()
+
+  if (!value) {
+    return value
+  }
+
+  if (value === 'have') return 'has'
+  if (value === 'go') return 'goes'
+  if (value === 'do') return 'does'
+  if (value.endsWith('y') && !/[aeiou]y$/.test(value)) {
+    return `${value.slice(0, -1)}ies`
+  }
+
+  if (/(s|x|z|ch|sh|o)$/.test(value)) {
+    return `${value}es`
+  }
+
+  return `${value}s`
 }
 
 function hasAdvancedTimelineLayer(features = {}) {
@@ -3624,6 +3940,7 @@ function localFeedbackCopy(feedbackLanguage) {
       describeCauseResult: () => 'La secuencia de acciones es fácil de seguir.',
       describeTimelineSequence: () => 'La línea de tiempo entre las acciones se entiende con claridad.',
       describeClarity: () => 'La oración es clara y natural.',
+      describeSceneActions: () => 'Mencionaste acciones importantes de la escena.',
       backgroundAction: 'una acción de fondo',
       mainEvent: 'un evento principal',
       twoActions: 'dos acciones separadas',
@@ -3635,15 +3952,22 @@ function localFeedbackCopy(feedbackLanguage) {
       useWhenWhile: 'Usa when o while para conectar dos acciones en el pasado.',
       useConnector: 'Une las acciones con when, while, because, before o after.',
       usePastPerfect: 'Agrega had + past participle o had been + -ing.',
+      usePastTenseInstead: 'Cambia los verbos principales al pasado.',
       stretchBeginner: 'Agrega otra oración en pasado sobre una acción visible.',
       tryEarlierDetail: 'Prueba agregar un detalle anterior con had o had been.',
       reasonPastNarration: 'El nivel principiante busca una narración clara en pasado, no solo simple past.',
       reasonPastContinuous: 'Past continuous ayuda a sentir la escena en progreso antes del evento principal.',
       reasonSimplePast: 'Simple past hace avanzar la historia.',
+      reasonPastTenseMismatch: 'Describiste la escena con acciones correctas, pero usaste presente en vez de pasado.',
+      reasonPastTenseUnclear: 'Las acciones se entienden, pero el tiempo verbal aún no está claro como pasado.',
       reasonWhenWhile: 'Eso deja más clara la relación entre una acción en progreso y otra acción en el pasado.',
       reasonConnector: 'El conector muestra si las acciones ocurrieron juntas, se interrumpieron o una pasó antes.',
       reasonPastPerfect: 'El reto avanzado te pide mostrar qué pasó antes de otro momento en pasado.',
       pastPerfectAlreadyWorksSummary: 'Tu forma con had ya muestra claramente una capa anterior de la historia. Usa past perfect continuous solo cuando la acción anterior realmente estaba ocurriendo durante un tiempo.',
+      presentTenseSummary: 'La oración menciona acciones importantes, pero los verbos están en presente, no en pasado.',
+      presentTenseSceneSummary: 'Mencionaste las acciones principales de la escena, pero los verbos están en presente. Esta tarea requiere pasado.',
+      notClearlyPastSummary: 'La oración menciona acciones importantes, pero el tiempo verbal todavía no está claramente en pasado.',
+      notClearlyPastSceneSummary: 'Mencionaste las acciones principales de la escena, pero el tiempo verbal todavía no está claramente en pasado.',
       sceneInferenceSummary: 'Tu narración está anclada en la escena y usa una interpretación razonable. Concéntrate ahora en que la relación temporal entre los verbos sea clara.',
       sceneSynonymSummary: 'Tu narración está anclada en la escena. Making pancakes y cooking pancakes describen la misma acción; ahora concéntrate en aclarar la relación temporal entre los verbos.',
       reasonStretchBeginner: 'Eso mantiene la práctica dentro del nivel principiante sin exigir conectores.',
@@ -3664,6 +3988,7 @@ function localFeedbackCopy(feedbackLanguage) {
       nextBasicAnotherPerson: 'Agrega una oración más sobre lo que otra persona estaba haciendo.',
       nextBasicMoreDetail: 'Agrega un detalle más sobre lo que estaba pasando en la escena.',
       nextBasicMoreAction: 'Muestra una acción más en pasado.',
+      nextUsePastTense: 'Cambia los verbos principales al pasado.',
       nextBasicStretch: 'Intenta conectar dos acciones usando when o while.',
       nextIntermediateConnect: 'Conecta dos acciones usando when o while.',
       nextIntermediateOneMore: 'Agrega una oración más que conecte acciones claramente.',
@@ -3682,84 +4007,93 @@ function localFeedbackCopy(feedbackLanguage) {
     }
   }
 
-  if (feedbackLanguage === 'Norwegian' || feedbackLanguage === 'Swedish') {
+  if (feedbackLanguage === 'Swedish') {
     return {
-      summary: 'Denne lokale coachen sjekket hovedmønstrene for fortelling i fortid. OpenAI-tilbakemelding blir mer presis og scene-bevisst.',
-      genericSummary: 'Du bygger en historie i fortid. Gjør tidsforholdene tydelige.',
-      defaultStrength: 'Du skrev et svar i fortid basert på scenen.',
-      strengthPastContinuous: 'Du brukte past continuous for en handling som allerede var i gang.',
-      strengthSimplePast: 'Du brukte simple past for avsluttede hendelser i historien.',
-      strengthPastPerfect: 'Du brukte past perfect for å vise en tidligere handling.',
-      strengthWhenWhile: 'Du brukte when eller while for å koble handlinger i fortid.',
-      strengthConnector: 'Du brukte en kobling for å vise hvordan to handlinger henger sammen i tid.',
-      describeContrast: (background, event) => `Du brukte past continuous (${background}) for bakgrunnen og simple past (${event}) for hovedhendelsen.`,
-      describeBackground: (background) => `Du brukte past continuous (${background}) for å vise en handling som allerede var i gang.`,
-      describeMainEvent: (event) => `Du brukte simple past (${event}) for å vise hovedhendelsen eller en avsluttet handling.`,
-      describeEarlierPast: (earlier) => `Du brukte past perfect (${earlier}) for å vise hva som hadde skjedd tidligere.`,
-      describeEarlierThenEvent: (earlier, event) => `Du brukte past perfect (${earlier}) for den tidligere hendelsen og simple past (${event}) for det som skjedde etterpå.`,
-      describeEarlierOngoing: (earlier) => `Du brukte past perfect continuous (${earlier}) for en handling som pågikk før et annet tidspunkt i fortiden.`,
-      describeEarlierOngoingThenEvent: (earlier, event) => `Du brukte past perfect continuous (${earlier}) for den tidligere pågående handlingen og simple past (${event}) for hovedhendelsene.`,
-      describeConnector: (connector) => `Du brukte koblingen '${connector}' for å vise hvordan handlingene henger sammen i tid.`,
-      describeWhenRelationship: (connector) => `Du brukte koblingen '${connector}' for å vise når én handling avbrøt en annen.`,
-      describeWhileRelationship: (connector) => `Du brukte koblingen '${connector}' for å vise at to handlinger skjedde samtidig.`,
-      describeCauseResult: () => 'Rekkefølgen mellom handlingene er lett å følge.',
-      describeTimelineSequence: () => 'Tidslinjen mellom handlingene er tydelig.',
-      describeClarity: () => 'Setningen er klar og naturlig.',
-      backgroundAction: 'en bakgrunnshandling',
-      mainEvent: 'en hovedhendelse',
-      twoActions: 'to separate handlinger',
-      earlierAction: 'en tidligere handling',
-      yourStory: 'historien din',
-      usePastNarration: 'Skriv om scenen i fortid.',
-      usePastContinuous: 'Bruk was/were + -ing for noe som allerede foregikk.',
-      useSimplePast: 'Bruk simple past for handlingen som skjedde eller avbrøt scenen.',
-      useWhenWhile: 'Bruk when eller while for å koble to handlinger i fortid.',
-      useConnector: 'Koble handlingene med when, while, because, before eller after.',
-      usePastPerfect: 'Legg til had + past participle eller had been + -ing.',
-      stretchBeginner: 'Legg til en setning til i fortid om en synlig handling.',
-      tryEarlierDetail: 'Prøv å legge til en tidligere detalj med had eller had been.',
-      reasonPastNarration: 'Nybegynnernivået ber om tydelig fortelling i fortid, ikke bare simple past.',
-      reasonPastContinuous: 'Past continuous hjelper lytteren å kjenne den pågående scenen før hovedhendelsen.',
-      reasonSimplePast: 'Simple past driver historien fremover.',
-      reasonWhenWhile: 'Det gjør forholdet tydeligere mellom en handling som pågikk og en annen handling i fortid.',
-      reasonConnector: 'Koblingen viser om handlingene skjedde samtidig, avbrøt hverandre, eller om én skjedde før.',
-      reasonPastPerfect: 'Den avanserte oppgaven ber deg vise hva som skjedde før et annet tidspunkt i fortiden.',
-      pastPerfectAlreadyWorksSummary: 'Formen med had viser allerede tydelig et tidligere lag i historien. Bruk past perfect continuous bare når den tidligere handlingen faktisk pågikk over tid.',
-      sceneInferenceSummary: 'Fortellingen din er forankret i scenen og bruker en rimelig tolkning. Fokuser nå på å gjøre tidsforholdet mellom verbene tydelig.',
-      sceneSynonymSummary: 'Fortellingen din er forankret i scenen. Making pancakes og cooking pancakes beskriver samme handling; fokuser nå på å gjøre tidsforholdet mellom verbene tydelig.',
-      reasonStretchBeginner: 'Det holder øvingen på nybegynnernivå uten å kreve koblinger.',
-      reasonEarlierDetail: 'Det gjør tidslinjen rikere og mer fortellende.',
-      keepAndAddPastSentence: 'Behold denne setningen. Legg til en setning til i fortid om hva som skjedde etterpå.',
-      reasonKeepAndAddPastSentence: 'Verbforholdet fungerer allerede. Neste steg er å fortsette fortellingen i fortid.',
-      keepAndAddResult: 'Behold denne setningen. Legg til et resultat med so eller because.',
-      reasonKeepAndAddResult: 'Tidsforholdet er allerede tydelig. Nå kan du vise konsekvensen.',
-      keepAndAddNextEvent: 'Behold denne setningen. Legg til en kort setning om hva som skjedde etterpå.',
-      reasonKeepAndAddNextEvent: 'Årsak-resultat-forholdet fungerer allerede. Neste steg er å fortsette fortellingen.',
-      keepAndAddEarlierPast: 'Behold denne setningen. Legg til hva som allerede hadde skjedd før.',
-      reasonKeepAndAddEarlierPast: 'Setningen fungerer. Neste nivå er å legge til et tidligere lag i historien med had.',
-      reasonMeaningPreservingPolish: 'Dette beholder ideen din og forbedrer bare klarhet og naturlig ordstilling.',
+      summary: 'Den här lokala coachen har granskat de viktigaste mönstren för berättande i dåtid. OpenAI-feedback blir mer precis och scenmedveten när en API-nyckel finns tillgänglig.',
+      genericSummary: 'Du bygger en berättelse i dåtid. Gör tidsrelationerna tydliga.',
+      defaultStrength: 'Du skrev ett svar i dåtid som hör ihop med scenen.',
+      strengthPastContinuous: 'Du använde past continuous för en handling som redan pågick.',
+      strengthSimplePast: 'Du använde simple past för avslutade händelser i berättelsen.',
+      strengthPastPerfect: 'Du använde past perfect för att visa en tidigare handling.',
+      strengthWhenWhile: 'Du använde when eller while för att koppla handlingar i dåtid.',
+      strengthConnector: 'Du använde en koppling för att visa hur två handlingar hänger ihop i tid.',
+      describeContrast: (background, event) => `Du använde past continuous (${background}) för bakgrunden och simple past (${event}) för huvudhändelsen.`,
+      describeBackground: (background) => `Du använde past continuous (${background}) för att visa en handling som redan pågick i bakgrunden.`,
+      describeMainEvent: (event) => `Du använde simple past (${event}) för huvudhändelsen eller en avslutad handling.`,
+      describeEarlierPast: (earlier) => `Du använde past perfect (${earlier}) för att visa vad som hade hänt tidigare.`,
+      describeEarlierThenEvent: (earlier, event) => `Du använde past perfect (${earlier}) för den tidigare händelsen och simple past (${event}) för det som hände sedan.`,
+      describeEarlierOngoing: (earlier) => `Du använde past perfect continuous (${earlier}) för en handling som pågick före en annan tidpunkt i dåtiden.`,
+      describeEarlierOngoingThenEvent: (earlier, event) => `Du använde past perfect continuous (${earlier}) för den tidigare pågående handlingen och simple past (${event}) för huvudhändelserna.`,
+      describeConnector: (connector) => `Du använde kopplingen '${connector}' för att visa hur handlingarna hänger ihop i tid.`,
+      describeWhenRelationship: (connector) => `Du använde kopplingen '${connector}' för att visa när en handling avbröt en annan.`,
+      describeWhileRelationship: (connector) => `Du använde kopplingen '${connector}' för att visa att två handlingar pågick samtidigt.`,
+      describeCauseResult: () => 'Följden mellan handlingarna är lätt att följa.',
+      describeTimelineSequence: () => 'Tidslinjen mellan handlingarna är tydlig.',
+      describeClarity: () => 'Meningen är tydlig och naturlig.',
+      describeSceneActions: () => 'Du nämnde viktiga handlingar i scenen.',
+      backgroundAction: 'en bakgrundshandling',
+      mainEvent: 'en huvudhändelse',
+      twoActions: 'två separata handlingar',
+      earlierAction: 'en tidigare handling',
+      yourStory: 'din berättelse',
+      usePastNarration: 'Skriv om scenen i dåtid.',
+      usePastContinuous: 'Använd was/were + -ing för något som redan pågick.',
+      useSimplePast: 'Använd simple past för handlingen som hände eller avbröt scenen.',
+      useWhenWhile: 'Använd when eller while för att koppla två handlingar i dåtid.',
+      useConnector: 'Koppla handlingarna med when, while, because, before eller after.',
+      usePastPerfect: 'Lägg till had + past participle eller had been + -ing.',
+      usePastTenseInstead: 'Ändra huvudverben till dåtid.',
+      stretchBeginner: 'Lägg till en mening till i dåtid om en synlig handling.',
+      tryEarlierDetail: 'Prova att lägga till en tidigare detalj med had eller had been.',
+      reasonPastNarration: 'Nybörjarnivån fokuserar på tydligt berättande i dåtid, inte bara simple past.',
+      reasonPastContinuous: 'Past continuous hjälper läsaren att känna den pågående scenen före huvudhändelsen.',
+      reasonSimplePast: 'Simple past driver berättelsen framåt.',
+      reasonPastTenseMismatch: 'Du beskrev scenen med rätt handlingar, men du använde presens i stället för dåtid.',
+      reasonPastTenseUnclear: 'Handlingarna går att förstå, men tempus är ännu inte tydligt i dåtid.',
+      reasonWhenWhile: 'Det gör relationen tydligare mellan en handling som pågick och en annan handling i dåtid.',
+      reasonConnector: 'Kopplingen visar om handlingarna hände samtidigt, avbröt varandra eller om en hände tidigare.',
+      reasonPastPerfect: 'Den avancerade uppgiften ber dig visa vad som hände före en annan tidpunkt i dåtid.',
+      pastPerfectAlreadyWorksSummary: 'Din form med had visar redan tydligt ett tidigare lager i berättelsen. Använd past perfect continuous bara när den tidigare handlingen verkligen pågick under en tid.',
+      presentTenseSummary: 'Meningen nämner viktiga handlingar, men verben står i presens, inte i dåtid.',
+      presentTenseSceneSummary: 'Du nämnde de viktigaste handlingarna i scenen, men verben står i presens. Den här uppgiften kräver dåtid.',
+      notClearlyPastSummary: 'Meningen nämner viktiga handlingar, men tempus är ännu inte tydligt i dåtid.',
+      notClearlyPastSceneSummary: 'Du nämnde de viktigaste handlingarna i scenen, men tempus är ännu inte tydligt i dåtid.',
+      sceneInferenceSummary: 'Din berättelse är förankrad i scenen och använder en rimlig tolkning. Fokusera nu på att göra tidsrelationen mellan verben tydlig.',
+      sceneSynonymSummary: 'Din berättelse är förankrad i scenen. Making pancakes och cooking pancakes beskriver samma handling; fokusera nu på att göra tidsrelationen mellan verben tydlig.',
+      reasonStretchBeginner: 'Det håller övningen på nybörjarnivå utan att kräva kopplingar.',
+      reasonEarlierDetail: 'Det gör tidslinjen rikare och mer berättande.',
+      keepAndAddPastSentence: 'Behåll den här meningen. Lägg till en mening till i dåtid om vad som hände sedan.',
+      reasonKeepAndAddPastSentence: 'Verbrelationen fungerar redan. Nästa steg är att fortsätta berättelsen i dåtid.',
+      keepAndAddResult: 'Behåll den här meningen. Lägg till ett resultat med so eller because.',
+      reasonKeepAndAddResult: 'Tidsrelationen är redan tydlig. Nu kan du visa konsekvensen.',
+      keepAndAddNextEvent: 'Behåll den här meningen. Lägg till en kort mening om vad som hände sedan.',
+      reasonKeepAndAddNextEvent: 'Orsak-resultat-relationen fungerar redan. Nästa steg är att fortsätta berättelsen.',
+      keepAndAddEarlierPast: 'Behåll den här meningen. Lägg till vad som redan hade hänt tidigare.',
+      reasonKeepAndAddEarlierPast: 'Meningen fungerar. Nästa nivå är att lägga till ett tidigare lager i berättelsen med had.',
+      reasonMeaningPreservingPolish: 'Det här behåller din idé och förbättrar bara tydlighet och naturlig ordföljd.',
       beginnerRewriteFallback: 'A person did one clear action, and then another visible action happened.',
       intermediateRewriteFallback: 'One action was happening when another action suddenly changed the scene.',
       advancedRewriteFallback: 'One action had already happened before another past action changed the scene.',
-      nextBasicNext: 'Legg til en setning til om hva som skjedde etterpå.',
-      nextBasicAnotherPerson: 'Legg til en setning til om hva en annen person gjorde.',
-      nextBasicMoreDetail: 'Legg til en detalj til om hva som skjedde i scenen.',
-      nextBasicMoreAction: 'Vis en handling til i fortid.',
-      nextBasicStretch: 'Prøv å koble to handlinger med when eller while.',
-      nextIntermediateConnect: 'Koble to handlinger med when eller while.',
-      nextIntermediateOneMore: 'Legg til en setning til som kobler handlinger tydelig.',
-      nextIntermediateStretch: 'Prøv å legge til en setning om hva som hadde skjedd før.',
-      nextAdvanced: 'Legg til en setning om hva som skjedde før med had eller had been.',
-      nextAdvancedTimeline: 'Vis hva som hadde skjedd før med had eller had been.',
-      nextAdvancedEarlierDetail: 'Legg til en tidligere detalj til med had eller had been.',
-      nextAdvancedMastery: (eventClause) => eventClause ? `Legg til en setning til om hva som hadde skjedd før ${eventClause}.` : 'Legg til en setning til om hva som hadde skjedd før hovedhendelsen.',
-      reasonAdvancedMastery: 'Du viser allerede tidslinjen tydelig. Nå kan du legge til enda et tidligere lag.',
-      nextAdvancedStructure: 'Gjør setningsstrukturen tydeligere, så tidslinjen blir lettere å følge.',
-      nextAdvancedTimelineClear: 'Gjør den tidligere og den senere handlingen tydeligere i én setning.',
-      reasonAdvancedStructure: 'Du har allerede vist den tidligere handlingen med had. Nå bør du gjøre setningsstrukturen tydeligere.',
-      reasonAdvancedTimelineClear: 'Neste forbedring er å gjøre forholdet mellom den tidligere og den senere handlingen tydeligere.',
-      readinessBasic: 'Hvis du vil ha en utfordring, kan du prøve å koble to handlinger med when eller while.',
-      readinessIntermediate: 'Du kobler handlingene tydelig. Nå kan du prøve å legge til hva som hadde skjedd før.',
+      nextBasicNext: 'Lägg till en mening till om vad som hände sedan.',
+      nextBasicAnotherPerson: 'Lägg till en mening till om vad en annan person gjorde.',
+      nextBasicMoreDetail: 'Lägg till en detalj till om vad som hände i scenen.',
+      nextBasicMoreAction: 'Visa en handling till i dåtid.',
+      nextUsePastTense: 'Ändra huvudverben till dåtid.',
+      nextBasicStretch: 'Prova att koppla två handlingar med when eller while.',
+      nextIntermediateConnect: 'Koppla två handlingar med when eller while.',
+      nextIntermediateOneMore: 'Lägg till en mening till som kopplar handlingarna tydligt.',
+      nextIntermediateStretch: 'Prova att lägga till en mening om vad som hade hänt tidigare.',
+      nextAdvanced: 'Lägg till en mening om vad som hände tidigare med had eller had been.',
+      nextAdvancedTimeline: 'Visa vad som hade hänt tidigare med had eller had been.',
+      nextAdvancedEarlierDetail: 'Lägg till en tidigare detalj till med had eller had been.',
+      nextAdvancedMastery: (eventClause) => eventClause ? `Lägg till en mening till om vad som hade hänt innan ${eventClause}.` : 'Lägg till en mening till om vad som hade hänt före huvudhändelsen.',
+      reasonAdvancedMastery: 'Du visar redan tidslinjen tydligt. Nu kan du lägga till ännu ett tidigare lager.',
+      nextAdvancedStructure: 'Gör meningsstrukturen tydligare så att tidslinjen blir lättare att följa.',
+      nextAdvancedTimelineClear: 'Gör den tidigare och den senare handlingen tydligare i en mening.',
+      reasonAdvancedStructure: 'Du har redan visat den tidigare handlingen med had. Nu behöver du göra meningsstrukturen tydligare.',
+      reasonAdvancedTimelineClear: 'Nästa förbättring är att göra relationen mellan den tidigare och den senare handlingen tydligare.',
+      readinessBasic: 'Om du vill ha en utmaning kan du prova att koppla två handlingar med when eller while.',
+      readinessIntermediate: 'Du kopplar handlingarna tydligt. Nu kan du prova att lägga till vad som hade hänt tidigare.',
     }
   }
 
@@ -3785,6 +4119,7 @@ function localFeedbackCopy(feedbackLanguage) {
     describeCauseResult: () => 'The sequence of actions is easy to follow.',
     describeTimelineSequence: () => 'The timeline between the actions is clear.',
     describeClarity: () => 'The sentence is clear and natural.',
+    describeSceneActions: () => 'You mentioned key actions from the scene.',
     backgroundAction: 'a background action',
     mainEvent: 'a main event',
     twoActions: 'two separate actions',
@@ -3796,15 +4131,22 @@ function localFeedbackCopy(feedbackLanguage) {
     useWhenWhile: 'Use when or while to connect two actions in the past.',
     useConnector: 'Join them with when, while, because, before, or after.',
     usePastPerfect: 'Add had + past participle or had been + -ing.',
+    usePastTenseInstead: 'Change the main verbs to the past tense.',
     stretchBeginner: 'Add one more past-tense sentence about a visible action.',
     tryEarlierDetail: 'Try adding one earlier past detail with had or had been.',
     reasonPastNarration: 'Beginner level asks for clear past narration, not only simple past.',
     reasonPastContinuous: 'Past continuous helps the listener feel the ongoing scene before the main event happens.',
     reasonSimplePast: 'Simple past moves the story forward.',
+    reasonPastTenseMismatch: 'You described the scene clearly, but you used present tense instead of past tense.',
+    reasonPastTenseUnclear: 'The actions are understandable, but the tense is not clearly past yet.',
     reasonWhenWhile: 'That makes the relationship clearer between one action in progress and another past action.',
     reasonConnector: 'The connector tells the reader whether actions happened together, interrupted each other, or happened earlier.',
     reasonPastPerfect: 'The advanced challenge asks you to show what happened before another past moment.',
     pastPerfectAlreadyWorksSummary: 'Your form with had already shows an earlier layer of the story clearly. Use past perfect continuous only when the earlier action was genuinely ongoing for a period of time.',
+    presentTenseSummary: 'The sentence mentions key actions, but the verbs are in the present tense, not the past.',
+    presentTenseSceneSummary: 'You mentioned the main actions in the scene, but the verbs are in the present tense. This task requires past tense.',
+    notClearlyPastSummary: 'The sentence mentions key actions, but the tense is not clearly past yet.',
+    notClearlyPastSceneSummary: 'You mentioned the main actions in the scene, but the tense is not clearly past yet.',
     sceneInferenceSummary: 'Your narration is anchored in the scene and uses a reasonable interpretation. Now focus on making the time relationship between the verbs clear.',
     sceneSynonymSummary: 'Your narration is anchored in the scene. Making pancakes and cooking pancakes describe the same action; now focus on making the time relationship between the verbs clear.',
     reasonStretchBeginner: 'That keeps the practice at beginner level without requiring connectors.',
@@ -3825,6 +4167,7 @@ function localFeedbackCopy(feedbackLanguage) {
     nextBasicAnotherPerson: 'Add one more sentence about what another person was doing.',
     nextBasicMoreDetail: 'Add one more detail about what was happening in the scene.',
     nextBasicMoreAction: 'Show one more action in the past.',
+    nextUsePastTense: 'Change the main verbs to the past tense.',
     nextBasicStretch: 'Try connecting two actions using when or while.',
     nextIntermediateConnect: 'Connect two actions using when or while.',
     nextIntermediateOneMore: 'Add one more sentence that connects actions clearly.',
@@ -3838,8 +4181,8 @@ function localFeedbackCopy(feedbackLanguage) {
     nextAdvancedTimelineClear: 'Make the earlier and later actions clearer in one sentence.',
     reasonAdvancedStructure: 'You already showed the earlier action with had. Now make the sentence structure clearer.',
     reasonAdvancedTimelineClear: 'The next improvement is to make the earlier and later actions connect more clearly.',
-    readinessBasic: 'You’re describing the scene clearly. Now try connecting two actions using when or while.',
-    readinessIntermediate: 'You’re connecting actions clearly. Now try adding what happened before.',
+    readinessBasic: "You're describing the scene clearly. Now try connecting two actions using when or while.",
+    readinessIntermediate: "You're connecting actions clearly. Now try adding what happened before.",
   }
 }
 

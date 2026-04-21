@@ -683,8 +683,14 @@ function App() {
         <div className="mobile-settings" aria-label={copy.mobileSettings.label}>
           <div className="mobile-topbar">
             <div className="mobile-app-brand">
-              <button type="button" className="title-reset mobile-app-title-button" onClick={refreshFromTitle}>
-                <span className="mobile-app-title">{copy.app.title}</span>
+              <button
+                type="button"
+                className="title-reset mobile-app-title-button"
+                onClick={refreshFromTitle}
+                aria-label={copy.app.title}
+              >
+                <img className="mobile-app-logo" src={appBrandLogo} alt="" aria-hidden="true" />
+                <span className="sr-only">{copy.app.title}</span>
               </button>
               <p className="mobile-app-subtitle">{copy.app.subtitle}</p>
             </div>
@@ -755,8 +761,14 @@ function App() {
 
         <div className="scene-pane">
           <section className="instruction-panel">
-            <button type="button" className="title-reset app-title-button" onClick={refreshFromTitle}>
-              <span className="app-title-text">{copy.app.title}</span>
+            <button
+              type="button"
+              className="title-reset app-title-button"
+              onClick={refreshFromTitle}
+              aria-label={copy.app.title}
+            >
+              <img className="app-title-logo" src={appBrandLogo} alt="" aria-hidden="true" />
+              <span className="sr-only">{copy.app.title}</span>
             </button>
             <p className="app-subtitle">{copy.app.subtitle}</p>
             <p className="scene-prompt">{copy.app.scenePrompt}</p>
@@ -1491,6 +1503,8 @@ const languageOptions = {
   sv: { label: 'Svenska', feedbackName: 'Swedish' },
 }
 
+const appBrandLogo = '/brand/tell-a-story-logo.png'
+
 const translations = {
   en: {
     app: {
@@ -1646,7 +1660,7 @@ const translations = {
     task: { title: 'Elige un nivel de dificultad', level: 'Nivel de reto' },
     challengeLabels: { beginner: 'Principiante', intermediate: 'Intermedio', advanced: 'Avanzado' },
     challengePrompts: {
-      beginner: 'Escribe dos o tres oraciones en simple past sobre la escena.',
+      beginner: 'Escribe 2-3 oraciones sobre la escena en pasado.',
       intermediate: 'Usa when o while para conectar acciones en el pasado.',
       advanced: 'Añade lo que pasó antes usando had o had been.',
     },
@@ -1661,11 +1675,11 @@ const translations = {
       title: 'when y while',
       when: {
         title: 'when',
-        text: 'Usa when cuando una acción ocurre durante otra que ya estaba en progreso.',
+        text: 'Algo pasa\n(un momento)',
       },
       while: {
         title: 'while',
-        text: 'Usa while cuando dos acciones están ocurriendo al mismo tiempo.',
+        text: 'Las cosas están pasando\n(más tiempo)',
       },
     },
     pastPerfectHint: {
@@ -1788,7 +1802,7 @@ const translations = {
     task: { title: 'Välj svårighetsgrad', level: 'Nivå' },
     challengeLabels: { beginner: 'Nybörjare', intermediate: 'Medel', advanced: 'Avancerad' },
     challengePrompts: {
-      beginner: 'Skriv två eller tre meningar i simple past om scenen.',
+      beginner: 'Skriv 2-3 meningar om scenen i dåtid.',
       intermediate: 'Använd when eller while för att koppla handlingar i dåtid.',
       advanced: 'Lägg till vad som hände tidigare med had eller had been.',
     },
@@ -1803,11 +1817,11 @@ const translations = {
       title: 'when och while',
       when: {
         title: 'when',
-        text: 'Använd when när en handling händer under en annan som redan pågår.',
+        text: 'Något händer\n(ett ögonblick)',
       },
       while: {
         title: 'while',
-        text: 'Använd while när två handlingar händer samtidigt.',
+        text: 'Saker pågår\n(längre tid)',
       },
     },
     pastPerfectHint: {
