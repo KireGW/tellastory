@@ -85,6 +85,10 @@ function App() {
   const copy = translations[uiLanguage]
   const hints = useMemo(() => buildHints(activeScene, challengeMode, copy), [activeScene, challengeMode, copy])
   const activeHint = hintIndex === null ? null : hints[hintIndex % hints.length]
+  const desktopHintPlaceholder = useMemo(
+    () => hints.reduce((longest, hint) => (hint.length > longest.length ? hint : longest), '') || '\u00A0',
+    [hints],
+  )
   const feedbackTone = feedback ? getFeedbackTone(copy, feedback) : null
   const isMobileFocusMode = isMobileViewport && (
     (isFocusSceneExpanded && isFocusSceneExpandedFromFocus) ||
@@ -1019,10 +1023,17 @@ function App() {
                     </p>
                   ) : null}
                 </section>
-              ) : activeHint && !isMobileViewport ? (
-                <aside className="hint-panel" aria-live="polite">
-                  <p className="section-kicker">{copy.form.hintLabel} {hintIndex + 1}/{hints.length}</p>
-                  <p>{activeHint}</p>
+              ) : hints.length > 0 && !isMobileViewport ? (
+                <aside
+                  className={activeHint ? 'hint-panel is-visible' : 'hint-panel is-hidden'}
+                  aria-live={activeHint ? 'polite' : undefined}
+                  aria-hidden={activeHint ? undefined : 'true'}
+                >
+                  <p className="section-kicker">
+                    {copy.form.hintLabel}
+                    {activeHint ? ` ${hintIndex + 1}/${hints.length}` : ''}
+                  </p>
+                  <p>{activeHint ?? desktopHintPlaceholder}</p>
                 </aside>
               ) : null}
             </div>
@@ -1118,9 +1129,14 @@ function App() {
             <div className="grammar-list">
               {copy.grammar.items.map((item) => (
                 <article key={item.title}>
-                  <h3>{item.title}</h3>
-                  <p>{item.text}</p>
-                  <span>{item.example}</span>
+                  <div className="grammar-card-heading">
+                    <h3>{item.title}</h3>
+                    {item.hint ? <span className="grammar-card-hint">{item.hint}</span> : null}
+                  </div>
+                  <p>{renderGrammarText(item)}</p>
+                  {item.example ? (
+                    <span className="grammar-card-example">{renderGrammarExample(item)}</span>
+                  ) : null}
                 </article>
               ))}
             </div>
@@ -1250,7 +1266,7 @@ const defaultChallengeModes = {
   },
   advanced: {
     label: 'Advanced',
-    prompt: 'Use had for an earlier event, or had been for an earlier action that continued for some time.',
+    prompt: 'Use had or had been to show something that happened before another past moment. Combine with other past forms to make the timeline clear.',
     targets: ['earlier past', 'past perfect when natural', 'past perfect continuous only for ongoing earlier actions'],
   },
 }
@@ -1403,7 +1419,17 @@ function buildHints(scene, challengeMode, copy) {
 
 function getChallengePromptParts(copy, challengeMode, activeChallenge) {
   const text = copy.challengePrompts[challengeMode] ?? activeChallenge.prompt
-  const grammarTerms = ['simple past', 'had been', 'had', 'when', 'while']
+  const grammarTerms = [
+    'other past forms',
+    'otras formas del pasado',
+    'andra dåtidsformer',
+    'past continuous',
+    'simple past',
+    'had been',
+    'had',
+    'when',
+    'while',
+  ]
   const orderedTerms = grammarTerms
     .filter((term) => text.includes(term))
     .sort((left, right) => right.length - left.length)
@@ -1497,6 +1523,50 @@ function renderChallengePrompt(parts, {
   })
 }
 
+function renderGrammarExample(item) {
+  const example = String(item?.example ?? '')
+  const highlights = Array.isArray(item?.highlight)
+    ? item.highlight.filter(Boolean)
+    : []
+
+  if (!example || !highlights.length) {
+    return example
+  }
+
+  const pattern = new RegExp(`(${highlights.map(escapeRegExp).join('|')})`, 'g')
+  const parts = example.split(pattern)
+
+  return parts.map((part, index) => (
+    highlights.includes(part)
+      ? <span key={`grammar-example-highlight-${index}`} className="grammar-example-verb">{part}</span>
+      : <span key={`grammar-example-text-${index}`}>{part}</span>
+  ))
+}
+
+function renderGrammarText(item) {
+  const text = String(item?.text ?? '')
+  const highlights = Array.isArray(item?.textHighlight)
+    ? item.textHighlight.filter(Boolean)
+    : []
+
+  if (!text || !highlights.length) {
+    return text
+  }
+
+  const pattern = new RegExp(`(${highlights.map(escapeRegExp).join('|')})`, 'g')
+  const parts = text.split(pattern)
+
+  return parts.map((part, index) => (
+    highlights.includes(part)
+      ? <strong key={`grammar-text-highlight-${index}`}>{part}</strong>
+      : <span key={`grammar-text-${index}`}>{part}</span>
+  ))
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 function findAction(scene, actionId) {
   return scene.sceneScript?.coreActions?.find((action) => action.id === actionId)
 }
@@ -1528,7 +1598,7 @@ const translations = {
     challengePrompts: {
       beginner: 'Write 2-3 sentences about the scene in the past.',
       intermediate: 'Use when or while to connect actions in the past.',
-      advanced: 'Add what happened before using had or had been.',
+      advanced: 'Use had or had been to show something that happened before another past moment. Combine with other past forms to make the timeline clear.',
     },
     challengeSubprompts: {},
     beginnerPastHint: {
@@ -1541,11 +1611,11 @@ const translations = {
       title: 'when / while',
       when: {
         title: 'when',
-        text: 'Something happens\n(a moment)',
+        text: 'An action interrupts another action.\n→ I was reading when the phone rang.',
       },
       while: {
         title: 'while',
-        text: 'Things are happening\n(a longer time)',
+        text: 'Two actions happen simultaneously.\n→ I was reading while he was watching TV.',
       },
     },
     pastPerfectHint: {
@@ -1633,27 +1703,34 @@ const translations = {
         {
           title: 'Simple Past',
           text: 'Use it for completed events that move the story forward.',
-          example: 'The child dropped the oranges. The cyclist swerved.',
+          example: 'The child dropped the oranges. The cyclist turned quickly.',
+          highlight: ['dropped', 'turned'],
         },
         {
           title: 'Past Continuous',
-          text: 'Use it for actions already happening in the background.',
+          hint: 'was / were + -ing form',
+          text: 'Use it for actions in progress in the background or actions that are interrupted.',
           example: 'The vendor was weighing apples when the child dropped the oranges.',
+          highlight: ['was weighing'],
         },
         {
           title: 'Past Perfect',
-          text: 'Use it for something that happened before another past moment.',
+          hint: 'had',
+          text: 'Use it for an action that happened before another past action.',
           example: 'The dog had taken the bread before anyone noticed.',
+          highlight: ['had taken'],
         },
         {
           title: 'Past Perfect Continuous',
-          text: 'Use it for an earlier action that had been continuing for some time.',
-          example: 'She had been reading before she fell asleep.',
+          hint: 'had been + -ing form',
+          text: 'Use it for an action that continued for some time before another past action.',
+          example: 'The vendor had been talking to customers before the dog ran off with the bread.',
+          highlight: ['had been talking'],
         },
         {
           title: 'Connectors',
-          text: 'Use when, while, as, because, before, after, and by the time to show the timeline.',
-          example: 'While shows background. When often marks the event. Because shows cause.',
+          text: 'Use when, while, as, because, before, after, and by the time to clarify the timeline.',
+          textHighlight: ['when', 'while', 'as', 'because', 'before', 'after', 'by the time'],
         },
       ],
     },
@@ -1672,7 +1749,7 @@ const translations = {
     challengePrompts: {
       beginner: 'Escribe 2-3 oraciones sobre la escena en pasado.',
       intermediate: 'Usa when o while para conectar acciones en el pasado.',
-      advanced: 'Añade lo que pasó antes usando had o had been.',
+      advanced: 'Usa had o had been para mostrar algo que pasó antes de otro momento pasado. Combínalo con otras formas del pasado para que la línea temporal quede clara.',
     },
     challengeSubprompts: {},
     beginnerPastHint: {
@@ -1777,22 +1854,29 @@ const translations = {
         {
           title: 'Simple Past',
           text: 'Úsalo para eventos terminados que hacen avanzar la historia.',
-          example: 'The child dropped the oranges. The cyclist swerved.',
+          example: 'The child dropped the oranges. The cyclist turned quickly.',
+          highlight: ['dropped', 'turned'],
         },
         {
           title: 'Past Continuous',
+          hint: 'was / were + -ing form',
           text: 'Úsalo para acciones que ya estaban ocurriendo como fondo de la escena.',
           example: 'The vendor was weighing apples when the child dropped the oranges.',
+          highlight: ['was weighing'],
         },
         {
           title: 'Past Perfect',
+          hint: 'had',
           text: 'Úsalo para algo que pasó antes de otro momento en el pasado.',
           example: 'The dog had taken the bread before anyone noticed.',
+          highlight: ['had taken'],
         },
         {
           title: 'Past Perfect Continuous',
+          hint: 'had been + -ing form',
           text: 'Úsalo para una acción anterior que había continuado durante un tiempo.',
-          example: 'She had been reading before she fell asleep.',
+          example: 'The vendor had been talking to customers before the dog ran off with the bread.',
+          highlight: ['had been talking'],
         },
         {
           title: 'Conectores',
@@ -1816,7 +1900,7 @@ const translations = {
     challengePrompts: {
       beginner: 'Skriv 2-3 meningar om scenen i dåtid.',
       intermediate: 'Använd when eller while för att koppla handlingar i dåtid.',
-      advanced: 'Lägg till vad som hände tidigare med had eller had been.',
+      advanced: 'Använd had eller had been för att visa något som hände före en annan tidpunkt i dåtiden. Kombinera det med andra dåtidsformer så att tidslinjen blir tydlig.',
     },
     challengeSubprompts: {},
     beginnerPastHint: {
@@ -1921,22 +2005,29 @@ const translations = {
         {
           title: 'Simple Past',
           text: 'Används för avslutade händelser som driver berättelsen framåt.',
-          example: 'The child dropped the oranges. The cyclist swerved.',
+          example: 'The child dropped the oranges. The cyclist turned quickly.',
+          highlight: ['dropped', 'turned'],
         },
         {
           title: 'Past Continuous',
+          hint: 'was / were + -ing form',
           text: 'Används för handlingar som redan pågick i bakgrunden.',
           example: 'The vendor was weighing apples when the child dropped the oranges.',
+          highlight: ['was weighing'],
         },
         {
           title: 'Past Perfect',
+          hint: 'had',
           text: 'Används för något som hände före en annan tidpunkt i dåtiden.',
           example: 'The dog had taken the bread before anyone noticed.',
+          highlight: ['had taken'],
         },
         {
           title: 'Past Perfect Continuous',
+          hint: 'had been + -ing form',
           text: 'Används för en tidigare handling som hade pågått en stund.',
-          example: 'She had been reading before she fell asleep.',
+          example: 'The vendor had been talking to customers before the dog ran off with the bread.',
+          highlight: ['had been talking'],
         },
         {
           title: 'Connectors',

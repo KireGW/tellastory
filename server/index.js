@@ -1325,9 +1325,9 @@ function findNarrativeExamplesByTense(source, phrasalUnits, tense, maxItems = 2)
   }
 
   const patternsByTense = {
-    pastPerfectContinuous: /\bhad\s+(?:not\s+)?been(?:\s+\w+){0,3}\s+\w+ing\b/gi,
-    pastPerfect: /\bhad\s+(?!not\s+been\b)(?!been\b)(?:\w+\s+){0,2}\w+(?:ed|en|ne|wn|t)\b/gi,
-    pastContinuous: /\b(?:was|were)\s+\w+ing\b/gi,
+    pastPerfectContinuous: pastPerfectContinuousExamplePattern,
+    pastPerfect: pastPerfectExamplePattern,
+    pastContinuous: pastContinuousExamplePattern,
   }
 
   const pattern = patternsByTense[tense]
@@ -1340,6 +1340,11 @@ function findNarrativeExamplesByTense(source, phrasalUnits, tense, maxItems = 2)
 
   return examples.slice(0, maxItems)
 }
+
+const phrasalParticlePatternSource = '(?:off|up|away|out|down|in|on|over|back|around|past)'
+const pastPerfectContinuousExamplePattern = new RegExp(`\\bhad\\s+(?:not\\s+)?been\\s+\\w+ing(?:\\s+${phrasalParticlePatternSource})?\\b`, 'gi')
+const pastPerfectExamplePattern = new RegExp(`\\bhad\\s+(?!not\\s+been\\b)(?!been\\b)\\w+(?:ed|en|ne|wn|t)(?:\\s+${phrasalParticlePatternSource})?\\b`, 'gi')
+const pastContinuousExamplePattern = new RegExp(`\\b(?:was|were)\\s+\\w+ing(?:\\s+${phrasalParticlePatternSource})?\\b`, 'gi')
 
 function expandPhrasalUnitExample(unit, tokens = []) {
   const surface = String(unit?.surface ?? '').trim()
