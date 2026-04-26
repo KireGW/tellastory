@@ -1341,10 +1341,9 @@ function findNarrativeExamplesByTense(source, phrasalUnits, tense, maxItems = 2)
   return examples.slice(0, maxItems)
 }
 
-const phrasalParticlePatternSource = '(?:off|up|away|out|down|in|on|over|back|around|past)'
-const pastPerfectContinuousExamplePattern = new RegExp(`\\bhad\\s+(?:not\\s+)?been\\s+\\w+ing(?:\\s+${phrasalParticlePatternSource})?\\b`, 'gi')
-const pastPerfectExamplePattern = new RegExp(`\\bhad\\s+(?!not\\s+been\\b)(?!been\\b)\\w+(?:ed|en|ne|wn|t)(?:\\s+${phrasalParticlePatternSource})?\\b`, 'gi')
-const pastContinuousExamplePattern = new RegExp(`\\b(?:was|were)\\s+\\w+ing(?:\\s+${phrasalParticlePatternSource})?\\b`, 'gi')
+const pastPerfectContinuousExamplePattern = /\bhad\s+(?:not\s+)?been\s+\w+ing\b/gi
+const pastPerfectExamplePattern = /\bhad\s+(?!not\s+been\b)(?!been\b)\w+(?:ed|en|ne|wn|t)\b/gi
+const pastContinuousExamplePattern = /\b(?:was|were)\s+\w+ing\b/gi
 
 function expandPhrasalUnitExample(unit, tokens = []) {
   const surface = String(unit?.surface ?? '').trim()
@@ -3078,19 +3077,23 @@ function buildSceneRelationshipSentence(scene, relationshipType) {
     return ''
   }
 
-  const backgroundSubject = sceneActorSubject(background.actor)
-  const eventSubject = lowerCaseSentenceStart(sceneActorSubject(event.actor))
+  const backgroundClause = buildSceneActionClause(background, scene)
+  const eventClause = buildSceneActionClause(event, scene, { lowercaseStart: true })
+
+  if (!backgroundClause || !eventClause) {
+    return ''
+  }
 
   if (relationshipType === 'interruption') {
-    return polishRewriteSurface(`${backgroundSubject} ${background.recommendedVerbForms?.[0] || 'was doing something'} when ${eventSubject} ${event.recommendedVerbForms?.[0] || 'did something'}.`)
+    return polishRewriteSurface(`${backgroundClause} when ${eventClause}.`)
   }
 
   if (relationshipType === 'simultaneous-background') {
-    return polishRewriteSurface(`${backgroundSubject} ${background.recommendedVerbForms?.[0] || 'was doing something'} while ${eventSubject} ${event.recommendedVerbForms?.[0] || 'did something'}.`)
+    return polishRewriteSurface(`${backgroundClause} while ${eventClause}.`)
   }
 
   if (relationshipType === 'cause-result') {
-    return polishRewriteSurface(`${backgroundSubject} ${background.recommendedVerbForms?.[0] || 'did something'}, so ${eventSubject} ${event.recommendedVerbForms?.[0] || 'did something'}.`)
+    return polishRewriteSurface(`${backgroundClause}, so ${eventClause}.`)
   }
 
   return ''
@@ -3103,7 +3106,25 @@ function buildSceneCoreActionSentence(scene, index = 0) {
     return ''
   }
 
-  return polishRewriteSurface(`${sceneActorSubject(action.actor)} ${action.recommendedVerbForms?.[0] || 'did something'}.`)
+  const clause = buildSceneActionClause(action, scene)
+  return clause ? polishRewriteSurface(`${clause}.`) : ''
+}
+
+function buildSceneActionClause(action, scene, { lowercaseStart = false } = {}) {
+  const visibleSentence = String(action?.visibleAs ?? '').trim()
+
+  if (!visibleSentence) {
+    return ''
+  }
+
+  const pastSentence = correctMainNarrationToPast(visibleSentence, scene)
+  const normalized = String(pastSentence ?? '').trim().replace(/[.!?]+$/, '')
+
+  if (!normalized) {
+    return ''
+  }
+
+  return lowercaseStart ? lowerCaseSentenceStart(normalized) : normalized
 }
 
 function applySceneArticlePolish(answer, scene) {
