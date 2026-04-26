@@ -1489,10 +1489,6 @@ function renderChallengePrompt(parts, {
     const opensConnectorHint =
       challengeMode === 'intermediate' &&
       (part.value === 'when' || part.value === 'while')
-    const opensPastPerfectHint =
-      challengeMode === 'advanced' &&
-      (part.value === 'had' || part.value === 'had been')
-
     return (
       <button
         key={`grammar-${part.value}-${index}`}
@@ -1506,11 +1502,6 @@ function renderChallengePrompt(parts, {
 
           if (opensConnectorHint) {
             openConnectorHint()
-            return
-          }
-
-          if (opensPastPerfectHint) {
-            openPastPerfectHint()
             return
           }
 
@@ -1703,28 +1694,28 @@ const translations = {
         {
           title: 'Simple Past',
           text: 'Use it for completed events that move the story forward.',
-          example: 'The child dropped the oranges. The cyclist turned quickly.',
+          example: 'The child dropped the oranges. The cyclist turned to avoid them.',
           highlight: ['dropped', 'turned'],
         },
         {
           title: 'Past Continuous',
-          hint: 'was / were + -ing form',
+          hint: 'was / were + verb + -ing',
           text: 'Use it for actions in progress in the background or actions that are interrupted.',
           example: 'The vendor was weighing apples when the child dropped the oranges.',
           highlight: ['was weighing'],
         },
         {
           title: 'Past Perfect',
-          hint: 'had',
+          hint: 'had + past participle',
           text: 'Use it for an action that happened before another past action.',
           example: 'The dog had taken the bread before anyone noticed.',
           highlight: ['had taken'],
         },
         {
           title: 'Past Perfect Continuous',
-          hint: 'had been + -ing form',
+          hint: 'had been + verb + -ing',
           text: 'Use it for an action that continued for some time before another past action.',
-          example: 'The vendor had been talking to customers before the dog ran off with the bread.',
+          example: 'The vendor had been talking to customers before the dog ran off.',
           highlight: ['had been talking'],
         },
         {
@@ -1854,28 +1845,28 @@ const translations = {
         {
           title: 'Simple Past',
           text: 'Úsalo para eventos terminados que hacen avanzar la historia.',
-          example: 'The child dropped the oranges. The cyclist turned quickly.',
+          example: 'The child dropped the oranges. The cyclist turned to avoid them.',
           highlight: ['dropped', 'turned'],
         },
         {
           title: 'Past Continuous',
-          hint: 'was / were + -ing form',
+          hint: 'was / were + verb + -ing',
           text: 'Úsalo para acciones que ya estaban ocurriendo como fondo de la escena.',
           example: 'The vendor was weighing apples when the child dropped the oranges.',
           highlight: ['was weighing'],
         },
         {
           title: 'Past Perfect',
-          hint: 'had',
+          hint: 'had + past participle',
           text: 'Úsalo para algo que pasó antes de otro momento en el pasado.',
           example: 'The dog had taken the bread before anyone noticed.',
           highlight: ['had taken'],
         },
         {
           title: 'Past Perfect Continuous',
-          hint: 'had been + -ing form',
+          hint: 'had been + verb + -ing',
           text: 'Úsalo para una acción anterior que había continuado durante un tiempo.',
-          example: 'The vendor had been talking to customers before the dog ran off with the bread.',
+          example: 'The vendor had been talking to customers before the dog ran off.',
           highlight: ['had been talking'],
         },
         {
@@ -2005,28 +1996,28 @@ const translations = {
         {
           title: 'Simple Past',
           text: 'Används för avslutade händelser som driver berättelsen framåt.',
-          example: 'The child dropped the oranges. The cyclist turned quickly.',
+          example: 'The child dropped the oranges. The cyclist turned to avoid them.',
           highlight: ['dropped', 'turned'],
         },
         {
           title: 'Past Continuous',
-          hint: 'was / were + -ing form',
+          hint: 'was / were + verb + -ing',
           text: 'Används för handlingar som redan pågick i bakgrunden.',
           example: 'The vendor was weighing apples when the child dropped the oranges.',
           highlight: ['was weighing'],
         },
         {
           title: 'Past Perfect',
-          hint: 'had',
+          hint: 'had + past participle',
           text: 'Används för något som hände före en annan tidpunkt i dåtiden.',
           example: 'The dog had taken the bread before anyone noticed.',
           highlight: ['had taken'],
         },
         {
           title: 'Past Perfect Continuous',
-          hint: 'had been + -ing form',
+          hint: 'had been + verb + -ing',
           text: 'Används för en tidigare handling som hade pågått en stund.',
-          example: 'The vendor had been talking to customers before the dog ran off with the bread.',
+          example: 'The vendor had been talking to customers before the dog ran off.',
           highlight: ['had been talking'],
         },
         {
