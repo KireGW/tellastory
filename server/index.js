@@ -470,13 +470,20 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
   normalized.detected.timeRelationships = deriveDetectedTimeRelationships(answerFeatures, analysis.semanticTenseFit)
 
   const teachingStrengths = buildNarrativeTeachingStrengths(answer, challenge, localCopy, answerFeatures)
-  const tenseMismatchFeedback = buildTenseMismatchFeedback(answer, scene, localCopy, answerFeatures)
+  const tenseMismatchFeedback = buildTenseMismatchFeedback(answer, scene, challenge, localCopy, answerFeatures)
   const semanticMismatchFeedback = buildSemanticTenseFeedback(answer, scene, challenge, localCopy, answerFeatures, semanticTenseFit)
 
   if (tenseMismatchFeedback) {
     normalized.summary = tenseMismatchFeedback.summary
     normalized.strengths = tenseMismatchFeedback.strengths
     normalized.corrections = appendOptionalCorrection([tenseMismatchFeedback.correction], normalizedSurfaceCorrection)
+    const safeTenseRewrite = String(tenseMismatchFeedback.correction?.suggestion ?? '').trim()
+    normalized.rewrite =
+      safeTenseRewrite &&
+      !betterVersionHasGrammarErrors(safeTenseRewrite, challenge) &&
+      hasMeaningfulRewriteChange(safeTenseRewrite, answer)
+        ? cleanFeedbackText(safeTenseRewrite)
+        : ''
   } else if (semanticMismatchFeedback) {
     normalized.summary = semanticMismatchFeedback.summary
     normalized.strengths = semanticMismatchFeedback.strengths
@@ -918,7 +925,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
     hasPastPerfect && 'earlier past',
     /\b(while|as)\b/.test(normalized) && 'simultaneous actions',
   ].filter(Boolean)
-  const tenseMismatchFeedback = buildTenseMismatchFeedback(answer, scene, localCopy, features)
+  const tenseMismatchFeedback = buildTenseMismatchFeedback(answer, scene, challenge, localCopy, features)
   const semanticMismatchFeedback = buildSemanticTenseFeedback(answer, scene, challenge, localCopy, features, semanticTenseFit)
   const surfacePolishRewrite = buildSurfacePolishRewrite(answer)
   const surfaceCorrection = surfacePolishRewrite ? surfacePolishCorrection(surfacePolishRewrite, localCopy, answer) : null
@@ -1068,7 +1075,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
   }
 }
 
-function buildTenseMismatchFeedback(answer, scene, localCopy, features = detectAnswerFeatures(answer)) {
+function buildTenseMismatchFeedback(answer, scene, challenge, localCopy, features = detectAnswerFeatures(answer)) {
   const tenseStatus = detectNarrationTenseStatus(answer, features)
 
   if (tenseStatus === 'past') {
@@ -1090,7 +1097,7 @@ function buildTenseMismatchFeedback(answer, scene, localCopy, features = detectA
     strengths.push(localCopy.defaultStrength)
   }
 
-  const repairedSuggestion = repairWholeAnswerSurface(answer, scene) || localCopy.usePastTenseInstead
+  const repairedSuggestion = chooseTenseMismatchSuggestion(answer, scene, challenge, localCopy, features)
   const mismatchReason = features.hasAgreementMismatch
     ? localCopy.reasonPastTenseAndAgreement
     : tenseStatus === 'present'
@@ -1114,6 +1121,49 @@ function buildTenseMismatchFeedback(answer, scene, localCopy, features = detectA
       grammarFocus: 'simple past',
     },
   }
+}
+
+function chooseTenseMismatchSuggestion(answer, scene, challenge, localCopy, features = detectAnswerFeatures(answer)) {
+  const sceneModeChallenge = challenge?.id
+    ? challenge
+    : { id: features.hasRelationshipConnector ? 'intermediate' : 'beginner' }
+  const preferSceneModelFirst =
+    Boolean(features.presentSignals?.hasUnclearBaseForms) ||
+    detectMajorErrors(answer)
+
+  const candidates = preferSceneModelFirst
+    ? [
+      buildSceneModelRewrite(scene, sceneModeChallenge),
+      buildSceneModelRewrite(scene, { id: 'beginner' }),
+      repairWholeAnswerSurface(answer, scene),
+      correctMainNarrationToPast(answer, scene),
+    ]
+    : [
+      repairWholeAnswerSurface(answer, scene),
+      correctMainNarrationToPast(answer, scene),
+      buildSceneModelRewrite(scene, sceneModeChallenge),
+      buildSceneModelRewrite(scene, { id: 'beginner' }),
+    ]
+
+  const accepted = candidates.find((candidate) => {
+    const text = String(candidate ?? '').trim()
+
+    if (!text) {
+      return false
+    }
+
+    if (hasObviousRewriteArtifacts(text)) {
+      return false
+    }
+
+    if (betterVersionHasGrammarErrors(text, sceneModeChallenge)) {
+      return false
+    }
+
+    return detectNarrationTenseStatus(text) === 'past'
+  })
+
+  return accepted || localCopy.usePastTenseInstead
 }
 
 function buildSemanticTenseFeedback(
@@ -2455,6 +2505,10 @@ function betterVersionHasGrammarErrors(value, challenge) {
     return true
   }
 
+  if (hasObviousRewriteArtifacts(candidate)) {
+    return true
+  }
+
   if (detectNarrationTenseStatus(candidate, features) !== 'past') {
     return true
   }
@@ -2468,6 +2522,23 @@ function betterVersionHasGrammarErrors(value, challenge) {
   }
 
   return false
+}
+
+function hasObviousRewriteArtifacts(value) {
+  const text = String(value ?? '').trim()
+
+  if (!text) {
+    return false
+  }
+
+  return (
+    /\b(?:am|is|are)\s+(?:came|come|ran|went|forgot|opened|closed|turned|approached|blocked|checked|carried|pointed|mixed|fixed|spilled|dropped)\b/i.test(text) ||
+    /\ba\s+past\b/i.test(text) ||
+    /(^|[.!?]\s*)(?:train|man|woman|boy|girl|waiter|vendor|cyclist|conductor|doctor|nurse|visitor|actor|director|mechanic|librarian|friend|guest|customer|farmer|goat|hiker)\s+(?:ran|walked|waited|checked|carried|pointed|mixed|fixed|slept|spoke|came|went|approached|knocked|opened|proposed|watched|looked|turned|forgot|dropped|arrived|blocked)\b/i.test(text) ||
+    /\bforgot suitcase\b/i.test(text) ||
+    /\bopen suitcase\b/i.test(text) ||
+    /\bon the ground opened\b/i.test(text)
+  )
 }
 
 function answerCanSupportCloseRepair(answer, scene = null, features = detectAnswerFeatures(answer)) {
@@ -3558,6 +3629,7 @@ function commonSimplePastMap() {
     check: 'checked',
     close: 'closed',
     collapse: 'collapsed',
+    come: 'came',
     cook: 'cooked',
     drop: 'dropped',
     fall: 'fell',
