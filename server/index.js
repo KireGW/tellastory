@@ -466,6 +466,8 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
     normalized.detected.mentionedActions,
     analysis.mentionedActions,
   )
+  normalized.detected.verbForms = deriveDetectedVerbForms(answerFeatures)
+  normalized.detected.timeRelationships = deriveDetectedTimeRelationships(answerFeatures, analysis.semanticTenseFit)
 
   const teachingStrengths = buildNarrativeTeachingStrengths(answer, challenge, localCopy, answerFeatures)
   const tenseMismatchFeedback = buildTenseMismatchFeedback(answer, scene, localCopy, answerFeatures)
@@ -1221,16 +1223,6 @@ function findSimplePastExamples(source, phrasalUnits = detectPhralVerbUnitsSafe(
   const words = tokenizeNarrativeWords(String(source ?? ''))
   const phrasalIndexes = new Set(phrasalUnits.filter((unit) => unit.tense === 'simple past').flatMap((unit) => [unit.index, unit.index + 1]))
 
-  for (let index = 0; index < words.length - 2; index += 1) {
-    const current = words[index].value.toLowerCase()
-    const next = words[index + 1]?.value?.toLowerCase() ?? ''
-    const nextTwo = words[index + 2]?.value ?? ''
-
-    if (current === 'had' && next === 'to' && nextTwo) {
-      addExample(`had to ${nextTwo}`)
-    }
-  }
-
   for (let index = 0; index < words.length; index += 1) {
     if (phrasalIndexes.has(index)) {
       continue
@@ -1606,6 +1598,29 @@ function buildNarrativeTeachingStrengths(answer, challenge, localCopy, features 
   return strengths.slice(0, 3)
 }
 
+function deriveDetectedVerbForms(features = {}) {
+  return [
+    features.hasSimplePast && 'simple past',
+    features.hasPastContinuous && 'past continuous',
+    features.hasPastPerfect && 'past perfect',
+    features.hasPastPerfectContinuous && 'past perfect continuous',
+  ].filter(Boolean)
+}
+
+function deriveDetectedTimeRelationships(features = {}, semanticTenseFit = {}) {
+  return [
+    features.hasPastContinuous && features.hasSimplePast && features.hasRelationshipConnector && 'background + event',
+    features.hasBecause && 'cause + result',
+    features.hasPastPerfect && 'earlier past',
+    features.hasPastPerfectContinuous && 'earlier ongoing action',
+    (features.hasWhile || /\bsimultaneous-background\b/.test(String(semanticTenseFit?.relationshipType ?? ''))) && 'simultaneous actions',
+    semanticTenseFit?.relationshipType === 'interruption' && features.hasWhen && 'interruption',
+    semanticTenseFit?.relationshipType === 'cause-result' && 'cause + result',
+    semanticTenseFit?.relationshipType === 'simultaneous-background' && 'simultaneous actions',
+    (features.hasRelationshipConnector || features.hasCauseResult || features.hasPastPerfect || features.hasPastPerfectContinuous) && 'sequence',
+  ].filter(Boolean)
+}
+
 function formatNarrativeExampleSummary(examples = []) {
   const unique = [...new Set((examples ?? []).map((item) => String(item ?? '').trim()).filter(Boolean))]
 
@@ -1692,6 +1707,13 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
     statuses.englishStatus === 'correct' &&
     statuses.sceneFit === 'on scene' &&
     statuses.taskFit === 'on target'
+  const strongAdvancedAttempt = advancedClearTimelineWithoutEarlierPast(
+    answer,
+    challenge,
+    answerFeatures,
+    statuses,
+    scene,
+  )
   const advancedMastery = answerWorks && demonstratesAdvancedMastery(answer, answerFeatures)
   const surfacePolishRewrite = buildSurfacePolishRewrite(answer)
   const surfaceCorrection = surfacePolishRewrite ? surfacePolishCorrection(surfacePolishRewrite, localCopy, answer) : null
@@ -1702,6 +1724,10 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
 
   if (answerWorks && advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses)) {
     return appendOptionalCorrection([consequenceCorrection(localCopy, answerFeatures)], surfaceCorrection)
+  }
+
+  if (strongAdvancedAttempt) {
+    return appendOptionalCorrection([nextLevelCorrection(challenge, localCopy)], surfaceCorrection)
   }
 
   if (answerWorks) {
@@ -2186,6 +2212,10 @@ function selectBetterVersionMode(answer, scene, challenge, statuses = null) {
     statuses?.sceneFit !== 'not scene-based'
 
   if (strongModel) {
+    return 'HIDE'
+  }
+
+  if (advancedClearTimelineWithoutEarlierPast(answer, challenge, features, statuses, scene)) {
     return 'HIDE'
   }
 
@@ -3729,12 +3759,21 @@ function normalizeVerdict(value, statuses, challenge, features, analysis = null)
 function verdictFromFeatures(challenge, features, statuses, answer = '', scene = null) {
   const level = normalizeRatingLevel(challenge)
   const isPastTense = detectPastTense(answer)
-  const isSceneRelevant = checkSceneMatch(answer, scene)
+  const isSceneRelevant = statuses?.sceneFit
+    ? statuses.sceneFit !== 'not scene-based'
+    : checkSceneMatch(answer, scene)
   const semanticTenseFit = evaluateSemanticTenseFit(answer, scene, challenge, features)
   const meetsLevelTarget = checkLevelTarget({ level, studentText: answer }) && semanticTenseFit.verdict !== 'mismatch'
   const usesTargetStructure = detectTargetStructure({ level, studentText: answer })
   const hasRecognizedAdvancedStructure = level === 'advanced' && hasValidAdvancedEarlierPast(answer, features)
   const hasAdvancedMastery = demonstratesAdvancedMastery(answer, features, { isSceneRelevant })
+  const hasStrongAdvancedAttempt = advancedClearTimelineWithoutEarlierPast(
+    answer,
+    challenge,
+    features,
+    statuses,
+    scene,
+  )
   const clarityScore = getClarityScore(answer)
   const hasMajorErrors = detectMajorErrors(answer)
   const rating = getRating({
@@ -3747,6 +3786,7 @@ function verdictFromFeatures(challenge, features, statuses, answer = '', scene =
     usesTargetStructure,
     hasRecognizedAdvancedStructure,
     hasAdvancedMastery,
+    hasStrongAdvancedAttempt,
     semanticTenseAligned: semanticTenseFit.verdict !== 'mismatch',
   })
 
@@ -3993,6 +4033,7 @@ function getRating({
   usesTargetStructure,
   hasRecognizedAdvancedStructure = false,
   hasAdvancedMastery = false,
+  hasStrongAdvancedAttempt = false,
   semanticTenseAligned = true,
 }) {
   let coreFailures = 0
@@ -4012,6 +4053,10 @@ function getRating({
 
   if (!isSceneRelevant) {
     return 'Good start'
+  }
+
+  if (level === 'advanced' && hasStrongAdvancedAttempt && isPastTense && isSceneRelevant && clarityScore >= 1 && !hasMajorErrors) {
+    return 'Good work'
   }
 
   if (!meetsLevelTarget) {
@@ -4482,7 +4527,8 @@ function detectAnswerFeatures(answer) {
   const pastPerfectMatches = normalized.match(/\bhad\s+(?:not\s+)?(?:already\s+|just\s+|still\s+|really\s+|almost\s+)?(?!been\b)\w+(?:ed|en|ne|wn|t)\b/g) ?? []
   const hasPastPerfectContinuous = pastPerfectContinuousMatches.length > 0
   const hasPastPerfect = pastPerfectMatches.length > 0
-  const hasPastContinuous = /\b(was|were)\s+\w+ing\b/.test(normalized) || /\bwas\s+about\s+to\b/.test(normalized)
+  const hasPastContinuous = /\b(was|were)\s+\w+ing\b/.test(normalized)
+  const hasAboutToPast = /\bwas\s+about\s+to\b/.test(normalized)
   const simplePastCandidates = words
     .filter((_, index) => !isPartOfEarlierPastStructure(words, index))
     .map((word) => word.value.toLowerCase())
@@ -4507,6 +4553,7 @@ function detectAnswerFeatures(answer) {
     hasPastPerfectContinuous,
     hasPastPerfect,
     hasPastContinuous,
+    hasAboutToPast,
     hasSimplePast,
     hasWhen,
     hasWhile,
@@ -4628,6 +4675,40 @@ function hasAdvancedTimelineLayer(features = {}) {
   return Boolean(
     (features.hasPastPerfect || features.hasPastPerfectContinuous) &&
     (features.hasSimplePast || features.hasPastContinuous || features.hasRelationshipConnector)
+  )
+}
+
+function advancedClearTimelineWithoutEarlierPast(
+  answer,
+  challenge,
+  features = detectAnswerFeatures(answer),
+  statuses = {},
+  scene = null,
+) {
+  if (challenge?.id !== 'advanced') {
+    return false
+  }
+
+  if (features.hasPastPerfect || features.hasPastPerfectContinuous) {
+    return false
+  }
+
+  const isSceneRelevant =
+    statuses.sceneFit
+      ? statuses.sceneFit !== 'not scene-based'
+      : checkSceneMatch(answer, scene)
+  const semanticTenseFit = evaluateSemanticTenseFit(answer, scene, challenge, features)
+  const clarityScore = String(answer ?? '').trim() ? getClarityScore(answer) : 0
+  const hasMajorErrors = String(answer ?? '').trim() ? detectMajorErrors(answer) : false
+
+  return Boolean(
+    detectPastTense(answer) &&
+    isSceneRelevant &&
+    semanticTenseFit.verdict !== 'mismatch' &&
+    features.hasSimplePast &&
+    (features.hasWhen || features.hasWhile || features.hasRelationshipConnector || features.hasCauseResult) &&
+    clarityScore === 2 &&
+    !hasMajorErrors
   )
 }
 
