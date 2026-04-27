@@ -412,7 +412,13 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
   if (analysis.sceneFit) {
     statuses.sceneFit = strongestSceneFit(statuses.sceneFit, analysis.sceneFit)
   }
+  if (analysis.sceneAnchoring?.highNonsense) {
+    statuses.sceneFit = 'not scene-based'
+  }
   statuses.taskFit = strongestTaskFit(statuses.taskFit, analysis.taskFit)
+  if (analysis.sceneAnchoring?.highNonsense) {
+    statuses.taskFit = 'different skill'
+  }
 
   if (
     challenge?.id === 'intermediate' &&
@@ -429,6 +435,7 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
   const usefulCorrections = normalizeUsefulCorrections(corrections, answer, challenge, localCopy, statuses, scene).slice(0, 4)
   const normalizedSurfaceRewrite = buildSurfacePolishRewrite(answer)
   const normalizedSurfaceCorrection = normalizedSurfaceRewrite
+    && !analysis.sceneAnchoring?.highNonsense
     ? surfacePolishCorrection(normalizedSurfaceRewrite, localCopy, answer)
     : null
   const summary = cleanSceneSynonymNitpick(
@@ -568,12 +575,15 @@ function mergeDetectedValues(first, second) {
 
 function analyzeAnswer(answer, scene, challenge) {
   const features = detectAnswerFeatures(answer)
-  const mentionedActions = detectMentionedActions(answer, scene)
-  const sceneFit = checkSceneMatch(answer, scene)
+  const sceneAnchoring = assessSceneAnchoring(answer, scene)
+  const mentionedActions = sceneAnchoring.mentionedActions
+  const sceneFit = sceneAnchoring.highNonsense
+    ? 'not scene-based'
+    : sceneAnchoring.isOnScene
     ? 'on scene'
     : mentionedActions.length
     ? 'partly on scene'
-    : null
+    : 'not scene-based'
   const semanticTenseFit = evaluateSemanticTenseFit(answer, scene, challenge, features)
   const taskFit =
     semanticTenseFit.verdict === 'mismatch' && taskFitFromFeatures(challenge, features) === 'on target'
@@ -585,6 +595,7 @@ function analyzeAnswer(answer, scene, challenge) {
   return {
     features,
     mentionedActions,
+    sceneAnchoring,
     sceneFit,
     taskFit,
     verdictFloor: verdictFromFeatures(challenge, features, statuses, answer, scene),
@@ -1082,14 +1093,17 @@ function buildTenseMismatchFeedback(answer, scene, challenge, localCopy, feature
     return null
   }
 
-  const mentionedActions = detectMentionedActions(answer, scene)
+  const sceneAnchoring = assessSceneAnchoring(answer, scene)
+  const mentionedActions = sceneAnchoring.mentionedActions
   const strengths = []
 
-  if (mentionedActions.length) {
+  if (sceneAnchoring.highNonsense) {
+    strengths.push(localCopy.describeSentenceAttempt())
+  } else if (mentionedActions.length) {
     strengths.push(localCopy.describeSceneActions())
   }
 
-  if (getClarityScore(answer) >= 1) {
+  if (getClarityScore(answer) >= 1 && !sceneAnchoring.highNonsense) {
     strengths.push(localCopy.describeClarity())
   }
 
@@ -1097,8 +1111,10 @@ function buildTenseMismatchFeedback(answer, scene, challenge, localCopy, feature
     strengths.push(localCopy.defaultStrength)
   }
 
-  const repairedSuggestion = chooseTenseMismatchSuggestion(answer, scene, challenge, localCopy, features)
-  const mismatchReason = features.hasAgreementMismatch
+  const repairedSuggestion = chooseTenseMismatchSuggestion(answer, scene, challenge, localCopy, features, sceneAnchoring)
+  const mismatchReason = sceneAnchoring.highNonsense
+    ? localCopy.reasonSceneRefocus
+    : features.hasAgreementMismatch
     ? localCopy.reasonPastTenseAndAgreement
     : tenseStatus === 'present'
     ? localCopy.reasonPastTenseMismatch
@@ -1106,7 +1122,9 @@ function buildTenseMismatchFeedback(answer, scene, challenge, localCopy, feature
 
   return {
     summary:
-      tenseStatus === 'present'
+      sceneAnchoring.highNonsense
+        ? localCopy.offSceneSummary
+        : tenseStatus === 'present'
         ? mentionedActions.length
           ? localCopy.presentTenseSceneSummary
           : localCopy.presentTenseSummary
@@ -1118,12 +1136,16 @@ function buildTenseMismatchFeedback(answer, scene, challenge, localCopy, feature
       original: localCopy.yourStory,
       suggestion: repairedSuggestion,
       reason: mismatchReason,
-      grammarFocus: 'simple past',
+      grammarFocus: sceneAnchoring.highNonsense ? 'scene description' : 'simple past',
     },
   }
 }
 
-function chooseTenseMismatchSuggestion(answer, scene, challenge, localCopy, features = detectAnswerFeatures(answer)) {
+function chooseTenseMismatchSuggestion(answer, scene, challenge, localCopy, features = detectAnswerFeatures(answer), sceneAnchoring = assessSceneAnchoring(answer, scene)) {
+  if (sceneAnchoring.highNonsense) {
+    return buildSceneRefocusSuggestion(scene, challenge, localCopy)
+  }
+
   const sceneModeChallenge = challenge?.id
     ? challenge
     : { id: features.hasRelationshipConnector ? 'intermediate' : 'beginner' }
@@ -1547,6 +1569,11 @@ function buildNarrativeTeachingSummary(
     : checkSceneMatch(answer, scene)
   const meetsLevelTarget = checkLevelTarget({ level, studentText: answer })
   const wordCount = String(answer ?? '').match(/\b[\p{L}\p{N}']+\b/gu)?.length ?? 0
+  const sceneAnchoring = assessSceneAnchoring(answer, scene)
+
+  if (sceneAnchoring.highNonsense) {
+    return localCopy.offSceneSummary
+  }
 
   if (level === 'beginner') {
     if (isSceneRelevant && meetsLevelTarget && clarityScore >= 1 && !hasMajorErrors) {
@@ -1753,6 +1780,7 @@ function normalizeCorrections(value) {
 
 function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, statuses, scene = null) {
   const answerFeatures = detectAnswerFeatures(answer)
+  const sceneAnchoring = assessSceneAnchoring(answer, scene)
   const answerWorks =
     statuses.englishStatus === 'correct' &&
     statuses.sceneFit === 'on scene' &&
@@ -1766,7 +1794,16 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
   )
   const advancedMastery = answerWorks && demonstratesAdvancedMastery(answer, answerFeatures)
   const surfacePolishRewrite = buildSurfacePolishRewrite(answer)
-  const surfaceCorrection = surfacePolishRewrite ? surfacePolishCorrection(surfacePolishRewrite, localCopy, answer) : null
+  const surfaceCorrection =
+    sceneAnchoring.highNonsense
+      ? null
+      : surfacePolishRewrite
+      ? surfacePolishCorrection(surfacePolishRewrite, localCopy, answer)
+      : null
+
+  if (sceneAnchoring.highNonsense) {
+    return appendOptionalCorrection([sceneRefocusCorrection(scene, challenge, localCopy)], null)
+  }
 
   if (advancedMastery) {
     return appendOptionalCorrection([advancedMasteryCorrection(localCopy, challenge, scene)], surfaceCorrection)
@@ -1790,6 +1827,10 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
     }
 
     if (sameText(correction.suggestion, answer)) {
+      return false
+    }
+
+    if (!correctionDisplayIsSafe(correction)) {
       return false
     }
 
@@ -1841,9 +1882,9 @@ function normalizeUsefulCorrections(corrections, answer, challenge, localCopy, s
 }
 
 function appendOptionalCorrection(corrections = [], extraCorrection = null) {
-  const base = corrections.filter(Boolean)
+  const base = corrections.filter(Boolean).filter(correctionDisplayIsSafe)
 
-  if (!extraCorrection?.suggestion) {
+  if (!extraCorrection?.suggestion || !correctionDisplayIsSafe(extraCorrection)) {
     return base
   }
 
@@ -2238,6 +2279,7 @@ function selectBetterVersionMode(answer, scene, challenge, statuses = null) {
   const clarityScore = getClarityScore(answer)
   const hasMajorErrors = detectMajorErrors(answer)
   const features = detectAnswerFeatures(answer)
+  const sceneAnchoring = assessSceneAnchoring(answer, scene)
   const wordCount = String(answer ?? '').match(/\b[\p{L}\p{N}']+\b/gu)?.length ?? 0
   const needsSurfacePolish = needsSceneArticlePolish(answer, scene) || Boolean(buildSurfacePolishRewrite(answer))
   const likelyRunOn = isLikelyRunOn(answer, features)
@@ -2262,6 +2304,10 @@ function selectBetterVersionMode(answer, scene, challenge, statuses = null) {
     statuses?.sceneFit !== 'not scene-based'
 
   if (strongModel) {
+    return 'HIDE'
+  }
+
+  if (sceneAnchoring.highNonsense) {
     return 'HIDE'
   }
 
@@ -3749,6 +3795,54 @@ function defaultStretchCorrection(challenge, localCopy) {
   }
 }
 
+function sceneRefocusCorrection(scene, challenge, localCopy) {
+  return {
+    original: localCopy.yourStory,
+    suggestion: buildSceneRefocusSuggestion(scene, challenge, localCopy),
+    reason: localCopy.reasonSceneRefocus,
+    grammarFocus: 'scene description',
+  }
+}
+
+function buildSceneRefocusSuggestion(scene, challenge, localCopy) {
+  if (challenge?.id === 'advanced') {
+    return localCopy.refocusAdvanced
+  }
+
+  if (challenge?.id === 'intermediate') {
+    return localCopy.refocusIntermediate
+  }
+
+  return localCopy.refocusBeginner
+}
+
+function correctionDisplayIsSafe(correction) {
+  const suggestion = String(correction?.suggestion ?? '').trim()
+  const reason = String(correction?.reason ?? '').trim()
+
+  if (!suggestion || !reason) {
+    return false
+  }
+
+  return !hasUnsafeDisplaySurface(suggestion) && !hasUnsafeDisplaySurface(reason)
+}
+
+function hasUnsafeDisplaySurface(value) {
+  const text = String(value ?? '').trim()
+
+  if (!text) {
+    return true
+  }
+
+  return (
+    polishRewriteSurface(text) !== text ||
+    applyKnownSpellingFixes(text) !== text ||
+    hasObviousRewriteArtifacts(text) ||
+    /[.!?,;:]{2,}/.test(text) ||
+    /,\./.test(text)
+  )
+}
+
 function correctionRespectsLevelRules(correction, answer, challenge) {
   const suggestion = `${correction?.suggestion ?? ''} ${correction?.reason ?? ''}`.trim()
   const features = detectAnswerFeatures(answer)
@@ -3878,43 +3972,7 @@ function detectPastTense(studentText) {
 }
 
 function checkSceneMatch(studentText, sceneModel) {
-  const text = String(studentText ?? '').trim()
-
-  if (!text || !sceneModel) {
-    return false
-  }
-
-  const sceneVocabulary = buildSceneVocabulary(sceneModel)
-  const answerTokens = extractContentTokens(text)
-
-  if (!answerTokens.length || !sceneVocabulary.size) {
-    return detectMentionedActions(text, sceneModel).length > 0
-  }
-
-  const matchedTokens = new Set()
-  const unmatchedTokens = new Set()
-
-  answerTokens.forEach((token) => {
-    if (sceneVocabulary.has(token) || [...sceneVocabulary].some((sceneToken) => sceneToken.startsWith(token) || token.startsWith(sceneToken))) {
-      matchedTokens.add(token)
-    } else {
-      unmatchedTokens.add(token)
-    }
-  })
-
-  if (matchedTokens.size >= 2 && matchedTokens.size > unmatchedTokens.size) {
-    return true
-  }
-
-  if (matchedTokens.size >= 2 && unmatchedTokens.size <= matchedTokens.size + 1) {
-    return true
-  }
-
-  if (matchedTokens.size === 1) {
-    return unmatchedTokens.size === 0
-  }
-
-  return false
+  return assessSceneAnchoring(studentText, sceneModel).isOnScene
 }
 
 function checkLevelTarget({ level, studentText }) {
@@ -4250,6 +4308,64 @@ function buildSceneVocabulary(sceneModel) {
   )
 }
 
+function assessSceneAnchoring(studentText, sceneModel) {
+  const text = String(studentText ?? '').trim()
+
+  if (!text || !sceneModel) {
+    return {
+      isOnScene: false,
+      highNonsense: false,
+      matchedTokens: new Set(),
+      unmatchedTokens: new Set(),
+      mentionedActions: [],
+    }
+  }
+
+  const sceneVocabulary = buildSceneVocabulary(sceneModel)
+  const answerTokens = extractContentTokens(text)
+  const mentionedActions = detectMentionedActions(text, sceneModel)
+
+  if (!answerTokens.length || !sceneVocabulary.size) {
+    return {
+      isOnScene: mentionedActions.length > 0,
+      highNonsense: false,
+      matchedTokens: new Set(),
+      unmatchedTokens: new Set(),
+      mentionedActions,
+    }
+  }
+
+  const matchedTokens = new Set()
+  const unmatchedTokens = new Set()
+
+  answerTokens.forEach((token) => {
+    if (sceneVocabulary.has(token) || [...sceneVocabulary].some((sceneToken) => sceneToken.startsWith(token) || token.startsWith(sceneToken))) {
+      matchedTokens.add(token)
+    } else {
+      unmatchedTokens.add(token)
+    }
+  })
+
+  const isOnScene =
+    (matchedTokens.size >= 2 && matchedTokens.size > unmatchedTokens.size) ||
+    (matchedTokens.size >= 2 && unmatchedTokens.size <= matchedTokens.size + 1) ||
+    (matchedTokens.size === 1 && unmatchedTokens.size === 0)
+
+  const highNonsense =
+    answerTokens.length >= 3 &&
+    mentionedActions.length === 0 &&
+    matchedTokens.size <= 1 &&
+    unmatchedTokens.size >= 2
+
+  return {
+    isOnScene,
+    highNonsense,
+    matchedTokens,
+    unmatchedTokens,
+    mentionedActions,
+  }
+}
+
 function extractContentTokens(value) {
   const text = String(value ?? '').toLowerCase()
   const tokens = text.match(/\b[\p{L}']+\b/gu) ?? []
@@ -4370,10 +4486,15 @@ function generateNextStep({ challenge, feedbackLanguage = 'English', answer = ''
   const copy = localFeedbackCopy(feedbackLanguage)
   const target = currentLevelTargetState(challenge, features, statuses)
   const semanticTenseFit = evaluateSemanticTenseFit(answer, scene, challenge, features)
+  const sceneAnchoring = assessSceneAnchoring(answer, scene)
   const hasAnotherActor = sceneHasAnotherActor(answer, scene)
   const hasAnotherAction = sceneHasAnotherAction(answer, scene)
   const advancedMastery = demonstratesAdvancedMastery(answer, features, { isSceneRelevant: statuses.sceneFit === 'on scene' || statuses.sceneFit === 'partly on scene' })
   const tenseStatus = detectNarrationTenseStatus(answer, features)
+
+  if (sceneAnchoring.highNonsense || statuses.sceneFit === 'not scene-based') {
+    return buildSceneRefocusSuggestion(scene, challenge, copy)
+  }
 
   if (tenseStatus !== 'past') {
     return copy.nextUsePastTense
@@ -4930,6 +5051,7 @@ function localFeedbackCopy(feedbackLanguage) {
       describeCauseResult: () => 'La secuencia de acciones es fácil de seguir.',
       describeTimelineSequence: () => 'La línea de tiempo entre las acciones se entiende con claridad.',
       describeClarity: () => 'La oración es clara y natural.',
+      describeSentenceAttempt: () => 'Escribiste una oración completa.',
       describeSceneActions: () => 'Mencionaste acciones importantes de la escena.',
       backgroundAction: 'una acción de fondo',
       mainEvent: 'un evento principal',
@@ -4969,6 +5091,7 @@ function localFeedbackCopy(feedbackLanguage) {
       presentTenseSceneSummary: 'Mencionaste las acciones principales de la escena, pero los verbos están en presente. Esta tarea requiere pasado.',
       notClearlyPastSummary: 'La oración menciona acciones importantes, pero el tiempo verbal todavía no está claramente en pasado.',
       notClearlyPastSceneSummary: 'Mencionaste las acciones principales de la escena, pero el tiempo verbal todavía no está claramente en pasado.',
+      offSceneSummary: 'Tu oración todavía no describe esta escena. Ahora intenta escribir sobre lo que realmente se ve aquí.',
       sceneInferenceSummary: 'Tu narración está anclada en la escena y usa una interpretación razonable. Concéntrate ahora en que la relación temporal entre los verbos sea clara.',
       sceneSynonymSummary: 'Tu narración está anclada en la escena. Making pancakes y cooking pancakes describen la misma acción; ahora concéntrate en aclarar la relación temporal entre los verbos.',
       reasonStretchBeginner: 'Eso mantiene la práctica dentro del nivel principiante sin exigir conectores.',
@@ -5007,6 +5130,10 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonAdvancedTimelineClear: 'La siguiente mejora es aclarar la relación entre la acción anterior y la posterior.',
       readinessBasic: 'Si quieres un desafío, intenta conectar dos acciones con when o while.',
       readinessIntermediate: 'Estás conectando acciones con claridad. Ahora intenta agregar qué había pasado antes.',
+      refocusBeginner: 'Escribe una o dos oraciones cortas en pasado sobre las personas y las acciones de esta escena.',
+      refocusIntermediate: 'Describe en pasado a las personas y las acciones de esta escena antes de conectarlas.',
+      refocusAdvanced: 'Primero describe claramente en pasado la escena visible. Después agrega qué había pasado antes.',
+      reasonSceneRefocus: 'Tu oración todavía no coincide con esta escena, así que el siguiente paso es describir a las personas y acciones visibles.',
     }
   }
 
@@ -5040,6 +5167,7 @@ function localFeedbackCopy(feedbackLanguage) {
       describeCauseResult: () => 'Följden mellan handlingarna är lätt att följa.',
       describeTimelineSequence: () => 'Tidslinjen mellan handlingarna är tydlig.',
       describeClarity: () => 'Meningen är tydlig och naturlig.',
+      describeSentenceAttempt: () => 'Du skrev en fullständig mening.',
       describeSceneActions: () => 'Du nämnde viktiga handlingar i scenen.',
       backgroundAction: 'en bakgrundshandling',
       mainEvent: 'en huvudhändelse',
@@ -5079,6 +5207,7 @@ function localFeedbackCopy(feedbackLanguage) {
       presentTenseSceneSummary: 'Du nämnde de viktigaste handlingarna i scenen, men verben står i presens. Den här uppgiften kräver dåtid.',
       notClearlyPastSummary: 'Meningen nämner viktiga handlingar, men tempus är ännu inte tydligt i dåtid.',
       notClearlyPastSceneSummary: 'Du nämnde de viktigaste handlingarna i scenen, men tempus är ännu inte tydligt i dåtid.',
+      offSceneSummary: 'Din mening beskriver inte den här scenen ännu. Försök nu skriva om det som faktiskt syns här.',
       sceneInferenceSummary: 'Din berättelse är förankrad i scenen och använder en rimlig tolkning. Fokusera nu på att göra tidsrelationen mellan verben tydlig.',
       sceneSynonymSummary: 'Din berättelse är förankrad i scenen. Making pancakes och cooking pancakes beskriver samma handling; fokusera nu på att göra tidsrelationen mellan verben tydlig.',
       reasonStretchBeginner: 'Det håller övningen på nybörjarnivå utan att kräva kopplingar.',
@@ -5117,6 +5246,10 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonAdvancedTimelineClear: 'Nästa förbättring är att göra relationen mellan den tidigare och den senare handlingen tydligare.',
       readinessBasic: 'Om du vill ha en utmaning kan du prova att koppla två handlingar med when eller while.',
       readinessIntermediate: 'Du kopplar handlingarna tydligt. Nu kan du prova att lägga till vad som hade hänt tidigare.',
+      refocusBeginner: 'Skriv en eller två korta meningar i dåtid om personerna och handlingarna i den här scenen.',
+      refocusIntermediate: 'Beskriv personerna och handlingarna i den här scenen i dåtid innan du kopplar ihop dem.',
+      refocusAdvanced: 'Beskriv först den synliga scenen tydligt i dåtid. Lägg sedan till vad som hade hänt tidigare.',
+      reasonSceneRefocus: 'Din mening matchar inte den här scenen ännu, så nästa steg är att beskriva de synliga personerna och handlingarna.',
     }
   }
 
@@ -5149,6 +5282,7 @@ function localFeedbackCopy(feedbackLanguage) {
     describeCauseResult: () => 'The sequence of actions is easy to follow.',
     describeTimelineSequence: () => 'The timeline between the actions is clear.',
     describeClarity: () => 'The sentence is clear and natural.',
+    describeSentenceAttempt: () => 'You wrote a complete sentence.',
     describeSceneActions: () => 'You mentioned key actions from the scene.',
     backgroundAction: 'a background action',
     mainEvent: 'a main event',
@@ -5188,6 +5322,7 @@ function localFeedbackCopy(feedbackLanguage) {
     presentTenseSceneSummary: 'You mentioned the main actions in the scene, but the verbs are in the present tense. This task requires past tense.',
     notClearlyPastSummary: 'The sentence mentions key actions, but the tense is not clearly past yet.',
     notClearlyPastSceneSummary: 'You mentioned the main actions in the scene, but the tense is not clearly past yet.',
+    offSceneSummary: 'Your sentence does not describe this scene yet. Now try writing about what is actually visible here.',
     sceneInferenceSummary: 'Your narration is anchored in the scene and uses a reasonable interpretation. Now focus on making the time relationship between the verbs clear.',
     sceneSynonymSummary: 'Your narration is anchored in the scene. Making pancakes and cooking pancakes describe the same action; now focus on making the time relationship between the verbs clear.',
     reasonStretchBeginner: 'That keeps the practice at beginner level without requiring connectors.',
@@ -5226,6 +5361,10 @@ function localFeedbackCopy(feedbackLanguage) {
     reasonAdvancedTimelineClear: 'The next improvement is to make the earlier and later actions connect more clearly.',
     readinessBasic: "You're describing the scene clearly. Now try connecting two actions using when or while.",
     readinessIntermediate: "You're connecting actions clearly. Now try adding what happened before.",
+    refocusBeginner: 'Write one or two short past-tense sentences about the people and actions in this scene.',
+    refocusIntermediate: 'Describe the people and actions in this scene in the past before you connect them.',
+    refocusAdvanced: 'First describe the visible scene clearly in the past. Then add what had happened earlier.',
+    reasonSceneRefocus: 'Your sentence does not match this scene yet, so the next step is to describe the visible people and actions.',
   }
 }
 
