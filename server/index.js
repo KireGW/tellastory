@@ -923,7 +923,22 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
   const hasConnector = /\b(when|while|after|before|as|because)\b/.test(normalized)
   const hasAnyPastVerb = hasSimplePast || hasPastContinuous || hasPastPerfect || hasPastPerfectContinuous
   const connectors = [...new Set(normalized.match(/\b(when|while|after|before|as|because|by the time)\b/g) ?? [])]
-  const mentionedActions = detectMentionedActions(answer, scene)
+  const sceneAnchoring = assessSceneAnchoring(answer, scene)
+  const mentionedActions = sceneAnchoring.mentionedActions
+  const preliminarySceneFit = sceneAnchoring.highNonsense
+    ? 'not scene-based'
+    : sceneAnchoring.isOnScene
+    ? 'on scene'
+    : mentionedActions.length
+    ? 'partly on scene'
+    : 'not scene-based'
+  const strongAdvancedTimelineWithoutEarlierPast = advancedClearTimelineWithoutEarlierPast(
+    answer,
+    challenge,
+    features,
+    { sceneFit: preliminarySceneFit },
+    scene,
+  )
   const verbForms = [
     hasSimplePast && 'simple past',
     hasPastContinuous && 'past continuous',
@@ -980,7 +995,12 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
         grammarFocus: 'connector',
       })
     }
-  } else if (!advancedMastery && challenge?.id !== 'beginner' && !hasValidAdvancedStructure) {
+  } else if (
+    !advancedMastery &&
+    challenge?.id !== 'beginner' &&
+    !hasValidAdvancedStructure &&
+    !strongAdvancedTimelineWithoutEarlierPast
+  ) {
     if (!hasPastContinuous) {
       corrections.push({
         original: localCopy.backgroundAction,
@@ -1039,11 +1059,16 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
       : hasSimplePast || hasPastContinuous || hasPastPerfect || hasPastPerfectContinuous
       ? 'mostly correct'
       : 'unclear'
-  const sceneFit = mentionedActions.length ? 'on scene' : 'not scene-based'
+  const sceneFit = preliminarySceneFit
   const taskFit = strongestTaskFit(
     challenge?.id === 'beginner' || hasConnector || hasPastPerfect ? 'partly on target' : 'different skill',
     taskFitFromFeatures(challenge, detectAnswerFeatures(answer)),
   )
+  const resolvedTaskFit = sceneAnchoring.highNonsense
+    ? 'different skill'
+    : semanticTenseFit.verdict === 'mismatch' && taskFit === 'on target'
+    ? 'partly on target'
+    : taskFit
 
   return {
     verdict: localVerdictFor({
@@ -1053,8 +1078,8 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
     }),
     englishStatus,
     sceneFit,
-    taskFit: semanticTenseFit.verdict === 'mismatch' && taskFit === 'on target' ? 'partly on target' : taskFit,
-    summary: tenseMismatchFeedback?.summary || semanticMismatchFeedback?.summary || buildNarrativeTeachingSummary(answer, challenge, localCopy, { englishStatus, sceneFit, taskFit }, scene),
+    taskFit: resolvedTaskFit,
+    summary: tenseMismatchFeedback?.summary || semanticMismatchFeedback?.summary || buildNarrativeTeachingSummary(answer, challenge, localCopy, { englishStatus, sceneFit, taskFit: resolvedTaskFit }, scene),
     strengths: tenseMismatchFeedback?.strengths || semanticMismatchFeedback?.strengths || (strengths.length ? strengths.slice(0, 3) : [localCopy.defaultStrength]),
     corrections: tenseMismatchFeedback
       ? appendOptionalCorrection([tenseMismatchFeedback.correction], surfaceCorrection)
@@ -1067,7 +1092,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
       feedbackLanguage,
       answer,
       scene,
-      statuses: { englishStatus, sceneFit, taskFit },
+      statuses: { englishStatus, sceneFit, taskFit: resolvedTaskFit },
       features,
     }),
     detected: {
@@ -1079,7 +1104,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
     levelReadinessHint: generateLevelReadinessHint({
       challenge,
       feedbackLanguage,
-      statuses: { englishStatus, sceneFit, taskFit },
+      statuses: { englishStatus, sceneFit, taskFit: resolvedTaskFit },
       features,
       recentAttemptHistory,
     }),
@@ -1200,6 +1225,8 @@ function buildSemanticTenseFeedback(
     return null
   }
 
+  const usableStudentBase = answerCanSupportCloseRepair(answer, scene, features)
+
   const strengths = []
   const examples = extractNarrativeExamples(answer)
 
@@ -1219,11 +1246,14 @@ function buildSemanticTenseFeedback(
     strengths.push(localCopy.describeClarity())
   }
 
-  const correctionSuggestion =
-    semanticTenseFit.modelSentence ||
-    (semanticTenseFit.relationshipType === 'simultaneous-background'
-      ? buildSceneRelationshipSentence(scene, 'simultaneous-background')
-      : buildSceneRelationshipSentence(scene, 'interruption'))
+  const correctionSuggestion = usableStudentBase
+    ? semanticTenseFit.reason === 'while_prefers_ongoing'
+      ? localCopy.keepSameActionsWhile
+      : localCopy.keepSameActionsBackgroundEvent
+    : semanticTenseFit.modelSentence ||
+      (semanticTenseFit.relationshipType === 'simultaneous-background'
+        ? buildSceneRelationshipSentence(scene, 'simultaneous-background')
+        : buildSceneRelationshipSentence(scene, 'interruption'))
 
   return {
     summary:
@@ -1741,12 +1771,78 @@ function detectMentionedActions(answer, scene) {
   return actions
     .filter((action) => {
       const actor = action.actor?.toLowerCase()
+      const actorMatches =
+        actor && actor.length >= 4
+          ? new RegExp(`\\b${escapeRegex(actor)}\\b`, 'i').test(normalized)
+          : false
       const words = action.visibleAs?.toLowerCase().match(/[a-z]+/g) ?? []
       const signalWords = words.filter((word) => word.length > 4)
+      const signalMatches = signalWords.some((word) => new RegExp(`\\b${escapeRegex(word)}\\b`, 'i').test(normalized))
+      const aliasMatches = inferActionSemanticAliases(action).some((alias) => new RegExp(`\\b${escapeRegex(alias.toLowerCase())}\\b`, 'i').test(normalized))
 
-      return normalized.includes(actor) || signalWords.some((word) => normalized.includes(word))
+      return actorMatches || signalMatches || aliasMatches
     })
     .map((action) => action.id)
+}
+
+function inferActionSemanticAliases(action) {
+  const id = String(action?.id ?? '').toLowerCase()
+  const visible = String(action?.visibleAs ?? '').toLowerCase()
+  const actor = String(action?.actor ?? '').toLowerCase()
+  const aliases = new Set()
+
+  if (id.includes('ring-box') || visible.includes('ring box')) {
+    aliases.add('proposed')
+    aliases.add('proposal')
+    aliases.add('engaged')
+    aliases.add('engagement')
+    aliases.add('planned')
+    aliases.add('planning')
+    aliases.add('asked her to marry')
+    aliases.add('asked him to marry')
+  }
+
+  if (id.includes('guests-turning') || visible.includes('turning around in surprise')) {
+    aliases.add('surprised')
+    aliases.add('surprise')
+    aliases.add('reacted')
+    aliases.add('noticed')
+  }
+
+  if ((id.includes('suitcase') || visible.includes('suitcase')) && actor === 'luggage') {
+    aliases.add('suitcase')
+    aliases.add('luggage')
+    aliases.add('bag')
+  }
+
+  if (visible.includes('running toward the train')) {
+    aliases.add('catch the train')
+    aliases.add('ran toward the train')
+    aliases.add('was running to catch the train')
+  }
+
+  if (id.includes('announcement') || visible.includes('gate-change announcement')) {
+    aliases.add('board')
+    aliases.add('screen')
+    aliases.add('display')
+    aliases.add('sign')
+    aliases.add('gate change')
+    aliases.add('new gate')
+    aliases.add('gate changed')
+    aliases.add('board changed')
+  }
+
+  if (id.includes('travelers-standing') || visible.includes('standing in line')) {
+    aliases.add('waiting in line')
+    aliases.add('stood in line')
+    aliases.add('were waiting')
+    aliases.add('worried')
+    aliases.add('confused')
+    aliases.add('nobody knew what to do')
+    aliases.add('everybody looked worried')
+  }
+
+  return [...aliases]
 }
 
 function arrayOfStrings(value) {
@@ -1919,14 +2015,23 @@ function sanitizeAdvancedPastPerfectFeedback(feedback, challenge, features, loca
     ? feedback.detected.verbForms
     : feedback.detected.verbForms.filter((form) => form !== 'past perfect continuous')
 
+  const correctedSummary =
+    mentionsForcedPastPerfectContinuous(feedback.summary) ||
+    isPastPerfectContinuousNitpick(feedback.summary) ||
+    criticizesNaturalPastPerfect(feedback.summary)
+      ? features.hasPastPerfectContinuous
+        ? localCopy.summaryAdvancedClear
+        : localCopy.pastPerfectAlreadyWorksSummary
+      : feedback.summary
+
   return {
     ...feedback,
     verdict: feedback.verdict === 'excellent' ? 'excellent' : 'good-work',
     taskFit: 'on target',
-    summary: mentionsPastPerfectContinuousForm(feedback.summary) || criticizesNaturalPastPerfect(feedback.summary)
-      ? localCopy.pastPerfectAlreadyWorksSummary
-      : feedback.summary,
-    strengths: ensureStrength(feedback.strengths, localCopy.strengthPastPerfect),
+    summary: correctedSummary,
+    strengths: features.hasPastPerfectContinuous
+      ? feedback.strengths
+      : ensureStrength(feedback.strengths, localCopy.strengthPastPerfect),
     corrections: sanitizedCorrections.length ? sanitizedCorrections : [consequenceCorrection(localCopy, features)],
     rewrite: mentionsPastPerfectContinuousForm(feedback.rewrite) || isPastPerfectContinuousNitpick(feedback.rewrite)
       ? ''
@@ -2222,6 +2327,10 @@ function sceneEventActorSubject(actor = '') {
 }
 
 function normalizeRewrite(value, answer, scene, challenge, localCopy, corrections = [], statuses = null) {
+  if (corrections.some(correctionKeepsStudentSentence)) {
+    return ''
+  }
+
   const mode = selectBetterVersionMode(answer, scene, challenge, statuses)
 
   if (mode === 'HIDE') {
@@ -2320,6 +2429,9 @@ function selectBetterVersionMode(answer, scene, challenge, statuses = null) {
   }
 
   if (semanticTenseFit.verdict === 'mismatch') {
+    if (answerCanSupportCloseRepair(answer, scene, features)) {
+      return 'HIDE'
+    }
     return 'REPAIR'
   }
 
@@ -2340,6 +2452,20 @@ function selectBetterVersionMode(answer, scene, challenge, statuses = null) {
   }
 
   return 'REBUILD'
+}
+
+function correctionKeepsStudentSentence(correction) {
+  const suggestion = String(correction?.suggestion ?? '').toLowerCase().trim()
+
+  if (!suggestion) {
+    return false
+  }
+
+  return (
+    suggestion.startsWith('keep this sentence') ||
+    suggestion.startsWith('mantén esta oración') ||
+    suggestion.startsWith('behåll den här meningen')
+  )
 }
 
 function isLikelySceneMismatch(studentText, sceneModel) {
@@ -2407,7 +2533,7 @@ function chooseRepairRewrite(value, answer, scene, challenge, corrections = []) 
     ...coreRepairCandidates,
     applySceneArticlePolish(answer, scene),
     repairAdvancedTimelineRewrite(answer, scene, challenge),
-    repairRelationshipRewrite(answer, scene, challenge),
+    ...(usableStudentBase ? [] : [repairRelationshipRewrite(answer, scene, challenge)]),
     ...(
       preserveAdvancedStructure || usableStudentBase
         ? []
@@ -2580,6 +2706,8 @@ function hasObviousRewriteArtifacts(value) {
   return (
     /\b(?:am|is|are)\s+(?:came|come|ran|went|forgot|opened|closed|turned|approached|blocked|checked|carried|pointed|mixed|fixed|spilled|dropped)\b/i.test(text) ||
     /\ba\s+past\b/i.test(text) ||
+    /\b(?:the|a|an)\s+(?:working|checking|carrying|waiting|typing|presenting|running|standing)\b(?=\s+(?:with|at|on|in|to|for|from|toward)\b|[.!?,])/i.test(text) ||
+    /\b(?:the|a|an)\s+(?:on|in|at|with|to|for|from|toward|before|after|during|while)\b/i.test(text) ||
     /(^|[.!?]\s*)(?:train|man|woman|boy|girl|waiter|vendor|cyclist|conductor|doctor|nurse|visitor|actor|director|mechanic|librarian|friend|guest|customer|farmer|goat|hiker)\s+(?:ran|walked|waited|checked|carried|pointed|mixed|fixed|slept|spoke|came|went|approached|knocked|opened|proposed|watched|looked|turned|forgot|dropped|arrived|blocked)\b/i.test(text) ||
     /\bforgot suitcase\b/i.test(text) ||
     /\bopen suitcase\b/i.test(text) ||
@@ -2714,6 +2842,7 @@ function applyKnownSpellingFixes(value = '') {
 
   const replacements = [
     [/\bdarek\b/gi, 'dark'],
+    [/\bnodody\b/gi, 'nobody'],
     [/\bshe were\b/gi, 'she was'],
     [/\bhe were\b/gi, 'he was'],
     [/\bit were\b/gi, 'it was'],
@@ -3664,6 +3793,7 @@ function commonSimplePastMap() {
     arrive: 'arrived',
     ask: 'asked',
     bargain: 'bargained',
+    be: 'was',
     blow: 'blew',
     break: 'broke',
     build: 'built',
@@ -3684,7 +3814,9 @@ function commonSimplePastMap() {
     forget: 'forgot',
     gather: 'gathered',
     jump: 'jumped',
+    keep: 'kept',
     knock: 'knocked',
+    know: 'knew',
     leave: 'left',
     look: 'looked',
     march: 'marched',
@@ -4292,6 +4424,7 @@ function buildSceneVocabulary(sceneModel) {
     ...(sceneModel?.sceneScript?.coreActions?.flatMap((action) => [
       action?.actor,
       action?.visibleAs,
+      ...inferActionSemanticAliases(action),
       ...(action?.recommendedVerbForms ?? []),
     ]) ?? []),
     ...(sceneModel?.sceneScript?.relationships?.flatMap((relationship) => [
@@ -4347,6 +4480,8 @@ function assessSceneAnchoring(studentText, sceneModel) {
   })
 
   const isOnScene =
+    mentionedActions.length >= 2 ||
+    (mentionedActions.length >= 1 && matchedTokens.size >= 2) ||
     (matchedTokens.size >= 2 && matchedTokens.size > unmatchedTokens.size) ||
     (matchedTokens.size >= 2 && unmatchedTokens.size <= matchedTokens.size + 1) ||
     (matchedTokens.size === 1 && unmatchedTokens.size === 0)
@@ -4789,6 +4924,12 @@ function detectPresentNarrationSignals(studentText) {
   const simplePastMap = commonSimplePastMap()
   const baseForms = new Set(Object.keys(simplePastMap))
   const thirdPersonForms = new Map()
+  const likelyDeterminers = new Set([
+    'a', 'an', 'the',
+    'this', 'that', 'these', 'those',
+    'my', 'your', 'his', 'her', 'its', 'our', 'their',
+    'some', 'any', 'each', 'every', 'another',
+  ])
 
   for (const baseForm of baseForms) {
     thirdPersonForms.set(toThirdPersonSingular(baseForm), baseForm)
@@ -4802,9 +4943,31 @@ function detectPresentNarrationSignals(studentText) {
   for (let index = 0; index < tokens.length; index += 1) {
     const current = tokens[index].value.toLowerCase()
     const previous = tokens[index - 1]?.value?.toLowerCase() ?? ''
+    const previousTwo = tokens[index - 2]?.value?.toLowerCase() ?? ''
+    const previousThree = tokens[index - 3]?.value?.toLowerCase() ?? ''
     const next = tokens[index + 1]?.value?.toLowerCase() ?? ''
 
     if (previous === 'to' || previous === 'will' || previous === 'would' || previous === 'can' || previous === 'could') {
+      continue
+    }
+
+    if (likelyDeterminers.has(previous)) {
+      continue
+    }
+
+    const determinerChainBefore =
+      likelyDeterminers.has(previousTwo) ||
+      likelyDeterminers.has(previousThree)
+    const nounPhraseEnding =
+      !next ||
+      next === 'and' ||
+      next === 'or' ||
+      next === 'but' ||
+      next === 'because' ||
+      next === 'when' ||
+      next === 'while'
+
+    if (determinerChainBefore && nounPhraseEnding) {
       continue
     }
 
@@ -4878,6 +5041,8 @@ function advancedClearTimelineWithoutEarlierPast(
   statuses = {},
   scene = null,
 ) {
+  const resolvedStatuses = statuses ?? {}
+
   if (challenge?.id !== 'advanced') {
     return false
   }
@@ -4887,8 +5052,8 @@ function advancedClearTimelineWithoutEarlierPast(
   }
 
   const isSceneRelevant =
-    statuses.sceneFit
-      ? statuses.sceneFit !== 'not scene-based'
+    resolvedStatuses.sceneFit
+      ? resolvedStatuses.sceneFit !== 'not scene-based'
       : checkSceneMatch(answer, scene)
   const semanticTenseFit = evaluateSemanticTenseFit(answer, scene, challenge, features)
   const clarityScore = String(answer ?? '').trim() ? getClarityScore(answer) : 0
@@ -4978,6 +5143,8 @@ function isLikelySimplePastVerb(candidate) {
 function isKnownSimplePastVerb(candidate) {
   const knownPastVerbs = new Set([
     'began',
+    'was',
+    'were',
     'broke',
     'blew',
     'brought',
@@ -4999,6 +5166,7 @@ function isKnownSimplePastVerb(candidate) {
     'lost',
     'made',
     'met',
+    'knew',
     'ran',
     'rang',
     'rose',
@@ -5331,6 +5499,8 @@ function localFeedbackCopy(feedbackLanguage) {
     reasonKeepAndAddPastSentence: 'The verb relationship already works. The next step is to continue the narration in the past.',
     keepAndAddResult: 'Keep this sentence. Add a result with so or because.',
     reasonKeepAndAddResult: 'The time relationship is already clear. Now you can show the consequence.',
+    keepSameActionsBackgroundEvent: 'Keep the same scene details. Use one ongoing background action and one shorter past event.',
+    keepSameActionsWhile: 'Keep the same scene details. With while, make both actions ongoing.',
     keepAndAddNextEvent: 'Keep this sentence. Add one short sentence about what happened next.',
     reasonKeepAndAddNextEvent: 'The cause-and-result relationship already works. The next step is to continue the narration.',
     keepAndAddEarlierPast: 'Keep this sentence. Add what had already happened before.',

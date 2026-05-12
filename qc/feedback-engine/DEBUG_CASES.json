@@ -1,0 +1,139 @@
+[
+  {
+    "id": "gate-change-past-ok",
+    "inputQuality": "natural",
+    "sceneId": "airport-delay",
+    "selectedDifficulty": "beginner",
+    "studentText": "There was a sudden gate change and nobody knew what to do.",
+    "feedbackLanguage": "English",
+    "recentAttemptHistory": [],
+    "expect": {
+      "verdict": "excellent",
+      "sceneFit": "on scene",
+      "taskFit": "on target",
+      "rewriteShouldBeEmpty": true,
+      "mustContainText": [
+        "simple past (was, knew)",
+        "You described the scene clearly in the past."
+      ],
+      "mustNotContainText": [
+        "not clearly past yet",
+        "Change the main verbs to the past tense"
+      ]
+    }
+  },
+  {
+    "id": "gate-change-typo-last",
+    "inputQuality": "noisy",
+    "sceneId": "airport-delay",
+    "selectedDifficulty": "beginner",
+    "studentText": "There was a sudden gate change and nodody knew what to do.",
+    "feedbackLanguage": "English",
+    "recentAttemptHistory": [],
+    "expect": {
+      "verdict": "excellent",
+      "sceneFit": "on scene",
+      "taskFit": "on target",
+      "mustContainText": [
+        "nobody",
+        "capitalization, punctuation, and spelling"
+      ],
+      "lastCorrectionShouldMention": "spelling",
+      "mustNotContainText": [
+        "not clearly past yet"
+      ]
+    }
+  },
+  {
+    "id": "platform-beginner-past-ok",
+    "inputQuality": "natural",
+    "sceneId": "train-platform",
+    "selectedDifficulty": "beginner",
+    "studentText": "John was running to catch the train. Somebody left an open suitcase on the platform.",
+    "feedbackLanguage": "English",
+    "recentAttemptHistory": [],
+    "expect": {
+      "verdict": "excellent",
+      "sceneFit": "on scene",
+      "taskFit": "on target",
+      "rewriteShouldBeEmpty": true,
+      "mustContainText": [
+        "past continuous (was running)",
+        "simple past",
+        "left)"
+      ],
+      "mustNotContainText": [
+        "not clearly past yet",
+        "Change the main verbs to the past tense"
+      ]
+    }
+  },
+  {
+    "id": "proposal-advanced-valid",
+    "inputQuality": "natural",
+    "sceneId": "restaurant-proposal",
+    "selectedDifficulty": "advanced",
+    "studentText": "Marc finally proposed. I'm sure he had been planning it for a long time. It was a beautiful moment.",
+    "feedbackLanguage": "English",
+    "recentAttemptHistory": [],
+    "expect": {
+      "verdict": "excellent",
+      "sceneFit": "on scene",
+      "taskFit": "on target",
+      "rewriteShouldBeEmpty": true,
+      "mustContainText": [
+        "had been planning",
+        "You showed clearly what had happened earlier"
+      ],
+      "mustNotContainText": [
+        "First describe the visible scene clearly",
+        "Use past perfect continuous only when"
+      ]
+    }
+  },
+  {
+    "id": "off-scene-nonsense-hidden-rewrite",
+    "inputQuality": "broken",
+    "sceneId": "midnight-knock",
+    "selectedDifficulty": "beginner",
+    "studentText": "banana eating peach on beach is fun to watch,",
+    "feedbackLanguage": "English",
+    "recentAttemptHistory": [],
+    "expect": {
+      "verdict": "keep-building",
+      "sceneFit": "not scene-based",
+      "taskFit": "different skill",
+      "rewriteShouldBeEmpty": true,
+      "mustContainText": [
+        "does not describe this scene yet"
+      ],
+      "mustNotContainText": [
+        "watched,.",
+        "banana eating peach on beach is fun to watched"
+      ]
+    }
+  },
+  {
+    "id": "advanced-timeline-without-had",
+    "inputQuality": "natural",
+    "sceneId": "market-spill",
+    "selectedDifficulty": "advanced",
+    "studentText": "I was just about to walk away with the oranges when I dropped them on the floor. Right then, a cyclist approached and had to turn quickly to avoid the oranges.",
+    "feedbackLanguage": "English",
+    "recentAttemptHistory": [],
+    "expect": {
+      "verdict": "good-work",
+      "sceneFit": "on scene",
+      "taskFit": "partly on target",
+      "rewriteShouldBeEmpty": true,
+      "mustContainText": [
+        "timeline makes sense"
+      ],
+      "mustNotContainText": [
+        "past continuous",
+        "had to turn",
+        "Train is come"
+      ]
+    }
+  }
+]

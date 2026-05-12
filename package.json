@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:feedback": "VERCEL=1 node scripts/feedback-regression.mjs",
-    "qc:feedback": "node scripts/feedback-qc.mjs"
+    "qc:feedback": "node scripts/feedback-qc.mjs",
+    "debug:feedback": "node scripts/debug-feedback.mjs"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
