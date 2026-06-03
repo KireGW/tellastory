@@ -277,6 +277,7 @@ function createExpectedFeedbackBehavior(selectedDifficulty, variant) {
     phrasalVerbShouldMention: null,
     phrasalVerbShouldDetect: null,
     phrasalVerbShouldNotDetect: null,
+    forbiddenFeedbackText: [],
     nextStepShould: ['one action only', 'current level'],
     readinessHintShouldBe: 'none',
   }
@@ -290,6 +291,7 @@ function createExpectedFeedbackBehavior(selectedDifficulty, variant) {
       'beginner-higher-grammar-earlier',
       'readiness-beginner',
       'intermediate-correct-when',
+      'intermediate-simple-past-when',
       'intermediate-already-had',
       'readiness-intermediate',
       'advanced-correct-had',
@@ -344,9 +346,19 @@ function createExpectedFeedbackBehavior(selectedDifficulty, variant) {
     base.betterVersionMode = 'HIDE'
   }
 
+  if (variant === 'meaning-unit-got-scared') {
+    base.phrasalVerbShouldMention = 'got scared'
+    base.betterVersionDisplay = 'hide'
+    base.betterVersionMode = 'HIDE'
+  }
+
   if (variant === 'phrasal-non-merge') {
     base.phrasalVerbShouldNotDetect = 'let go'
     base.betterVersionMode = 'REBUILD'
+  }
+
+  if (variant === 'intermediate-simple-past-when') {
+    base.forbiddenFeedbackText.push('interrupted another')
   }
 
   if (normalizedDifficulty === 'beginner') {
@@ -386,7 +398,7 @@ function createExpectedRatingBehavior(selectedDifficulty, variant) {
   }
 
   if (normalizedDifficulty === 'beginner') {
-    if (['beginner-clear-short', 'beginner-clear-detail', 'beginner-higher-grammar-connector', 'beginner-higher-grammar-earlier', 'readiness-beginner', 'phrasal-went-off', 'phrasal-blew-away', 'phrasal-rolled-away', 'phrasal-hurried-past'].includes(variant)) {
+    if (['beginner-clear-short', 'beginner-clear-detail', 'beginner-higher-grammar-connector', 'beginner-higher-grammar-earlier', 'readiness-beginner', 'phrasal-went-off', 'phrasal-blew-away', 'phrasal-rolled-away', 'phrasal-hurried-past', 'meaning-unit-got-scared'].includes(variant)) {
       base.expectedRatingBand = 'high'
     } else if (['beginner-mixed-verb-choice', 'beginner-underdeveloped', 'beginner-scene-mismatch', 'phrasal-non-merge'].includes(variant)) {
       base.expectedRatingBand = 'low'
@@ -394,7 +406,7 @@ function createExpectedRatingBehavior(selectedDifficulty, variant) {
   }
 
   if (normalizedDifficulty === 'intermediate') {
-    if (['intermediate-correct-when', 'intermediate-correct-while', 'readiness-intermediate', 'intermediate-already-had', 'phrasal-rolled-in'].includes(variant)) {
+    if (['intermediate-correct-when', 'intermediate-correct-while', 'intermediate-simple-past-when', 'readiness-intermediate', 'intermediate-already-had', 'phrasal-rolled-in'].includes(variant)) {
       base.expectedRatingBand = 'high'
     } else if (['intermediate-no-connector', 'intermediate-too-beginner', 'intermediate-scene-mismatch'].includes(variant)) {
       base.expectedRatingBand = 'low'
@@ -456,6 +468,9 @@ function buildCasesForScene(scene) {
   const shortNarration = actionSentence(eventAction).trim()
   const relationshipUnclear = `${actionSentence(backgroundAction)} ${actionSentence(simultaneousActionOr(parts))}`
   const intermediatePolish = `${stripLeadingArticle(subjectForActor(backgroundAction.actor))} ${backgroundAction.recommendedVerbForms?.[0]} when ${lowercaseFirst(subjectForActor(eventAction.actor))} ${eventAction.recommendedVerbForms?.[0]}.`
+  const simplePastWhen = scene.id === 'midnight-knock'
+    ? 'The cat jumped when somebody knocked on the door.'
+    : ''
   const overcomplicated = `${whenSentence.replace(/\.$/, '')} because ${lowercaseFirst(subjectForActor(reactionAction.actor))} ${reactionAction.recommendedVerbForms?.[0]}.`
   const advancedPolish = `${stripLeadingArticle(subjectForActor(earlierAction.actor))} ${earlierAction.recommendedVerbForms?.find((verb) => verb.includes('had')) || `had ${earlierAction.recommendedVerbForms?.[0] || 'done something'}`} before ${lowercaseFirst(subjectForActor(eventAction.actor))} ${eventAction.recommendedVerbForms?.[0]}.`
   const advancedAwkward = `${subjectForActor(backgroundAction.actor)} had been ${stripAuxiliary(backgroundAction.recommendedVerbForms?.[0])} when ${lowercaseFirst(subjectForActor(eventAction.actor))} ${eventAction.recommendedVerbForms?.[0]}.`
@@ -481,6 +496,9 @@ function buildCasesForScene(scene) {
 
     makeCase(scene, 'intermediate', 'intermediate-no-connector', simpleNarration, 'Should ask to connect actions.', 'none'),
     makeCase(scene, 'intermediate', 'intermediate-correct-when', whenSentence, 'Should reinforce action relationships.', 'none'),
+    ...(simplePastWhen
+      ? [makeCase(scene, 'intermediate', 'intermediate-simple-past-when', simplePastWhen, 'Should praise when as a time relationship, not an interruption.', 'none')]
+      : []),
     makeCase(scene, 'intermediate', 'intermediate-correct-while', whileSentence, 'Should reinforce overlap/relationship language.', 'none'),
     makeCase(scene, 'intermediate', 'intermediate-polish-article', intermediatePolish, 'Mostly correct intermediate answer with a small article fix.', 'none'),
     makeCase(scene, 'intermediate', 'intermediate-wrong-when', `${subjectForActor(eventAction.actor)} ${eventAction.recommendedVerbForms?.[0]} when ${lowercaseFirst(subjectForActor(backgroundAction.actor))} ${backgroundAction.recommendedVerbForms?.[0]}.`, 'Misused connector should not count as clear readiness.', 'none'),
@@ -539,6 +557,7 @@ function buildPhrasalVerbCases(scene) {
 
   if (scene.id === 'midnight-knock') {
     cases.push(
+      makeCase(scene, 'beginner', 'meaning-unit-got-scared', 'The cat got scared and jumped.', 'Detect the full change-of-state phrase in feedback.', 'none'),
       makeCase(scene, 'beginner', 'phrasal-non-merge', 'The child let go of the balloon.', 'Do not merge unknown multiword sequences as phrasal verbs.', 'none'),
     )
   }
@@ -822,6 +841,9 @@ function evaluateCase(qcCase, result) {
   if (!summaryHasFormMeaning) feedbackFindings.push('feedback did not connect form to meaning clearly')
   if (!summaryUsesStudentWords) feedbackFindings.push('feedback did not reference student wording')
   if (misreadPastPerfectAsSimplePast) feedbackFindings.push('feedback misread past perfect as simple past')
+  if (qcCase.expectedFeedbackBehavior.forbiddenFeedbackText.some((text) => containsAny(combinedWorked, [text]))) {
+    feedbackFindings.push('feedback used forbidden wording for this tense pattern')
+  }
   if (!phrasalDetectionPass) feedbackFindings.push('phrasal verb detector missed or mis-merged a meaning unit')
   if (!phrasalMentionPass) feedbackFindings.push('feedback did not refer to the full phrasal verb')
   if (betterVersionQuality !== 'PASS') feedbackFindings.push('better version felt generic or artificial')

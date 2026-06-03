@@ -165,6 +165,11 @@ function translateCanonicalFeedbackText(value, localCopy) {
     return localCopy.describeMainEvent(match[1])
   }
 
+  match = text.match(/^You used simple past \((.+)\) for completed story events\.$/)
+  if (match) {
+    return localCopy.describeCompletedEvents(match[1])
+  }
+
   match = text.match(/^You used past perfect \((.+)\) to show what had happened earlier\.$/)
   if (match) {
     return localCopy.describeEarlierPast(match[1])
@@ -219,6 +224,14 @@ function canonicalFeedbackTextMap(localCopy) {
     ['Use when or while to connect two actions in the past.', localCopy.useWhenWhile],
     ['Join them with when, while, because, before, or after.', localCopy.useConnector],
     ['Add had + past participle or had been + -ing.', localCopy.usePastPerfect],
+    ['Change the verbs that are still in present tense to past tense.', localCopy.instructionSimplePastCorrection],
+    ['Use was/were + -ing for the action that was already happening.', localCopy.instructionPastContinuousCorrection],
+    ['Show what happened earlier with had or had been.', localCopy.instructionPastPerfectCorrection],
+    ['Connect the actions with a clear time connector.', localCopy.instructionConnectorCorrection],
+    ['Make the time relationship between the actions clearer.', localCopy.instructionTimeRelationshipCorrection],
+    ['Fix the spelling and polish the sentence.', localCopy.instructionSurfaceCorrection],
+    ['Make the earlier and later timeline clearer.', localCopy.instructionAdvancedCorrection],
+    ['Rewrite the idea more clearly.', localCopy.instructionClarityCorrection],
     ['Add one more past-tense sentence about a visible action.', localCopy.stretchBeginner],
     ['Try adding one earlier past detail with had or had been.', localCopy.tryEarlierDetail],
     ['Beginner level asks for clear past narration, not only simple past.', localCopy.reasonPastNarration],
@@ -318,6 +331,7 @@ For the summary, strengths, and correction reasons:
 - connect form to meaning in the story
 - highlight the relationship between actions
 Prefer short contrasts such as "past continuous (was blowing) for the background vs simple past (chased) for the main event."
+Say "one action interrupted another" for "when" only when that specific relationship uses past continuous + simple past. For simple past + simple past with "when", say the actions relate in time instead.
 Use these meanings consistently:
 - past continuous -> background or ongoing action
 - simple past -> main event or completed action
@@ -456,7 +470,7 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
     verdict: normalizeVerdict(feedback.verdict, statuses, challenge, answerFeatures, analysis),
     ...statuses,
     summary,
-    strengths: arrayOfStrings(feedback.strengths).map(cleanFeedbackText).slice(0, 3),
+    strengths: normalizeFeedbackStrengths(feedback.strengths, answerFeatures, localCopy, challenge),
     corrections: usefulCorrections,
     rewrite: cleanFeedbackText(normalizeRewrite(feedback.rewrite, answer, scene, challenge, localCopy, usefulCorrections, statuses)),
     challenge: cleanFeedbackText(generateNextStep({ challenge, feedbackLanguage, answer, scene, statuses, features: answerFeatures })),
@@ -483,7 +497,10 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
   if (tenseMismatchFeedback) {
     normalized.summary = tenseMismatchFeedback.summary
     normalized.strengths = tenseMismatchFeedback.strengths
-    normalized.corrections = appendOptionalCorrection([tenseMismatchFeedback.correction], normalizedSurfaceCorrection)
+    normalized.corrections = appendOptionalCorrection(
+      [tenseMismatchFeedback.correction],
+      correctionAlreadyRepairsSurface(answer, tenseMismatchFeedback.correction?.suggestion) ? null : normalizedSurfaceCorrection,
+    )
     const safeTenseRewrite = String(tenseMismatchFeedback.correction?.suggestion ?? '').trim()
     normalized.rewrite =
       safeTenseRewrite &&
@@ -517,7 +534,7 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
     teachingStrengths.length &&
     !normalized.strengths.some(hasSpecificNarrativeTeaching)
   ) {
-    normalized.strengths = mergeDetectedValues(teachingStrengths, normalized.strengths).slice(0, 3)
+    normalized.strengths = mergeDetectedValues(teachingStrengths, normalized.strengths).slice(0, strengthLimitForChallenge(challenge))
   }
 
   if (!normalized.strengths.length) {
@@ -557,6 +574,32 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
 
 function normalizeStatus(value, allowedValues, fallback) {
   return allowedValues.includes(value) ? value : fallback
+}
+
+function normalizeFeedbackStrengths(strengths, features, localCopy, challenge = null) {
+  return arrayOfStrings(strengths)
+    .map(cleanFeedbackText)
+    .map((strength) => {
+      if (
+        !features.hasInterruption &&
+        /^You used the connector 'when' to show when one action interrupted another\.$/.test(strength)
+      ) {
+        return localCopy.describeConnector('when')
+      }
+
+      return strength
+    })
+    .slice(0, strengthLimitForChallenge(challenge))
+}
+
+function strengthLimitForChallenge(challenge) {
+  return String(challenge?.id ?? '').trim().toLowerCase() === 'advanced' ? 4 : 3
+}
+
+function describeWhenStrength(answer, localCopy, features = detectAnswerFeatures(answer)) {
+  return features.hasInterruption
+    ? localCopy.describeWhenRelationship('when')
+    : localCopy.describeConnector('when')
 }
 
 function strongestTaskFit(first, second) {
@@ -1069,8 +1112,16 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
     : semanticTenseFit.verdict === 'mismatch' && taskFit === 'on target'
     ? 'partly on target'
     : taskFit
+  const displayedCorrections = tenseMismatchFeedback
+    ? appendOptionalCorrection(
+      [tenseMismatchFeedback.correction],
+      correctionAlreadyRepairsSurface(answer, tenseMismatchFeedback.correction?.suggestion) ? null : surfaceCorrection,
+    )
+    : semanticMismatchFeedback
+    ? appendOptionalCorrection([semanticMismatchFeedback.correction], surfaceCorrection)
+    : appendOptionalCorrection(finalCorrections, surfaceCorrection)
 
-  return {
+  return ensureDistinctRewrite({
     verdict: localVerdictFor({
       challenge,
       answer,
@@ -1080,13 +1131,9 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
     sceneFit,
     taskFit: resolvedTaskFit,
     summary: tenseMismatchFeedback?.summary || semanticMismatchFeedback?.summary || buildNarrativeTeachingSummary(answer, challenge, localCopy, { englishStatus, sceneFit, taskFit: resolvedTaskFit }, scene),
-    strengths: tenseMismatchFeedback?.strengths || semanticMismatchFeedback?.strengths || (strengths.length ? strengths.slice(0, 3) : [localCopy.defaultStrength]),
-    corrections: tenseMismatchFeedback
-      ? appendOptionalCorrection([tenseMismatchFeedback.correction], surfaceCorrection)
-      : semanticMismatchFeedback
-      ? appendOptionalCorrection([semanticMismatchFeedback.correction], surfaceCorrection)
-      : appendOptionalCorrection(finalCorrections, surfaceCorrection),
-    rewrite: normalizeRewrite(scene.sample, answer, scene, challenge, localCopy, tenseMismatchFeedback ? [tenseMismatchFeedback.correction] : semanticMismatchFeedback ? [semanticMismatchFeedback.correction] : finalCorrections),
+    strengths: tenseMismatchFeedback?.strengths || semanticMismatchFeedback?.strengths || (strengths.length ? strengths.slice(0, strengthLimitForChallenge(challenge)) : [localCopy.defaultStrength]),
+    corrections: displayedCorrections,
+    rewrite: normalizeRewrite(scene.sample, answer, scene, challenge, localCopy, displayedCorrections),
     challenge: generateNextStep({
       challenge,
       feedbackLanguage,
@@ -1108,7 +1155,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
       features,
       recentAttemptHistory,
     }),
-  }
+  }, answer, challenge, localCopy)
 }
 
 function buildTenseMismatchFeedback(answer, scene, challenge, localCopy, features = detectAnswerFeatures(answer)) {
@@ -1137,10 +1184,15 @@ function buildTenseMismatchFeedback(answer, scene, challenge, localCopy, feature
   }
 
   const repairedSuggestion = chooseTenseMismatchSuggestion(answer, scene, challenge, localCopy, features, sceneAnchoring)
+  const hasMixedPastAndPresent =
+    (features.hasPastContinuous || features.hasPastPerfect || features.hasPastPerfectContinuous || features.hasSimplePast) &&
+    features.presentSignals?.hasExplicitPresent
   const mismatchReason = sceneAnchoring.highNonsense
     ? localCopy.reasonSceneRefocus
     : features.hasAgreementMismatch
     ? localCopy.reasonPastTenseAndAgreement
+    : hasMixedPastAndPresent
+    ? localCopy.reasonMixedPastPresent
     : tenseStatus === 'present'
     ? localCopy.reasonPastTenseMismatch
     : localCopy.reasonPastTenseUnclear
@@ -1149,6 +1201,8 @@ function buildTenseMismatchFeedback(answer, scene, challenge, localCopy, feature
     summary:
       sceneAnchoring.highNonsense
         ? localCopy.offSceneSummary
+        : hasMixedPastAndPresent
+        ? localCopy.mixedPastPresentSummary
         : tenseStatus === 'present'
         ? mentionedActions.length
           ? localCopy.presentTenseSceneSummary
@@ -1175,8 +1229,7 @@ function chooseTenseMismatchSuggestion(answer, scene, challenge, localCopy, feat
     ? challenge
     : { id: features.hasRelationshipConnector ? 'intermediate' : 'beginner' }
   const preferSceneModelFirst =
-    Boolean(features.presentSignals?.hasUnclearBaseForms) ||
-    detectMajorErrors(answer)
+    Boolean(features.presentSignals?.hasUnclearBaseForms)
 
   const candidates = preferSceneModelFirst
     ? [
@@ -1237,7 +1290,7 @@ function buildSemanticTenseFeedback(
   }
 
   if (features.hasWhen) {
-    strengths.push(localCopy.describeWhenRelationship('when'))
+    strengths.push(describeWhenStrength(answer, localCopy, features))
   } else if (features.hasWhile) {
     strengths.push(localCopy.describeWhileRelationship('while'))
   }
@@ -1303,52 +1356,121 @@ function matchNarrativeExample(source, pattern) {
   return match ? match[0].trim() : ''
 }
 
-function findSimplePastExamples(source, phrasalUnits = detectPhralVerbUnitsSafe(source), maxItems = 2) {
+function hasWhenInterruptionPattern(answer) {
+  const source = String(answer ?? '').trim()
+
+  if (!/\bwhen\b/i.test(source)) {
+    return false
+  }
+
+  const sentences = source.split(/[.!?;]+/)
+
+  for (const sentence of sentences) {
+    const sentenceText = sentence.trim()
+
+    if (!/\bwhen\b/i.test(sentenceText)) {
+      continue
+    }
+
+    for (const match of sentenceText.matchAll(/\bwhen\b/gi)) {
+      const before = trailingNarrativeClause(sentenceText.slice(0, match.index))
+      const after = leadingNarrativeClause(sentenceText.slice(match.index + match[0].length))
+      const beforeHasContinuous = clauseHasPastContinuous(before)
+      const afterHasContinuous = clauseHasPastContinuous(after)
+      const beforeHasSimplePast = clauseHasSimplePast(before)
+      const afterHasSimplePast = clauseHasSimplePast(after)
+
+      if (
+        (beforeHasContinuous && afterHasSimplePast) ||
+        (afterHasContinuous && beforeHasSimplePast)
+      ) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+function trailingNarrativeClause(value) {
+  return String(value ?? '').split(/,\s*|\s+(?:and|but|so)\s+/i).pop()?.trim() ?? ''
+}
+
+function leadingNarrativeClause(value) {
+  return String(value ?? '').split(/,\s*|\s+(?:and|but|so)\s+/i)[0]?.trim() ?? ''
+}
+
+function clauseHasPastContinuous(value) {
+  return /\b(was|were)\s+(?:not\s+)?\w+ing\b/i.test(String(value ?? ''))
+}
+
+function clauseHasSimplePast(value) {
+  const clause = String(value ?? '').trim()
+  return findSimplePastExamples(clause, detectPhrasalVerbUnits(clause), 1).length > 0
+}
+
+function findSimplePastExamples(source, phrasalUnits = detectPhralVerbUnitsSafe(source), maxItems = 3) {
   const examples = []
   const seen = new Set()
 
-  const addExample = (value) => {
+  const addExample = (value, index = Number.MAX_SAFE_INTEGER) => {
     const normalized = String(value ?? '').trim().toLowerCase()
 
     if (!normalized || seen.has(normalized)) {
       return
     }
 
-    examples.push(String(value).trim())
+    examples.push({ value: String(value).trim(), index })
     seen.add(normalized)
   }
 
   for (const unit of phrasalUnits.filter((candidate) => candidate.tense === 'simple past')) {
-    addExample(unit.surface)
+    addExample(unit.surface, unit.index)
   }
 
   const words = tokenizeNarrativeWords(String(source ?? ''))
+  const pastStateUnits = detectPastStateUnits(words)
   const phrasalIndexes = new Set(phrasalUnits.filter((unit) => unit.tense === 'simple past').flatMap((unit) => [unit.index, unit.index + 1]))
+  const consumedIndexes = new Set([...phrasalIndexes])
+
+  for (const unit of pastStateUnits) {
+    addExample(unit.surface, unit.index)
+    consumedIndexes.add(unit.index)
+    consumedIndexes.add(unit.index + 1)
+  }
 
   for (let index = 0; index < words.length; index += 1) {
-    if (phrasalIndexes.has(index)) {
+    if (consumedIndexes.has(index)) {
       continue
     }
 
     const word = words[index].value
     const normalized = word.toLowerCase()
+
+    if (isPastContinuousAuxiliaryAt(words, index)) {
+      continue
+    }
 
     if (isPartOfEarlierPastStructure(words, index)) {
       continue
     }
 
     if (isKnownSimplePastVerb(normalized)) {
-      addExample(word)
+      addExample(word, index)
     }
   }
 
   for (let index = 0; index < words.length; index += 1) {
-    if (phrasalIndexes.has(index)) {
+    if (consumedIndexes.has(index)) {
       continue
     }
 
     const word = words[index].value
     const normalized = word.toLowerCase()
+
+    if (isPastContinuousAuxiliaryAt(words, index)) {
+      continue
+    }
 
     if (isPartOfEarlierPastStructure(words, index)) {
       continue
@@ -1358,11 +1480,59 @@ function findSimplePastExamples(source, phrasalUnits = detectPhralVerbUnitsSafe(
       /\w+ed\b/.test(normalized) &&
       isLikelySimplePastVerb(normalized)
     ) {
-      addExample(word)
+      addExample(word, index)
     }
   }
 
-  return examples.slice(0, maxItems)
+  return examples
+    .sort((left, right) => left.index - right.index)
+    .map((example) => example.value)
+    .slice(0, maxItems)
+}
+
+function detectPastStateUnits(words = []) {
+  const units = []
+
+  for (let index = 0; index < words.length - 1; index += 1) {
+    const verb = words[index]?.value?.toLowerCase() ?? ''
+    const adjective = words[index + 1]?.value?.toLowerCase() ?? ''
+
+    if (!pastStateVerbs.has(verb) || !pastStateAdjectives.has(adjective)) {
+      continue
+    }
+
+    units.push({
+      surface: `${words[index].value} ${words[index + 1].value}`,
+      index,
+    })
+  }
+
+  return units
+}
+
+const pastStateVerbs = new Set(['got', 'became', 'felt'])
+const pastStateAdjectives = new Set([
+  'afraid',
+  'angry',
+  'confused',
+  'excited',
+  'happy',
+  'nervous',
+  'sad',
+  'scared',
+  'surprised',
+  'worried',
+])
+
+function isPastContinuousAuxiliaryAt(words, index) {
+  const current = words[index]?.value?.toLowerCase() ?? ''
+  const next = words[index + 1]?.value?.toLowerCase() ?? ''
+  const twoAhead = words[index + 2]?.value?.toLowerCase() ?? ''
+
+  return (
+    (current === 'was' || current === 'were') &&
+    (/\w+ing\b/.test(next) || (next === 'not' && /\w+ing\b/.test(twoAhead)))
+  )
 }
 
 function isPartOfEarlierPastStructure(words, index) {
@@ -1435,9 +1605,9 @@ function findNarrativeExamplesByTense(source, phrasalUnits, tense, maxItems = 2)
   return examples.slice(0, maxItems)
 }
 
-const pastPerfectContinuousExamplePattern = /\bhad\s+(?:not\s+)?been\s+\w+ing\b/gi
+const pastPerfectContinuousExamplePattern = /\bhad\s+(?:not\s+)?been(?:\s+\w+){0,3}\s+\w+ing\b/gi
 const pastPerfectExamplePattern = /\bhad\s+(?!not\s+been\b)(?!been\b)\w+(?:ed|en|ne|wn|t)\b/gi
-const pastContinuousExamplePattern = /\b(?:was|were)\s+\w+ing\b/gi
+const pastContinuousExamplePattern = /\b(?:was|were)\s+(?:not\s+)?\w+ing\b/gi
 
 function expandPhrasalUnitExample(unit, tokens = []) {
   const surface = String(unit?.surface ?? '').trim()
@@ -1643,6 +1813,7 @@ function buildNarrativeTeachingSummary(
 function buildNarrativeTeachingStrengths(answer, challenge, localCopy, features = detectAnswerFeatures(answer)) {
   const examples = extractNarrativeExamples(answer)
   const strengths = []
+  const strengthLimit = strengthLimitForChallenge(challenge)
   const clarityScore = getClarityScore(answer)
   const hasMajorErrors = detectMajorErrors(answer)
   const tenseStatus = detectNarrationTenseStatus(answer, features)
@@ -1658,7 +1829,7 @@ function buildNarrativeTeachingStrengths(answer, challenge, localCopy, features 
 
   if (tenseStatus !== 'past') {
     if (features.hasWhen) {
-      addStrength('relationship', localCopy.describeWhenRelationship('when'))
+      addStrength('relationship', describeWhenStrength(answer, localCopy, features))
     } else if (features.hasWhile) {
       addStrength('relationship', localCopy.describeWhileRelationship('while'))
     }
@@ -1667,7 +1838,7 @@ function buildNarrativeTeachingStrengths(answer, challenge, localCopy, features 
       addStrength('clarity', localCopy.describeClarity())
     }
 
-    return strengths.slice(0, 3)
+    return strengths.slice(0, strengthLimit)
   }
 
   const simplePastSummary = formatNarrativeExampleSummary(examples.simplePastItems)
@@ -1685,11 +1856,16 @@ function buildNarrativeTeachingStrengths(answer, challenge, localCopy, features 
   }
 
   if (!features.presentSignals?.hasUnclearBaseForms && features.hasSimplePast && simplePastSummary) {
-    addStrength('simplePast', localCopy.describeMainEvent(simplePastSummary))
+    addStrength(
+      'simplePast',
+      examples.simplePastItems.length > 1
+        ? localCopy.describeCompletedEvents(simplePastSummary)
+        : localCopy.describeMainEvent(simplePastSummary),
+    )
   }
 
   if (features.hasWhen) {
-    addStrength('relationship', localCopy.describeWhenRelationship('when'))
+    addStrength('relationship', describeWhenStrength(answer, localCopy, features))
   } else if (features.hasWhile) {
     addStrength('relationship', localCopy.describeWhileRelationship('while'))
   } else if (features.hasCauseResult) {
@@ -1702,7 +1878,7 @@ function buildNarrativeTeachingStrengths(answer, challenge, localCopy, features 
     addStrength('clarity', localCopy.describeClarity())
   }
 
-  return strengths.slice(0, 3)
+  return strengths.slice(0, strengthLimit)
 }
 
 function deriveDetectedVerbForms(features = {}) {
@@ -1991,6 +2167,20 @@ function appendOptionalCorrection(corrections = [], extraCorrection = null) {
   return [...base, extraCorrection]
 }
 
+function correctionAlreadyRepairsSurface(answer, suggestion) {
+  const original = String(answer ?? '').trim()
+  const repaired = String(suggestion ?? '').trim()
+
+  if (!original || !repaired) {
+    return false
+  }
+
+  return (
+    applyKnownSpellingFixes(original) !== original &&
+    applyKnownSpellingFixes(repaired) === repaired
+  )
+}
+
 function advancedPastPerfectAlreadyWorks(challenge, features, statuses) {
   return (
     challenge?.id === 'advanced' &&
@@ -2031,7 +2221,7 @@ function sanitizeAdvancedPastPerfectFeedback(feedback, challenge, features, loca
     summary: correctedSummary,
     strengths: features.hasPastPerfectContinuous
       ? feedback.strengths
-      : ensureStrength(feedback.strengths, localCopy.strengthPastPerfect),
+      : ensureStrength(feedback.strengths, localCopy.strengthPastPerfect, strengthLimitForChallenge(challenge)),
     corrections: sanitizedCorrections.length ? sanitizedCorrections : [consequenceCorrection(localCopy, features)],
     rewrite: mentionsPastPerfectContinuousForm(feedback.rewrite) || isPastPerfectContinuousNitpick(feedback.rewrite)
       ? ''
@@ -2043,12 +2233,12 @@ function sanitizeAdvancedPastPerfectFeedback(feedback, challenge, features, loca
   }
 }
 
-function ensureStrength(strengths, strength) {
+function ensureStrength(strengths, strength, limit = 3) {
   if (!strength || strengths.some((item) => normalizeComparableText(item) === normalizeComparableText(strength))) {
     return strengths
   }
 
-  return [...strengths, strength].slice(0, 3)
+  return [...strengths, strength].slice(0, limit)
 }
 
 function cleanAdvancedPastPerfectNitpick(value, challenge, features, localCopy) {
@@ -2360,7 +2550,7 @@ function normalizeRewrite(value, answer, scene, challenge, localCopy, correction
   return accepted?.value || ''
 }
 
-function ensureDistinctRewrite(feedback, answer) {
+function ensureDistinctRewrite(feedback, answer, challenge = null, localCopy = localFeedbackCopy('English')) {
   if (!feedback.rewrite || !String(feedback.rewrite).trim()) {
     return {
       ...feedback,
@@ -2375,7 +2565,62 @@ function ensureDistinctRewrite(feedback, answer) {
     }
   }
 
+  const corrections = feedback.corrections ?? []
+  const hasDuplicateCorrection = corrections.some((correction) => sameText(feedback.rewrite, correction?.suggestion))
+
+  if (hasDuplicateCorrection) {
+    return {
+      ...feedback,
+      corrections: corrections.map((correction) =>
+        sameText(feedback.rewrite, correction?.suggestion)
+          ? {
+            ...correction,
+            suggestion: instructionForDuplicateRewriteCorrection(correction, challenge, localCopy),
+          }
+          : correction,
+      ),
+    }
+  }
+
   return feedback
+}
+
+function instructionForDuplicateRewriteCorrection(correction, challenge, localCopy) {
+  const focus = String(correction?.grammarFocus ?? '').toLowerCase()
+
+  if (focus.includes('spelling') || focus.includes('capitalization') || focus.includes('punctuation')) {
+    return localCopy.instructionSurfaceCorrection
+  }
+
+  if (focus.includes('past perfect')) {
+    return localCopy.instructionPastPerfectCorrection
+  }
+
+  if (focus.includes('past continuous')) {
+    return localCopy.instructionPastContinuousCorrection
+  }
+
+  if (focus.includes('simple past')) {
+    return localCopy.instructionSimplePastCorrection
+  }
+
+  if (focus.includes('connector')) {
+    return localCopy.instructionConnectorCorrection
+  }
+
+  if (focus.includes('scene')) {
+    return localCopy.refocusBeginner
+  }
+
+  if (focus.includes('time relationship') || challenge?.id === 'intermediate') {
+    return localCopy.instructionTimeRelationshipCorrection
+  }
+
+  if (challenge?.id === 'advanced') {
+    return localCopy.instructionAdvancedCorrection
+  }
+
+  return localCopy.instructionClarityCorrection
 }
 
 function selectBetterVersionMode(answer, scene, challenge, statuses = null) {
@@ -2847,6 +3092,11 @@ function applyKnownSpellingFixes(value = '') {
     [/\bhe were\b/gi, 'he was'],
     [/\bit were\b/gi, 'it was'],
     [/\bthey was\b/gi, 'they were'],
+    [/\bfriends was\b/gi, 'friends were'],
+    [/\bcampers was\b/gi, 'campers were'],
+    [/\bpeople was\b/gi, 'people were'],
+    [/\bforests\b/gi, 'forest'],
+    [/\blilght\b/gi, 'light'],
     [/\bhats\b(?=\s+off\b)/gi, 'hat'],
     [/\boff of\b/gi, 'off'],
     [/\bmade a chaos\b/gi, 'caused chaos'],
@@ -3813,6 +4063,8 @@ function commonSimplePastMap() {
     foam: 'foamed',
     forget: 'forgot',
     gather: 'gathered',
+    has: 'had',
+    have: 'had',
     jump: 'jumped',
     keep: 'kept',
     knock: 'knocked',
@@ -4855,13 +5107,14 @@ function detectAnswerFeatures(answer) {
   const pastPerfectMatches = normalized.match(/\bhad\s+(?:not\s+)?(?:already\s+|just\s+|still\s+|really\s+|almost\s+)?(?!been\b)\w+(?:ed|en|ne|wn|t)\b/g) ?? []
   const hasPastPerfectContinuous = pastPerfectContinuousMatches.length > 0
   const hasPastPerfect = pastPerfectMatches.length > 0
-  const hasPastContinuous = /\b(was|were)\s+\w+ing\b/.test(normalized)
+  const hasPastContinuous = /\b(was|were)\s+(?:not\s+)?\w+ing\b/.test(normalized)
   const hasAboutToPast = /\bwas\s+about\s+to\b/.test(normalized)
   const simplePastCandidates = words
     .filter((_, index) => !isPartOfEarlierPastStructure(words, index))
+    .filter((_, index) => !isPastContinuousAuxiliaryAt(words, index))
     .map((word) => word.value.toLowerCase())
   const hasSimplePast =
-    simplePastCandidates.some((candidate) => /\b\w+(ed|ght|ought|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/.test(candidate) && isLikelySimplePastVerb(candidate)) ||
+    simplePastCandidates.some((candidate) => /\b\w+(ed|oke|ent|ame|aw|old|ook|ost|elt|egan|an)\b/.test(candidate) && isLikelySimplePastVerb(candidate)) ||
     simplePastCandidates.some(isKnownSimplePastVerb)
   const hasWhen = /\bwhen\b/.test(normalized)
   const hasWhile = /\bwhile\b/.test(normalized)
@@ -4874,7 +5127,7 @@ function detectAnswerFeatures(answer) {
     (hasPastPerfectContinuous && /\bnot\s+been\s+\w+ing\b/.test(normalized) && hasWhen)
   const hasAnyConnector = /\b(when|while|after|before|as|because|so|by the time|after which|but)\b/.test(normalized)
   const hasRelationshipConnector = /\b(when|while|after|before|as|because|so|by the time|after which)\b/.test(normalized)
-  const hasInterruption = hasWhen && hasPastContinuous && hasSimplePast
+  const hasInterruption = hasWhenInterruptionPattern(normalized)
   const hasAnyPastVerb = hasPastPerfectContinuous || hasPastPerfect || hasPastContinuous || hasSimplePast
 
   return {
@@ -4952,6 +5205,10 @@ function detectPresentNarrationSignals(studentText) {
     }
 
     if (likelyDeterminers.has(previous)) {
+      continue
+    }
+
+    if (next === 'was' || next === 'were' || next === 'had') {
       continue
     }
 
@@ -5209,6 +5466,7 @@ function localFeedbackCopy(feedbackLanguage) {
       describeContrast: (background, event) => `Usaste past continuous (${background}) para el fondo y simple past (${event}) para el evento principal.`,
       describeBackground: (background) => `Usaste past continuous (${background}) para mostrar una acción en progreso en el fondo.`,
       describeMainEvent: (event) => `Usaste simple past (${event}) para mostrar el evento principal o terminado.`,
+      describeCompletedEvents: (events) => `Usaste simple past (${events}) para mostrar eventos terminados de la historia.`,
       describeEarlierPast: (earlier) => `Usaste past perfect (${earlier}) para mostrar qué había pasado antes.`,
       describeEarlierThenEvent: (earlier, event) => `Usaste past perfect (${earlier}) para el evento anterior y simple past (${event}) para lo que pasó después.`,
       describeEarlierOngoing: (earlier) => `Usaste past perfect continuous (${earlier}) para una acción que seguía ocurriendo antes de otro momento pasado.`,
@@ -5233,6 +5491,14 @@ function localFeedbackCopy(feedbackLanguage) {
       useConnector: 'Une las acciones con when, while, because, before o after.',
       usePastPerfect: 'Agrega had + past participle o had been + -ing.',
       usePastTenseInstead: 'Cambia los verbos principales al pasado.',
+      instructionSimplePastCorrection: 'Cambia los verbos que siguen en presente al pasado.',
+      instructionPastContinuousCorrection: 'Usa was/were + -ing para la acción que ya estaba ocurriendo.',
+      instructionPastPerfectCorrection: 'Muestra qué pasó antes con had o had been.',
+      instructionConnectorCorrection: 'Conecta las acciones con un conector de tiempo claro.',
+      instructionTimeRelationshipCorrection: 'Haz más clara la relación de tiempo entre las acciones.',
+      instructionSurfaceCorrection: 'Corrige la ortografía y pule la oración.',
+      instructionAdvancedCorrection: 'Haz más clara la línea de tiempo anterior y posterior.',
+      instructionClarityCorrection: 'Reescribe la idea con más claridad.',
       stretchBeginner: 'Agrega otra oración en pasado sobre una acción visible.',
       tryEarlierDetail: 'Prueba agregar un detalle anterior con had o had been.',
       reasonPastNarration: 'El nivel principiante busca una narración clara en pasado, no solo simple past.',
@@ -5241,6 +5507,7 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonPastTenseMismatch: 'Describiste la escena con acciones correctas, pero usaste presente en vez de pasado.',
       reasonPastTenseUnclear: 'Las acciones se entienden, pero el tiempo verbal aún no está claro como pasado.',
       reasonPastTenseAndAgreement: 'Usa formas de pasado correctas y corrige la concordancia, por ejemplo past simple para el evento principal y was para she.',
+      reasonMixedPastPresent: 'Algunas partes ya están en pasado. Cambia los verbos que siguen en presente para que toda la historia esté en pasado.',
       suggestSurfacePolish: 'Añade también mayúscula inicial y punto final.',
       suggestSurfacePolishWithSpelling: 'Corrige también la mayúscula, la puntuación y la ortografía.',
       reasonSurfacePolish: 'Añade una mayúscula al principio y un punto al final para pulir la oración.',
@@ -5257,6 +5524,7 @@ function localFeedbackCopy(feedbackLanguage) {
       pastPerfectAlreadyWorksSummary: 'Tu forma con had ya muestra claramente una capa anterior de la historia. Usa past perfect continuous solo cuando la acción anterior realmente estaba ocurriendo durante un tiempo.',
       presentTenseSummary: 'La oración menciona acciones importantes, pero los verbos están en presente, no en pasado.',
       presentTenseSceneSummary: 'Mencionaste las acciones principales de la escena, pero los verbos están en presente. Esta tarea requiere pasado.',
+      mixedPastPresentSummary: 'La oración incluye algo de pasado, pero no todos los verbos están todavía en pasado.',
       notClearlyPastSummary: 'La oración menciona acciones importantes, pero el tiempo verbal todavía no está claramente en pasado.',
       notClearlyPastSceneSummary: 'Mencionaste las acciones principales de la escena, pero el tiempo verbal todavía no está claramente en pasado.',
       offSceneSummary: 'Tu oración todavía no describe esta escena. Ahora intenta escribir sobre lo que realmente se ve aquí.',
@@ -5325,6 +5593,7 @@ function localFeedbackCopy(feedbackLanguage) {
       describeContrast: (background, event) => `Du använde past continuous (${background}) för bakgrunden och simple past (${event}) för huvudhändelsen.`,
       describeBackground: (background) => `Du använde past continuous (${background}) för att visa en handling som redan pågick i bakgrunden.`,
       describeMainEvent: (event) => `Du använde simple past (${event}) för huvudhändelsen eller en avslutad handling.`,
+      describeCompletedEvents: (events) => `Du använde simple past (${events}) för avslutade händelser i berättelsen.`,
       describeEarlierPast: (earlier) => `Du använde past perfect (${earlier}) för att visa vad som hade hänt tidigare.`,
       describeEarlierThenEvent: (earlier, event) => `Du använde past perfect (${earlier}) för den tidigare händelsen och simple past (${event}) för det som hände sedan.`,
       describeEarlierOngoing: (earlier) => `Du använde past perfect continuous (${earlier}) för en handling som pågick före en annan tidpunkt i dåtiden.`,
@@ -5349,6 +5618,14 @@ function localFeedbackCopy(feedbackLanguage) {
       useConnector: 'Koppla handlingarna med when, while, because, before eller after.',
       usePastPerfect: 'Lägg till had + past participle eller had been + -ing.',
       usePastTenseInstead: 'Ändra huvudverben till dåtid.',
+      instructionSimplePastCorrection: 'Ändra de verb som fortfarande står i presens till dåtid.',
+      instructionPastContinuousCorrection: 'Använd was/were + -ing för handlingen som redan pågick.',
+      instructionPastPerfectCorrection: 'Visa vad som hände tidigare med had eller had been.',
+      instructionConnectorCorrection: 'Koppla handlingarna med en tydlig tidskoppling.',
+      instructionTimeRelationshipCorrection: 'Gör tidsrelationen mellan handlingarna tydligare.',
+      instructionSurfaceCorrection: 'Rätta stavningen och putsa meningen.',
+      instructionAdvancedCorrection: 'Gör den tidigare och senare tidslinjen tydligare.',
+      instructionClarityCorrection: 'Skriv om idén tydligare.',
       stretchBeginner: 'Lägg till en mening till i dåtid om en synlig handling.',
       tryEarlierDetail: 'Prova att lägga till en tidigare detalj med had eller had been.',
       reasonPastNarration: 'Nybörjarnivån fokuserar på tydligt berättande i dåtid, inte bara simple past.',
@@ -5357,6 +5634,7 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonPastTenseMismatch: 'Du beskrev scenen med rätt handlingar, men du använde presens i stället för dåtid.',
       reasonPastTenseUnclear: 'Handlingarna går att förstå, men tempus är ännu inte tydligt i dåtid.',
       reasonPastTenseAndAgreement: 'Använd korrekta dåtidsformer och rätt kongruens, till exempel simple past för huvudhändelsen och was med she.',
+      reasonMixedPastPresent: 'Vissa delar är redan i dåtid. Ändra de verb som fortfarande står i presens så att hela berättelsen står i dåtid.',
       suggestSurfacePolish: 'Lägg också till stor bokstav och punkt.',
       suggestSurfacePolishWithSpelling: 'Rätta också versal, skiljetecken och stavning.',
       reasonSurfacePolish: 'Lägg till stor bokstav i början och punkt i slutet för att putsa meningen.',
@@ -5373,6 +5651,7 @@ function localFeedbackCopy(feedbackLanguage) {
       pastPerfectAlreadyWorksSummary: 'Din form med had visar redan tydligt ett tidigare lager i berättelsen. Använd past perfect continuous bara när den tidigare handlingen verkligen pågick under en tid.',
       presentTenseSummary: 'Meningen nämner viktiga handlingar, men verben står i presens, inte i dåtid.',
       presentTenseSceneSummary: 'Du nämnde de viktigaste handlingarna i scenen, men verben står i presens. Den här uppgiften kräver dåtid.',
+      mixedPastPresentSummary: 'Meningen innehåller en del dåtid, men alla verb står inte i dåtid ännu.',
       notClearlyPastSummary: 'Meningen nämner viktiga handlingar, men tempus är ännu inte tydligt i dåtid.',
       notClearlyPastSceneSummary: 'Du nämnde de viktigaste handlingarna i scenen, men tempus är ännu inte tydligt i dåtid.',
       offSceneSummary: 'Din mening beskriver inte den här scenen ännu. Försök nu skriva om det som faktiskt syns här.',
@@ -5440,6 +5719,7 @@ function localFeedbackCopy(feedbackLanguage) {
     describeContrast: (background, event) => `You used past continuous (${background}) for the background and simple past (${event}) for the main event.`,
     describeBackground: (background) => `You used past continuous (${background}) to show an action already in progress in the background.`,
     describeMainEvent: (event) => `You used simple past (${event}) for the main event or completed action.`,
+    describeCompletedEvents: (events) => `You used simple past (${events}) for completed story events.`,
     describeEarlierPast: (earlier) => `You used past perfect (${earlier}) to show what had happened earlier.`,
     describeEarlierThenEvent: (earlier, event) => `You used past perfect (${earlier}) for the earlier event and simple past (${event}) for what happened next.`,
     describeEarlierOngoing: (earlier) => `You used past perfect continuous (${earlier}) for an ongoing action before another past moment.`,
@@ -5464,6 +5744,14 @@ function localFeedbackCopy(feedbackLanguage) {
     useConnector: 'Join them with when, while, because, before, or after.',
     usePastPerfect: 'Add had + past participle or had been + -ing.',
     usePastTenseInstead: 'Change the main verbs to the past tense.',
+    instructionSimplePastCorrection: 'Change the verbs that are still in present tense to past tense.',
+    instructionPastContinuousCorrection: 'Use was/were + -ing for the action that was already happening.',
+    instructionPastPerfectCorrection: 'Show what happened earlier with had or had been.',
+    instructionConnectorCorrection: 'Connect the actions with a clear time connector.',
+    instructionTimeRelationshipCorrection: 'Make the time relationship between the actions clearer.',
+    instructionSurfaceCorrection: 'Fix the spelling and polish the sentence.',
+    instructionAdvancedCorrection: 'Make the earlier and later timeline clearer.',
+    instructionClarityCorrection: 'Rewrite the idea more clearly.',
     stretchBeginner: 'Add one more past-tense sentence about a visible action.',
     tryEarlierDetail: 'Try adding one earlier past detail with had or had been.',
     reasonPastNarration: 'Beginner level asks for clear past narration, not only simple past.',
@@ -5472,6 +5760,7 @@ function localFeedbackCopy(feedbackLanguage) {
     reasonPastTenseMismatch: 'You described the scene clearly, but you used present tense instead of past tense.',
     reasonPastTenseUnclear: 'The actions are understandable, but the tense is not clearly past yet.',
     reasonPastTenseAndAgreement: "Use correct past forms and fix the agreement, for example simple past for the main event and 'was' with 'she'.",
+    reasonMixedPastPresent: 'Some parts are already in the past. Change the verbs that are still in present tense so the whole story is in the past.',
     suggestSurfacePolish: 'Also add a capital letter and a full stop.',
     suggestSurfacePolishWithSpelling: 'Also fix the capitalization, punctuation, and spelling.',
     reasonSurfacePolish: 'Add a capital letter at the beginning and a full stop at the end to polish the sentence.',
@@ -5488,6 +5777,7 @@ function localFeedbackCopy(feedbackLanguage) {
     pastPerfectAlreadyWorksSummary: 'Your form with had already shows an earlier layer of the story clearly. Use past perfect continuous only when the earlier action was genuinely ongoing for a period of time.',
     presentTenseSummary: 'The sentence mentions key actions, but the verbs are in the present tense, not the past.',
     presentTenseSceneSummary: 'You mentioned the main actions in the scene, but the verbs are in the present tense. This task requires past tense.',
+    mixedPastPresentSummary: 'The sentence includes some past tense, but not all the verbs are in the past yet.',
     notClearlyPastSummary: 'The sentence mentions key actions, but the tense is not clearly past yet.',
     notClearlyPastSceneSummary: 'You mentioned the main actions in the scene, but the tense is not clearly past yet.',
     offSceneSummary: 'Your sentence does not describe this scene yet. Now try writing about what is actually visible here.',
