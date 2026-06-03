@@ -10,6 +10,7 @@ function App() {
   const [answer, setAnswer] = useState('')
   const [submittedAnswer, setSubmittedAnswer] = useState('')
   const [feedback, setFeedback] = useState(null)
+  const [feedbackPanelHeight, setFeedbackPanelHeight] = useState(0)
   const [recentAttemptHistory, setRecentAttemptHistory] = useState([])
   const [isChecking, setIsChecking] = useState(false)
   const [isGrammarOpen, setIsGrammarOpen] = useState(false)
@@ -35,6 +36,8 @@ function App() {
   const storyInputRef = useRef(null)
   const sceneViewportRef = useRef(null)
   const pendingFeedbackAnchorRef = useRef(false)
+  const skipNextDesktopFeedbackScrollRef = useRef(false)
+  const pendingDesktopFeedbackScrollYRef = useRef(null)
   const viewportStateRef = useRef({
     height: null,
     isMobile: null,
@@ -94,7 +97,12 @@ function App() {
     (isFocusSceneExpanded && isFocusSceneExpandedFromFocus) ||
     (isStoryFocused && (isKeyboardOpen || isRestoringFocusMode))
   )
-  const storyRows = isMobileFocusMode ? 2 : feedback ? 3 : 8
+  const isDesktopFeedbackRefreshing = !isMobileViewport && isChecking && Boolean(feedback) && feedbackPanelHeight > 0
+  const hasFeedbackLayoutSlot = Boolean(feedback) || isDesktopFeedbackRefreshing
+  const feedbackRefreshStyle = !isMobileViewport && feedbackPanelHeight > 0
+    ? { minHeight: `${feedbackPanelHeight}px` }
+    : undefined
+  const storyRows = isMobileFocusMode ? 2 : hasFeedbackLayoutSlot ? 3 : 8
   const challengePromptParts = getChallengePromptParts(copy, challengeMode, activeChallenge)
   const challengeSubprompt = copy.challengeSubprompts?.[challengeMode] ?? ''
   const mobileGhostText = activeHint && !answer.trim()
@@ -149,8 +157,17 @@ function App() {
       return undefined
     }
 
+    if (!isMobileViewport) {
+      setFeedbackPanelHeight(Math.ceil(feedbackRef.current.getBoundingClientRect().height))
+    }
+
     const firstFrame = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
+        if (skipNextDesktopFeedbackScrollRef.current && !isMobileViewport) {
+          skipNextDesktopFeedbackScrollRef.current = false
+          return
+        }
+
         if (pendingFeedbackAnchorRef.current) {
           pendingFeedbackAnchorRef.current = false
           scrollFeedbackToTopUnderScene(feedbackRef.current)
@@ -248,16 +265,33 @@ function App() {
 
   async function runStoryCheck() {
     setError('')
-    setFeedback(null)
 
     if (answer.trim().split(/\s+/).length < 8) {
+      setFeedback(null)
       setError(getTooShortError(copy, challengeMode))
       return
     }
 
     const shouldExitFocusAfterFeedback = isMobileFocusMode
+    const shouldRefreshDesktopFeedbackInPlace = !isMobileViewport && Boolean(feedback)
+    const desktopRefreshScrollY = shouldRefreshDesktopFeedbackInPlace
+      ? pendingDesktopFeedbackScrollYRef.current ?? window.scrollY
+      : null
+    pendingDesktopFeedbackScrollYRef.current = null
 
+    if (shouldRefreshDesktopFeedbackInPlace) {
+      skipNextDesktopFeedbackScrollRef.current = true
+    }
+
+    if (!shouldRefreshDesktopFeedbackInPlace) {
+      setFeedback(null)
+    }
     setIsChecking(true)
+
+    if (desktopRefreshScrollY !== null) {
+      restoreScrollPosition(desktopRefreshScrollY)
+    }
+
     const checkedAnswer = answer
     try {
       const response = await fetch('/api/feedback', {
@@ -321,6 +355,9 @@ function App() {
         })
       }
     } catch (feedbackError) {
+      if (shouldRefreshDesktopFeedbackInPlace) {
+        setFeedback(null)
+      }
       setError(feedbackError.message)
     } finally {
       setIsChecking(false)
@@ -629,6 +666,11 @@ function App() {
   function handleSubmitPress(event) {
     if (isMobileFocusMode) {
       event.preventDefault()
+      return
+    }
+
+    if (!isMobileViewport && feedback) {
+      pendingDesktopFeedbackScrollYRef.current = window.scrollY
     }
   }
 
@@ -661,6 +703,10 @@ function App() {
   function handleAnswerChange(event) {
     if (isMobileViewport && activeHint) {
       setHintIndex(null)
+    }
+
+    if (!isMobileViewport && feedback) {
+      pendingDesktopFeedbackScrollYRef.current = window.scrollY
     }
 
     setAnswer(event.target.value)
@@ -960,7 +1006,19 @@ function App() {
             </button>
           </div>
             <div className="hint-slot">
-              {feedback ? (
+              {isDesktopFeedbackRefreshing ? (
+                <section
+                  className="feedback feedback-refresh"
+                  ref={feedbackRef}
+                  aria-live="polite"
+                  aria-busy="true"
+                  tabIndex="-1"
+                  style={feedbackRefreshStyle}
+                >
+                  <span className="sr-only">{copy.form.checking}</span>
+                  <span className="feedback-thinking-symbol" aria-hidden="true" />
+                </section>
+              ) : feedback ? (
                 <section className="feedback" ref={feedbackRef} aria-live="polite" tabIndex="-1">
                   <div className="feedback-header">
                     <div>
@@ -1364,6 +1422,18 @@ function scrollFeedbackToTopUnderScene(element) {
   window.scrollTo({
     top: Math.max(0, top),
     behavior: 'smooth',
+  })
+}
+
+function restoreScrollPosition(scrollY) {
+  const restore = () => {
+    window.scrollTo({ top: scrollY, behavior: 'auto' })
+  }
+
+  restore()
+  window.requestAnimationFrame(() => {
+    restore()
+    window.requestAnimationFrame(restore)
   })
 }
 

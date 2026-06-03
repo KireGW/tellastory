@@ -6,6 +6,7 @@ const cases = [
   ['midnight-knock', 'intermediate', 'excellent', 'The woman was sleeping while rain was hitting the window, and the cat jumped when somebody knocked on the door.'],
   ['midnight-knock', 'intermediate', 'not-excellent', 'Woman sleep. Door noise. Cat jump now.'],
   ['market-spill', 'advanced', 'excellent', 'The market was already crowded because the vendors had opened their stalls early. While one vendor was weighing apples, a child dropped some oranges, so a cyclist swerved to avoid them.'],
+  ['market-spill', 'intermediate', 'excellent', "It was a busy day at the market. John rode his bicycle when the boy accidentally dropped a case of oranges, just in front of John's bike."],
   ['market-spill', 'intermediate', 'not-excellent', 'In market we were, but suddenly orange. The dog is bread red.'],
   ['train-platform', 'advanced', 'excellent', 'People were rushing toward the train because the conductor had already blown the whistle. While a man was running along the platform, pigeons scattered around an open suitcase.'],
   ['train-platform', 'intermediate', 'not-excellent', 'Train station busy. People running. Suitcase open and birds around.'],
@@ -87,6 +88,14 @@ async function runCase([sceneId, challengeId, expected, text]) {
   }
 
   const feedback = await response.json()
+  const specialRegressionPassed =
+    sceneId === 'market-spill' &&
+    challengeId === 'intermediate' &&
+    text.includes('John rode')
+      ? (feedback.strengths ?? []).join(' ').includes('rode') &&
+        feedback.corrections?.[0]?.suggestion !== 'Join them with when, while, because, before, or after.' &&
+        String(feedback.levelReadinessHint ?? '').includes('past continuous')
+      : true
 
   return {
     scene: scene.title,
@@ -96,7 +105,7 @@ async function runCase([sceneId, challengeId, expected, text]) {
     actualVerdict: feedback.verdict,
     actualTaskFit: feedback.taskFit,
     actualEnglish: feedback.englishStatus,
-    ok: expectedPassed(expected, feedback),
+    ok: expectedPassed(expected, feedback) && specialRegressionPassed,
     summary: feedback.summary,
     tryThis: feedback.corrections?.[0]?.suggestion,
     text,

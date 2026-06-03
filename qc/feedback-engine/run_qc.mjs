@@ -277,7 +277,9 @@ function createExpectedFeedbackBehavior(selectedDifficulty, variant) {
     phrasalVerbShouldMention: null,
     phrasalVerbShouldDetect: null,
     phrasalVerbShouldNotDetect: null,
+    requiredFeedbackText: [],
     forbiddenFeedbackText: [],
+    forbiddenTryThisText: [],
     nextStepShould: ['one action only', 'current level'],
     readinessHintShouldBe: 'none',
   }
@@ -291,6 +293,7 @@ function createExpectedFeedbackBehavior(selectedDifficulty, variant) {
       'beginner-higher-grammar-earlier',
       'readiness-beginner',
       'intermediate-correct-when',
+      'intermediate-market-rode-when',
       'intermediate-simple-past-when',
       'intermediate-already-had',
       'readiness-intermediate',
@@ -361,6 +364,12 @@ function createExpectedFeedbackBehavior(selectedDifficulty, variant) {
     base.forbiddenFeedbackText.push('interrupted another')
   }
 
+  if (variant === 'intermediate-market-rode-when') {
+    base.requiredFeedbackText.push('rode')
+    base.forbiddenTryThisText.push('Join them with when, while, because, before, or after.')
+    base.readinessHintShouldBe = 'yes'
+  }
+
   if (normalizedDifficulty === 'beginner') {
     base.nextStepShould.push('one more past sentence or detail')
     if (variant === 'readiness-beginner') {
@@ -406,7 +415,7 @@ function createExpectedRatingBehavior(selectedDifficulty, variant) {
   }
 
   if (normalizedDifficulty === 'intermediate') {
-    if (['intermediate-correct-when', 'intermediate-correct-while', 'intermediate-simple-past-when', 'readiness-intermediate', 'intermediate-already-had', 'phrasal-rolled-in'].includes(variant)) {
+    if (['intermediate-correct-when', 'intermediate-correct-while', 'intermediate-simple-past-when', 'intermediate-market-rode-when', 'readiness-intermediate', 'intermediate-already-had', 'phrasal-rolled-in'].includes(variant)) {
       base.expectedRatingBand = 'high'
     } else if (['intermediate-no-connector', 'intermediate-too-beginner', 'intermediate-scene-mismatch'].includes(variant)) {
       base.expectedRatingBand = 'low'
@@ -471,6 +480,9 @@ function buildCasesForScene(scene) {
   const simplePastWhen = scene.id === 'midnight-knock'
     ? 'The cat jumped when somebody knocked on the door.'
     : ''
+  const marketRodeWhen = scene.id === 'market-spill'
+    ? "It was a busy day at the market. John rode his bicycle when the boy accidentally dropped a case of oranges, just in front of John's bike."
+    : ''
   const overcomplicated = `${whenSentence.replace(/\.$/, '')} because ${lowercaseFirst(subjectForActor(reactionAction.actor))} ${reactionAction.recommendedVerbForms?.[0]}.`
   const advancedPolish = `${stripLeadingArticle(subjectForActor(earlierAction.actor))} ${earlierAction.recommendedVerbForms?.find((verb) => verb.includes('had')) || `had ${earlierAction.recommendedVerbForms?.[0] || 'done something'}`} before ${lowercaseFirst(subjectForActor(eventAction.actor))} ${eventAction.recommendedVerbForms?.[0]}.`
   const advancedAwkward = `${subjectForActor(backgroundAction.actor)} had been ${stripAuxiliary(backgroundAction.recommendedVerbForms?.[0])} when ${lowercaseFirst(subjectForActor(eventAction.actor))} ${eventAction.recommendedVerbForms?.[0]}.`
@@ -498,6 +510,9 @@ function buildCasesForScene(scene) {
     makeCase(scene, 'intermediate', 'intermediate-correct-when', whenSentence, 'Should reinforce action relationships.', 'none'),
     ...(simplePastWhen
       ? [makeCase(scene, 'intermediate', 'intermediate-simple-past-when', simplePastWhen, 'Should praise when as a time relationship, not an interruption.', 'none')]
+      : []),
+    ...(marketRodeWhen
+      ? [makeCase(scene, 'intermediate', 'intermediate-market-rode-when', marketRodeWhen, 'Should recognize rode and avoid asking for a connector already present.', 'none')]
       : []),
     makeCase(scene, 'intermediate', 'intermediate-correct-while', whileSentence, 'Should reinforce overlap/relationship language.', 'none'),
     makeCase(scene, 'intermediate', 'intermediate-polish-article', intermediatePolish, 'Mostly correct intermediate answer with a small article fix.', 'none'),
@@ -732,6 +747,9 @@ function scoreLabel(pass, partial) {
 
 function evaluateCase(qcCase, result) {
   const combinedWorked = [result.coachNote, ...result.whatWorked].join(' ')
+  const combinedTryThis = (result.tryThis ?? [])
+    .map((correction) => `${correction?.suggestion ?? ''} ${correction?.reason ?? ''}`.trim())
+    .join(' ')
   const betterVersion = String(result.betterVersion ?? '')
   const nextStep = String(result.nextStep ?? '')
   const readinessHint = String(result.readinessHint ?? '')
@@ -841,8 +859,14 @@ function evaluateCase(qcCase, result) {
   if (!summaryHasFormMeaning) feedbackFindings.push('feedback did not connect form to meaning clearly')
   if (!summaryUsesStudentWords) feedbackFindings.push('feedback did not reference student wording')
   if (misreadPastPerfectAsSimplePast) feedbackFindings.push('feedback misread past perfect as simple past')
+  if (qcCase.expectedFeedbackBehavior.requiredFeedbackText.some((text) => !containsAny(combinedWorked, [text]))) {
+    feedbackFindings.push('feedback omitted required wording for this pattern')
+  }
   if (qcCase.expectedFeedbackBehavior.forbiddenFeedbackText.some((text) => containsAny(combinedWorked, [text]))) {
     feedbackFindings.push('feedback used forbidden wording for this tense pattern')
+  }
+  if (qcCase.expectedFeedbackBehavior.forbiddenTryThisText.some((text) => containsAny(combinedTryThis, [text]))) {
+    feedbackFindings.push('try-this used forbidden wording for this pattern')
   }
   if (!phrasalDetectionPass) feedbackFindings.push('phrasal verb detector missed or mis-merged a meaning unit')
   if (!phrasalMentionPass) feedbackFindings.push('feedback did not refer to the full phrasal verb')

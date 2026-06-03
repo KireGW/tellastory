@@ -272,6 +272,7 @@ function canonicalFeedbackTextMap(localCopy) {
     ['The next improvement is to make the relationship between the earlier and later action clearer.', localCopy.reasonAdvancedTimelineClear],
     ['If you want a challenge, try connecting two actions using when or while.', localCopy.readinessBasic],
     ["You're connecting actions clearly. Now try adding what happened before.", localCopy.readinessIntermediate],
+    ["This works clearly. For an extra challenge, try making the action before 'when' past continuous.", localCopy.readinessIntermediatePastContinuous],
   ])
 }
 
@@ -548,7 +549,7 @@ function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'Engli
         ? meaningPreservingCorrection(preservedRewrite, localCopy)
         : advancedPastPerfectAlreadyWorks(challenge, answerFeatures, statuses)
         ? consequenceCorrection(localCopy, answerFeatures)
-        : defaultStretchCorrection(challenge, localCopy),
+        : defaultStretchCorrection(challenge, localCopy, answerFeatures),
     )
   }
 
@@ -1094,7 +1095,7 @@ function localFeedback(answer, scene, challenge, feedbackLanguage = 'English', r
     ? corrections.slice(0, 4)
     : hasValidAdvancedStructure
     ? [consequenceCorrection(localCopy, features)]
-    : [defaultStretchCorrection(challenge, localCopy)]
+    : [defaultStretchCorrection(challenge, localCopy, features)]
   const clarityScore = getClarityScore(answer)
   const englishStatus =
     clarityScore === 2
@@ -4080,6 +4081,7 @@ function commonSimplePastMap() {
     rain: 'rained',
     read: 'read',
     repair: 'repaired',
+    ride: 'rode',
     ring: 'rang',
     roll: 'rolled',
     run: 'ran',
@@ -4152,7 +4154,7 @@ function fallbackRewriteFor(challenge, localCopy) {
   return localCopy.intermediateRewriteFallback
 }
 
-function defaultStretchCorrection(challenge, localCopy) {
+function defaultStretchCorrection(challenge, localCopy, features = {}) {
   if (challenge?.id === 'beginner') {
     return {
       original: localCopy.yourStory,
@@ -4169,6 +4171,10 @@ function defaultStretchCorrection(challenge, localCopy) {
       reason: localCopy.reasonEarlierDetail,
       grammarFocus: 'past perfect',
     }
+  }
+
+  if (features.hasWhen || features.hasWhile || features.hasRelationshipConnector) {
+    return resultOrConsequenceCorrection(localCopy, features)
   }
 
   return {
@@ -4950,9 +4956,22 @@ function generateLevelReadinessHint({ challenge, feedbackLanguage = 'English', s
     challenge?.id === 'advanced' ||
     !target.met ||
     target.strength !== 'clear' ||
-    !stableAcrossAttempts ||
     !['low', 'none'].includes(errorSeverity)
   ) {
+    return null
+  }
+
+  if (
+    challenge?.id === 'intermediate' &&
+    statuses.taskFit === 'on target' &&
+    features.hasWhen &&
+    features.hasSimplePast &&
+    !features.hasPastContinuous
+  ) {
+    return copy.readinessIntermediatePastContinuous
+  }
+
+  if (!stableAcrossAttempts) {
     return null
   }
 
@@ -5426,6 +5445,7 @@ function isKnownSimplePastVerb(candidate) {
     'knew',
     'ran',
     'rang',
+    'rode',
     'rose',
     'said',
     'saw',
@@ -5566,6 +5586,7 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonAdvancedTimelineClear: 'La siguiente mejora es aclarar la relación entre la acción anterior y la posterior.',
       readinessBasic: 'Si quieres un desafío, intenta conectar dos acciones con when o while.',
       readinessIntermediate: 'Estás conectando acciones con claridad. Ahora intenta agregar qué había pasado antes.',
+      readinessIntermediatePastContinuous: "Esto funciona con claridad. Como desafío extra, intenta poner en past continuous la acción que ocurre antes de 'when'.",
       refocusBeginner: 'Escribe una o dos oraciones cortas en pasado sobre las personas y las acciones de esta escena.',
       refocusIntermediate: 'Describe en pasado a las personas y las acciones de esta escena antes de conectarlas.',
       refocusAdvanced: 'Primero describe claramente en pasado la escena visible. Después agrega qué había pasado antes.',
@@ -5693,6 +5714,7 @@ function localFeedbackCopy(feedbackLanguage) {
       reasonAdvancedTimelineClear: 'Nästa förbättring är att göra relationen mellan den tidigare och den senare handlingen tydligare.',
       readinessBasic: 'Om du vill ha en utmaning kan du prova att koppla två handlingar med when eller while.',
       readinessIntermediate: 'Du kopplar handlingarna tydligt. Nu kan du prova att lägga till vad som hade hänt tidigare.',
+      readinessIntermediatePastContinuous: "Det här fungerar tydligt. Som extra utmaning kan du prova att skriva handlingen före 'when' i past continuous.",
       refocusBeginner: 'Skriv en eller två korta meningar i dåtid om personerna och handlingarna i den här scenen.',
       refocusIntermediate: 'Beskriv personerna och handlingarna i den här scenen i dåtid innan du kopplar ihop dem.',
       refocusAdvanced: 'Beskriv först den synliga scenen tydligt i dåtid. Lägg sedan till vad som hade hänt tidigare.',
@@ -5821,6 +5843,7 @@ function localFeedbackCopy(feedbackLanguage) {
     reasonAdvancedTimelineClear: 'The next improvement is to make the earlier and later actions connect more clearly.',
     readinessBasic: "You're describing the scene clearly. Now try connecting two actions using when or while.",
     readinessIntermediate: "You're connecting actions clearly. Now try adding what happened before.",
+    readinessIntermediatePastContinuous: "This works clearly. For an extra challenge, try making the action before 'when' past continuous.",
     refocusBeginner: 'Write one or two short past-tense sentences about the people and actions in this scene.',
     refocusIntermediate: 'Describe the people and actions in this scene in the past before you connect them.',
     refocusAdvanced: 'First describe the visible scene clearly in the past. Then add what had happened earlier.',
