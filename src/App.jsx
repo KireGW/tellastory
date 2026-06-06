@@ -25,6 +25,7 @@ function App() {
   const [focusSceneZoom, setFocusSceneZoom] = useState({ scale: 1, x: 0, y: 0 })
   const [isMobileViewport, setIsMobileViewport] = useState(false)
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
+  const [isDemoMode, setIsDemoMode] = useState(getStoredDemoMode)
   const [hintIndex, setHintIndex] = useState(null)
   const [error, setError] = useState('')
   const [sceneTrackIndex, setSceneTrackIndex] = useState(getStoredSceneTrackIndex)
@@ -116,6 +117,11 @@ function App() {
     feedback?.rewrite &&
     hasMeaningfulRewriteDifference(feedback.rewrite, submittedAnswer),
   )
+  const demoToggleLabel = isDemoMode ? 'Demo on' : 'Demo off'
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKeys.demoMode, isDemoMode ? 'true' : 'false')
+  }, [isDemoMode])
 
   useEffect(() => {
     if (!isMobileViewport) {
@@ -314,6 +320,7 @@ function App() {
           },
           feedbackLanguage: languageOptions[uiLanguage].feedbackName,
           recentAttemptHistory,
+          demoMode: isDemoMode,
         }),
       })
 
@@ -1163,6 +1170,14 @@ function App() {
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          className={isDemoMode ? 'demo-toggle scene-bank-demo-toggle is-on' : 'demo-toggle scene-bank-demo-toggle'}
+          aria-pressed={isDemoMode}
+          onClick={() => setIsDemoMode((enabled) => !enabled)}
+        >
+          {demoToggleLabel}
+        </button>
       </section>
 
       {isGrammarOpen ? (
@@ -1314,8 +1329,8 @@ function App() {
 const defaultChallengeModes = {
   beginner: {
     label: 'Beginner',
-    prompt: 'Write two or three simple past sentences about the scene.',
-    targets: ['simple past'],
+    prompt: 'Write two or three sentences about the scene in the past.',
+    targets: ['past narration'],
   },
   intermediate: {
     label: 'Intermediate',
@@ -1332,6 +1347,7 @@ const defaultChallengeModes = {
 const storageKeys = {
   sceneId: 'pastNarrationTrainer.activeSceneId',
   challengeMode: 'pastNarrationTrainer.challengeMode',
+  demoMode: 'pastNarrationTrainer.demoMode',
 }
 
 const VALID_LEVELS = ['beginner', 'intermediate', 'advanced']
@@ -1350,6 +1366,10 @@ function getStoredChallengeMode() {
   }
 
   return Object.hasOwn(defaultChallengeModes, storedChallengeMode) ? storedChallengeMode : 'intermediate'
+}
+
+function getStoredDemoMode() {
+  return window.localStorage.getItem(storageKeys.demoMode) === 'true'
 }
 
 function hasMeaningfulRewriteDifference(rewrite, original) {

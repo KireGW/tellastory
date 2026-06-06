@@ -30,6 +30,12 @@ Then add `OPENAI_API_KEY`. Without a key, the server uses a local grammar-coach 
 
 The feedback engine is scene-aware. The image is the student stimulus, but the coach reads `sceneScript` from `src/data/scenes.js` to understand visible actions, narrative roles, useful connectors, and target verb relationships. This lets students write many valid stories instead of matching a fixed answer key.
 
+### Feedback modes
+
+Use `FEEDBACK_ENGINE=v2` to run the experimental LLM feedback engine locally.
+
+Use `DEMO_FEEDBACK=true` for seminar demos where selected prepared answers must always return the same feedback. Demo feedback only applies to exact prepared scene + level + answer combinations; all other answers continue through the normal feedback engine.
+
 ## Image bank
 
 The 20 practice scenes live in `src/data/scenes.js`. Scene images can be stored in `public/scenes/` and referenced with paths like `/scenes/midnight-knock.png`.

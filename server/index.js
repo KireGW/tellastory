@@ -11,7 +11,7 @@ const openai = process.env.OPENAI_API_KEY
 app.use(express.json({ limit: '1mb' }))
 
 app.post('/api/feedback', async (request, response) => {
-  const { answer, scene, challenge, feedbackLanguage = 'English', recentAttemptHistory = [] } = request.body ?? {}
+  const { answer, scene, challenge, feedbackLanguage = 'English', recentAttemptHistory = [], demoMode = false } = request.body ?? {}
 
   if (!answer || !scene?.title) {
     response.status(400).json({ error: 'Missing answer or scene.' })
@@ -19,7 +19,7 @@ app.post('/api/feedback', async (request, response) => {
   }
 
   try {
-    response.json(await generateFeedback({ answer, scene, challenge, feedbackLanguage, recentAttemptHistory }))
+    response.json(await generateFeedback({ answer, scene, challenge, feedbackLanguage, recentAttemptHistory, demoMode }))
   } catch (error) {
     console.error(error)
     if (error instanceof Error && error.message.startsWith('Invalid difficulty level:')) {
@@ -37,12 +37,48 @@ async function generateFeedback({
   challenge,
   feedbackLanguage = 'English',
   recentAttemptHistory = [],
+  demoMode = false,
 }) {
   const normalizedChallenge = normalizeChallenge(challenge)
   const normalizedFeedbackLanguage = normalizeFeedbackLanguage(feedbackLanguage)
+  const demoFeedback = findDemoFeedbackFixture({ answer, scene, challenge: normalizedChallenge, demoMode })
 
+  if (demoFeedback) {
+    return translateFeedbackOutput(demoFeedback, normalizedFeedbackLanguage)
+  }
+
+  if (normalizeFeedbackEngine(process.env.FEEDBACK_ENGINE) === 'v2') {
+    try {
+      return await generateV2Feedback({
+        answer,
+        scene,
+        challenge: normalizedChallenge,
+        feedbackLanguage: normalizedFeedbackLanguage,
+        recentAttemptHistory,
+      })
+    } catch (error) {
+      console.error('Experimental feedback v2 failed; falling back to current engine.', error)
+    }
+  }
+
+  return generateCurrentFeedback({
+    answer,
+    scene,
+    challenge: normalizedChallenge,
+    feedbackLanguage: normalizedFeedbackLanguage,
+    recentAttemptHistory,
+  })
+}
+
+async function generateCurrentFeedback({
+  answer,
+  scene,
+  challenge,
+  feedbackLanguage = 'English',
+  recentAttemptHistory = [],
+}) {
   if (!openai) {
-    return localFeedback(answer, scene, normalizedChallenge, normalizedFeedbackLanguage, recentAttemptHistory)
+    return localFeedback(answer, scene, challenge, feedbackLanguage, recentAttemptHistory)
   }
 
   const completion = await openai.chat.completions.create({
@@ -58,7 +94,7 @@ async function generateFeedback({
         role: 'user',
         content: JSON.stringify({
           scene,
-          challenge: normalizedChallenge,
+          challenge,
           feedbackLanguage: 'English',
           studentAnswer: answer,
           task:
@@ -71,17 +107,259 @@ async function generateFeedback({
   const canonicalFeedback = normalizeFeedback(
     JSON.parse(completion.choices[0].message.content),
     scene,
-    normalizedChallenge,
+    challenge,
     'English',
     answer,
     recentAttemptHistory,
   )
 
-  return translateFeedbackOutput(canonicalFeedback, normalizedFeedbackLanguage)
+  return translateFeedbackOutput(canonicalFeedback, feedbackLanguage)
+}
+
+async function generateV2Feedback({
+  answer,
+  scene,
+  challenge,
+  feedbackLanguage = 'English',
+  recentAttemptHistory = [],
+}) {
+  if (!openai) {
+    throw new Error('Feedback v2 requires OPENAI_API_KEY.')
+  }
+
+  const completion = await openai.chat.completions.create({
+    model: process.env.OPENAI_V2_MODEL ?? process.env.OPENAI_MODEL ?? 'gpt-4.1-mini',
+    temperature: 0.15,
+    response_format: { type: 'json_object' },
+    messages: [
+      {
+        role: 'system',
+        content: coachV2SystemPrompt(),
+      },
+      {
+        role: 'user',
+        content: JSON.stringify({
+          sceneBrief: buildSceneFeedbackBrief(scene, challenge),
+          challenge,
+          feedbackLanguage: 'English',
+          studentAnswer: answer,
+          task:
+            'Give feedback on this learner text for the selected scene and difficulty. Return canonical English feedback only. Translation happens after validation.',
+        }),
+      },
+    ],
+  })
+
+  const rawFeedback = JSON.parse(completion.choices[0].message.content)
+  const canonicalFeedback = normalizeV2Feedback(
+    rawFeedback,
+    scene,
+    challenge,
+    'English',
+    answer,
+    recentAttemptHistory,
+  )
+
+  return translateFeedbackOutput(canonicalFeedback, feedbackLanguage)
 }
 
 const VALID_LEVELS = ['beginner', 'intermediate', 'advanced']
 const VALID_FEEDBACK_LANGUAGES = ['English', 'Spanish', 'Swedish']
+const VALID_FEEDBACK_ENGINES = ['current', 'v2']
+
+function normalizeFeedbackEngine(engine) {
+  const normalized = String(engine ?? '').trim().toLowerCase()
+  return VALID_FEEDBACK_ENGINES.includes(normalized) ? normalized : 'current'
+}
+
+function demoFeedbackEnabled(demoMode = false) {
+  return Boolean(demoMode) || ['1', 'true', 'yes', 'on'].includes(String(process.env.DEMO_FEEDBACK ?? '').trim().toLowerCase())
+}
+
+function findDemoFeedbackFixture({ answer, scene, challenge, demoMode = false }) {
+  if (!demoFeedbackEnabled(demoMode)) {
+    return null
+  }
+
+  const sceneId = normalizeDemoValue(scene?.id || scene?.title)
+  const challengeId = normalizeDemoValue(challenge?.id)
+  const answerKey = normalizeDemoAnswer(answer)
+  const fixture = DEMO_FEEDBACK_FIXTURES.find((item) =>
+    normalizeDemoValue(item.sceneId) === sceneId &&
+    normalizeDemoValue(item.challengeId) === challengeId &&
+    item.answers.some((demoAnswer) => normalizeDemoAnswer(demoAnswer) === answerKey)
+  )
+
+  return fixture ? cloneFeedback(fixture.feedback) : null
+}
+
+function normalizeDemoValue(value) {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+function normalizeDemoAnswer(value) {
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+}
+
+function cloneFeedback(feedback) {
+  return JSON.parse(JSON.stringify(feedback))
+}
+
+const DEMO_FEEDBACK_FIXTURES = [
+  {
+    sceneId: 'garden-party',
+    challengeId: 'beginner',
+    answers: [
+      'It was a lovely day for a garden party. Suddenly the wind started blowing, and the tablecloth flew away. The children did not notice and continued playing.',
+    ],
+    feedback: {
+      verdict: 'excellent',
+      englishStatus: 'correct',
+      sceneFit: 'on scene',
+      taskFit: 'on target',
+      summary: 'You wrote a clear past narration that fits the garden party scene and shows a sequence of events.',
+      strengths: [
+        'You used past-tense verbs to tell the story clearly.',
+        'You included the wind, the tablecloth, and the children from the scene.',
+        'Your sentences are easy to understand.',
+      ],
+      corrections: [
+        {
+          original: 'The children did not notice and continued playing.',
+          suggestion: 'Keep your story. Add one more past-tense sentence about what happened next.',
+          reason: 'Your past narration already works well. The next step is to continue the story.',
+          grammarFocus: 'narrative coherence',
+        },
+      ],
+      rewrite: 'It was a lovely day for a garden party. Suddenly, the wind started blowing, and the tablecloth flew away. The children did not notice and continued playing.',
+      challenge: 'Add one more past-tense sentence about what happened next at the party.',
+      detected: {
+        mentionedActions: ['wind started blowing', 'tablecloth flew away', 'children continued playing'],
+        verbForms: ['simple past'],
+        connectors: [],
+        timeRelationships: ['sequence'],
+      },
+      levelReadinessHint: "You're describing the scene clearly. Now try connecting two actions using when or while.",
+    },
+  },
+  {
+    sceneId: 'garden-party',
+    challengeId: 'intermediate',
+    answers: [
+      'It was a lovely day for a garden party. Suddenly the wind started blowing, and the tablecloth flew away. The children did not notice and continued playing.',
+    ],
+    feedback: {
+      verdict: 'good-work',
+      englishStatus: 'correct',
+      sceneFit: 'on scene',
+      taskFit: 'partly on target',
+      summary: 'You told a clear past-tense story. To meet the intermediate task better, connect the ongoing action with the sudden event using when or while.',
+      strengths: [
+        'You described clear past events from the garden party scene.',
+        'You included the sudden tablecloth event.',
+        'You showed that the children continued playing.',
+      ],
+      corrections: [
+        {
+          original: 'The children did not notice and continued playing.',
+          suggestion: 'While the children were playing, the wind started blowing and the tablecloth flew away.',
+          reason: 'This uses the children playing as the background action and connects it to the sudden tablecloth event.',
+          grammarFocus: 'connector',
+        },
+      ],
+      rewrite: 'It was a lovely day for a garden party. While the children were playing, the wind started blowing and the tablecloth flew away.',
+      challenge: 'Try using while or when to connect the children playing with the tablecloth flying away.',
+      detected: {
+        mentionedActions: ['wind started blowing', 'tablecloth flew away', 'children continued playing'],
+        verbForms: ['simple past'],
+        connectors: [],
+        timeRelationships: ['sequence'],
+      },
+      levelReadinessHint: '',
+    },
+  },
+  {
+    sceneId: 'garden-party',
+    challengeId: 'intermediate',
+    answers: [
+      'The guests were enjoying the party, when a gust of wind suddenly blew the tablecloth away.',
+    ],
+    feedback: {
+      verdict: 'excellent',
+      englishStatus: 'correct',
+      sceneFit: 'on scene',
+      taskFit: 'on target',
+      summary: "You used past continuous and simple past with when to show one action in progress and one sudden event.",
+      strengths: [
+        'You used past continuous for the background action.',
+        'You used simple past for the sudden event.',
+        'Your sentence fits the garden party scene well.',
+      ],
+      corrections: [
+        {
+          original: 'The guests were enjoying the party, when a gust of wind suddenly blew the tablecloth away.',
+          suggestion: 'The guests were enjoying the party when a gust of wind suddenly blew the tablecloth away.',
+          reason: 'Remove the comma before when. The verb relationship already works.',
+          grammarFocus: 'narrative coherence',
+        },
+      ],
+      rewrite: 'The guests were enjoying the party when a gust of wind suddenly blew the tablecloth away.',
+      challenge: 'Add one more sentence about how the guests or children reacted.',
+      detected: {
+        mentionedActions: ['guests enjoying the party', 'wind blew the tablecloth away'],
+        verbForms: ['past continuous', 'simple past'],
+        connectors: ['when'],
+        timeRelationships: ['background + event'],
+      },
+      levelReadinessHint: "You're connecting actions clearly. Now try adding what happened before.",
+    },
+  },
+  {
+    sceneId: 'midnight-knock',
+    challengeId: 'intermediate',
+    answers: [
+      'Lucy is very tired. She were drink lot of alhocol. Was sleepeing hard when klnocking on the door. The cat was so scared.',
+    ],
+    feedback: {
+      verdict: 'good-start',
+      englishStatus: 'mostly correct',
+      sceneFit: 'on scene',
+      taskFit: 'partly on target',
+      summary: 'Your story fits the scene, and you are trying to show what was happening before the knock.',
+      strengths: [
+        'You used the cat and the knock from the scene.',
+        'You tried to use when to connect the sleeping with the knock.',
+        'The story idea is clear even with spelling and grammar mistakes.',
+      ],
+      corrections: [
+        {
+          original: 'She were drink lot of alhocol',
+          suggestion: 'She had drunk a lot of alcohol.',
+          reason: 'Past perfect shows what happened before she was sleeping and before the knock.',
+          grammarFocus: 'past perfect',
+        },
+        {
+          original: 'Was sleepeing hard when klnocking on the door',
+          suggestion: 'She was sleeping deeply when someone knocked on the door.',
+          reason: 'Past continuous shows the background action, and simple past shows the knock.',
+          grammarFocus: 'past continuous',
+        },
+      ],
+      rewrite: 'Lucy was very tired. She had drunk a lot of alcohol. She was sleeping deeply when someone knocked on the door. The cat was very scared.',
+      challenge: 'Check the verb forms and spelling, then add one sentence about what Lucy did after the knock.',
+      detected: {
+        mentionedActions: ['Lucy was tired', 'Lucy was sleeping', 'someone knocked on the door', 'the cat was scared'],
+        verbForms: ['past continuous', 'past perfect', 'simple past'],
+        connectors: ['when'],
+        timeRelationships: ['background + event', 'earlier past'],
+      },
+      levelReadinessHint: '',
+    },
+  },
+]
 
 function normalizeChallenge(challenge) {
   const level = normalizeDifficultyLevel(challenge?.id)
@@ -412,6 +690,365 @@ Return only valid JSON with this exact shape:
   }
 }
 `.trim()
+}
+
+function coachV2SystemPrompt() {
+  return `
+You are a kind English storytelling coach for young learners.
+
+The learner is writing short past-tense narration about a picture scene. Your job is not to find one correct answer. Your job is to help the learner improve how verb forms show narrative time.
+
+The learner may describe any reasonable part of the scene. Accept plausible interpretations from the scene brief. Do not punish correct English just because it does not use the target structure. If the answer is correct but not fully on task, say what works first, then suggest one focused improvement.
+
+Evaluate these things separately before writing feedback:
+1. English correctness.
+2. Scene fit.
+3. Narrative time relationships.
+4. Fit with the selected difficulty level.
+5. The learner's intended timeline, even when the grammar and spelling are broken.
+
+Difficulty levels:
+- Beginner: clear past-tense narration about visible or plausible scene actions. Do not require connectors or past perfect.
+- Intermediate: clear relationship between actions, especially with when, while, or as. Other connectors such as because, so, before, and after can still be useful narration.
+- Advanced: layered past narration, especially earlier past with had or had been. Use past perfect continuous only when the earlier action was genuinely ongoing for a period of time.
+
+Beginner verdict calibration:
+- If a beginner answer has 2-3 understandable sentences, fits the scene, and is in past narration, it has met the task. Use "excellent" when only small polish remains, such as spelling, spacing, commas, or adding one optional extra detail.
+- Use "good-work" for a beginner answer that is on scene and mostly in the past but still has one meaningful clarity or verb-form issue.
+- Use "good-start" only when a core part of the beginner task still needs work: not enough story, unclear meaning, not clearly past, or weak scene connection.
+- Do not keep the verdict low just because the answer can be extended. A next-step challenge can stretch a successful answer without lowering the verdict.
+
+Intermediate verdict calibration:
+- If an intermediate answer fits the scene and clearly connects a background action in progress with a completed past event, it has met the task. Use "excellent" when the past-time relationship works and only small polish remains, such as spelling, spacing, or a comma.
+- Use "good-work" for an intermediate answer that is on scene and attempts the relationship, but one meaningful verb-form, connector, or timeline issue still needs work.
+- Use "good-start" only when the relationship between actions is still unclear, the answer is not clearly past narration, or the scene connection is weak.
+- Do not lower the verdict because the sentence can be extended with another simultaneous action. A next-step challenge can stretch a successful answer without lowering the verdict.
+
+Teaching principles:
+- Preserve the learner's intended meaning.
+- Preserve the learner's intended timeline. If the learner clearly means that one event happened before another past moment, use past perfect as a repair even outside the advanced level. Do not introduce past perfect as an extra requirement; use it only when it keeps the learner's own meaning.
+- Treat an attempted earlier event by meaning, not only by correct form. For example, if a learner writes a broken sentence meaning "she drank before she was sleeping and before someone knocked", repair it as "She had drunk..." rather than flattening it to "She drank..." when the earlier timing matters.
+- Do not replace the learner's story with a new model answer.
+- Do not add advanced grammar unless the selected level calls for it or the learner already attempted it.
+- Explain grammar through story meaning: background action, main event, earlier event, cause/result, sequence, interruption, or simultaneous actions.
+- Judge past narration by the finite verb phrase, not by every -ing word. Phrases such as "started blowing", "began running", "tried to catch", "wanted to help", and "was scared" can be valid past narration. Do not call them inconsistent with past narration just because they contain an -ing form, an infinitive, or an adjective.
+- In intermediate feedback, do not treat "started + -ing" or "began + -ing" as the best background action just because it contains an -ing word. It often describes the start of a change or event. If the learner also gives a clearer ongoing action, use that for the when/while relationship. Past continuous forms such as "was raining", "were playing", or "was sleeping" can still be excellent background actions.
+- For beginner feedback, do not replace a valid phrase like "started blowing" with a simpler verb only to make everything look like simple past. If the past narration works, reward it and suggest a story-building next step or a small natural wording polish.
+- For beginner next steps, prefer simple story extension: what happened next, how someone reacted, or one more visible scene action. Do not ask for simultaneous-action grammar, "while", or past continuous unless the learner already attempted that relationship or selected a higher level.
+- For intermediate feedback, when you adapt a correct past-tense sequence toward "when" or "while", choose a natural ongoing background action from the learner's text or the scene, then connect it to a completed event. Do not force a bounded result event or a sudden change into past continuous just to satisfy the connector task.
+- Do not give two competing intermediate rewrites for the same issue. Choose the single most natural time relationship.
+- Focus on one useful next step.
+- Keep feedback short, concrete, and encouraging.
+- Write all student-facing feedback directly to the learner with "you" and "your".
+- In the strengths field, when you praise a verb form, connector, or time relationship, include a short quote from the learner's own text if it fits naturally. Do not force quotes into every strength.
+- Good strengths example for "Lisa was sleeping when a stranger knocked on the door.": "You used past continuous (\"was sleeping\") for the background action.", "You used simple past (\"knocked\") for the interrupting event.", "You used \"when\" to connect the two actions clearly."
+- Do not write rubric-style fragments such as "Used past tense narration", "Included the cat", or "Tried to show a reaction". Prefer full direct sentences such as "You used past tense narration", "You included the cat from the scene", and "You tried to show the cat's reaction".
+- Never mention prompts, rubrics, JSON, schemas, internal evaluation, or model behavior.
+- Never say the scene brief requires one exact answer.
+
+When giving a correction:
+- If there is a real grammar, spelling, or clarity issue, minimally repair the learner's own sentence.
+- If the sentence is correct but not on task, keep the sentence and suggest how to move it toward the task.
+- If the answer already works well, do not invent a correction. Suggest an extension.
+- It is okay to include two corrections only when the learner's text has both a clear surface repair and a clear narrative-time repair.
+- Prioritize meaning-preserving narrative-time repairs over small style polish. Do not spend a correction on minor wording if a bigger verb-time relationship still needs attention.
+- Prefer two strong corrections over three weaker ones.
+- For intermediate answers that need when or while, do not give two alternative narrative-time corrections. Choose the one best correction.
+- For intermediate rewrites, if you add when or while to connect an existing event with an existing background action, replace the original event wording instead of repeating the same event twice.
+- The grammarFocus field is legacy UI metadata. Do not spend effort classifying the correction into a narrow grammar box. Use "narrative coherence" unless the correction is clearly and mainly about a specific verb-time relationship such as simple past, past continuous, past perfect, past perfect continuous, or a connector.
+- If the only issue is punctuation, spacing, or spelling, present it as small polish. Do not frame it as the main grammar target, and do not let it reduce the verdict when the selected verb relationship already works.
+- When the learner already used the selected connector or verb relationship correctly, do not say "Connect the actions..." as the correction. Say to keep the sentence and polish the small surface issue, or give a story-extension challenge.
+
+Rewrite rules:
+- The rewrite must be a minimally improved version of the learner's own text.
+- Keep the same actors, events, and intended story whenever possible.
+- Do not add a new cause or event unless the learner already implied it or the scene brief makes it a natural repair.
+- Return an empty string when no rewrite is useful.
+
+Scene fit:
+- Do not mark an answer as only partly on scene just because the learner adds a plausible backstory detail that is not visible. If the main events, people, objects, or reactions are anchored in the scene, keep sceneFit as "on scene".
+- Mark sceneFit down only when the answer replaces the scene with a different setting, depends mainly on absent people/objects, or loses the scene's main action.
+
+Return only valid JSON with this exact shape:
+{
+  "verdict": "keep-building" | "good-start" | "good-work" | "excellent",
+  "englishStatus": "correct" | "mostly correct" | "unclear",
+  "sceneFit": "on scene" | "partly on scene" | "not scene-based",
+  "taskFit": "on target" | "partly on target" | "different skill",
+  "summary": "one short coaching summary",
+  "strengths": ["1-3 short strengths"],
+  "corrections": [
+    {
+      "original": "short quote or paraphrase from the learner",
+      "suggestion": "minimal correction or next useful move",
+      "reason": "why this helps the story",
+      "grammarFocus": "simple past" | "past continuous" | "past perfect" | "past perfect continuous" | "connector" | "narrative coherence"
+    }
+  ],
+  "rewrite": "a minimally improved version of the learner's own text, or empty string if no rewrite is useful",
+  "challenge": "one short next action for the learner",
+  "detected": {
+    "mentionedActions": ["short scene/action labels"],
+    "verbForms": ["simple past", "past continuous", "past perfect", "past perfect continuous"],
+    "connectors": ["when", "while", "because", "before", "after", "as", "by the time"],
+    "timeRelationships": ["background + event", "cause + result", "earlier past", "sequence", "simultaneous actions"]
+  }
+}
+`.trim()
+}
+
+function buildSceneFeedbackBrief(scene = {}, challenge = {}) {
+  const sceneScript = scene?.sceneScript ?? {}
+  const isBeginner = challenge?.id === 'beginner'
+  const isIntermediate = challenge?.id === 'intermediate'
+  const isAdvanced = challenge?.id === 'advanced'
+
+  return {
+    title: stringOrEmpty(scene.title),
+    setting: stringOrEmpty(scene.setting),
+    taskPrompt: stringOrEmpty(scene.prompt),
+    sceneFeedbackGuidance: isIntermediate ? stringOrEmpty(sceneScript.feedbackGuidance) : '',
+    sceneTeachingOpportunities: isIntermediate ? arrayOfStrings(scene.focus) : [],
+    levelFocus: isBeginner ? ['past narration'] : arrayOfStrings(challenge?.targets),
+    exampleAnswer: isIntermediate ? stringOrEmpty(scene.sample) : '',
+    visibleActions: (sceneScript.coreActions ?? []).map((action) => ({
+      id: stringOrEmpty(action.id),
+      actor: stringOrEmpty(action.actor),
+      visibleAs: stringOrEmpty(action.visibleAs),
+      recommendedVerbForms: isBeginner ? [] : arrayOfStrings(action.recommendedVerbForms),
+      narrativeRole: stringOrEmpty(action.narrativeRole || action.grammarRole),
+      grammarTargets: isBeginner ? [] : arrayOfStrings(action.grammarTargets),
+    })),
+    usefulRelationships: isBeginner ? [] : (sceneScript.relationships ?? []).map((relationship) => ({
+      type: stringOrEmpty(relationship.type),
+      modelSentence: stringOrEmpty(relationship.modelSentence),
+      backgroundAction: stringOrEmpty(relationship.backgroundAction),
+      interruptingAction: stringOrEmpty(relationship.interruptingAction),
+      earlierAction: stringOrEmpty(relationship.earlierAction),
+      laterAction: stringOrEmpty(relationship.laterAction),
+      cause: stringOrEmpty(relationship.cause),
+      result: stringOrEmpty(relationship.result),
+      actions: arrayOfStrings(relationship.actions),
+    })),
+    exampleRelationships: isIntermediate
+      ? (sceneScript.targetRelationships ?? []).map(normalizeSceneRelationshipTarget)
+      : [],
+    guidance:
+      isBeginner
+        ? 'Accept reasonable inferences using the people, objects, setting, and actions in this scene. For beginner feedback, reward clear past narration about scene actions and do not push relationship grammar such as while, when, or past continuous unless the learner already tries it.'
+        : isAdvanced
+          ? 'Accept reasonable inferences using the people, objects, setting, and actions in this scene. Use the relationships as optional teaching support, but let the selected advanced task guide the feedback: earlier past with had or had been, combined naturally with other past forms.'
+          : 'Accept reasonable inferences using the people, objects, setting, and actions in this scene. For intermediate feedback, use sceneTeachingOpportunities, exampleAnswer, usefulRelationships, and exampleRelationships as optional examples. Do not treat them as a single required answer or force the learner toward the sample if their own when/while relationship works naturally. When adapting an answer toward when or while, choose one natural time relationship only.',
+  }
+}
+
+function normalizeSceneRelationshipTarget(relationship) {
+  if (typeof relationship === 'string') {
+    return {
+      type: '',
+      modelSentence: relationship,
+      actions: [],
+    }
+  }
+
+  return {
+    type: stringOrEmpty(relationship?.type),
+    modelSentence: stringOrEmpty(relationship?.modelSentence),
+    actions: arrayOfStrings(relationship?.actions),
+  }
+}
+
+function normalizeV2Feedback(feedback, scene, challenge, feedbackLanguage = 'English', answer = '', recentAttemptHistory = []) {
+  const localCopy = localFeedbackCopy(feedbackLanguage)
+  const analysis = analyzeAnswer(answer, scene, challenge)
+  const features = analysis.features
+  const statuses = {
+    englishStatus: normalizeStatus(feedback?.englishStatus, ['correct', 'mostly correct', 'unclear'], analysis.features.hasAnyPastVerb ? 'mostly correct' : 'unclear'),
+    sceneFit: normalizeStatus(feedback?.sceneFit, ['on scene', 'partly on scene', 'not scene-based'], analysis.sceneFit || 'partly on scene'),
+    taskFit: normalizeStatus(feedback?.taskFit, ['on target', 'partly on target', 'different skill'], analysis.taskFit || 'partly on target'),
+  }
+
+  if (analysis.sceneAnchoring?.highNonsense) {
+    statuses.sceneFit = 'not scene-based'
+    statuses.taskFit = 'different skill'
+  }
+
+  const teachingStrengths = buildNarrativeTeachingStrengths(answer, challenge, localCopy, features)
+  const strengths = arrayOfStrings(feedback?.strengths)
+    .map(cleanFeedbackText)
+    .filter(Boolean)
+    .slice(0, strengthLimitForChallenge(challenge))
+  const corrections = normalizeV2Corrections(feedback?.corrections, answer, challenge, localCopy, features)
+  const fallbackCorrection = defaultStretchCorrection(challenge, localCopy, features)
+  const detected = normalizeV2Detected(feedback?.detected, answer, scene, analysis)
+  const summary = cleanFeedbackText(feedback?.summary || buildNarrativeTeachingSummary(answer, challenge, localCopy, statuses, scene))
+  const challengeText = cleanFeedbackText(feedback?.challenge || generateNextStep({ challenge, feedbackLanguage, answer, scene, statuses, features }))
+  const normalized = {
+    verdict: normalizeV2Verdict(feedback?.verdict, statuses),
+    ...statuses,
+    summary,
+    strengths: strengths.length ? strengths : (teachingStrengths.length ? teachingStrengths : [localCopy.defaultStrength]),
+    corrections: corrections.length ? corrections : [fallbackCorrection],
+    rewrite: normalizeV2Rewrite(feedback?.rewrite, answer, challenge),
+    challenge: challengeText,
+    detected,
+    levelReadinessHint: generateLevelReadinessHint({
+      challenge,
+      feedbackLanguage,
+      statuses,
+      features,
+      recentAttemptHistory,
+    }),
+  }
+
+  return ensureDistinctRewrite(
+    applyFeedbackConsistencyCaps(normalized),
+    answer,
+    challenge,
+    localCopy,
+  )
+}
+
+function normalizeV2Verdict(value, statuses) {
+  const normalized = normalizeVerdictValue(value)
+
+  if (statuses.englishStatus === 'unclear' || statuses.sceneFit === 'not scene-based') {
+    return normalized === 'excellent' ? 'good-start' : normalized
+  }
+
+  if (statuses.taskFit !== 'on target' && normalized === 'excellent') {
+    return 'good-work'
+  }
+
+  return normalized
+}
+
+function normalizeV2Corrections(value, answer, challenge, localCopy, features) {
+  const allowedFocus = new Set([
+    'simple past',
+    'past continuous',
+    'past perfect',
+    'past perfect continuous',
+    'connector',
+    'narrative coherence',
+  ])
+
+  return normalizeCorrections(value)
+    .map((correction) => ({
+      ...correction,
+      original: cleanFeedbackText(correction.original || localCopy.yourStory),
+      suggestion: cleanFeedbackText(correction.suggestion),
+      reason: cleanFeedbackText(correction.reason),
+      grammarFocus: allowedFocus.has(correction.grammarFocus) ? correction.grammarFocus : 'narrative coherence',
+    }))
+    .filter((correction) => correction.suggestion && correction.reason)
+    .filter((correction) => v2CorrectionDisplayIsSafe(correction))
+    .filter((correction) => v2CorrectionRespectsLevelRules(correction, answer, challenge))
+    .slice(0, features.hasAnyPastVerb ? 3 : 2)
+}
+
+function v2CorrectionRespectsLevelRules(correction, answer, challenge) {
+  const suggestion = `${correction?.suggestion ?? ''} ${correction?.reason ?? ''}`.trim().toLowerCase()
+  const features = detectAnswerFeatures(answer)
+
+  if (challenge?.id !== 'beginner') {
+    return true
+  }
+
+  if (!features.hasWhen && /\bwhen\b/.test(suggestion)) {
+    return false
+  }
+
+  if (!features.hasWhile && /\bwhile\b/.test(suggestion)) {
+    return false
+  }
+
+  if (!features.hasPastPerfect && /\b(had|past perfect)\b/.test(suggestion)) {
+    return false
+  }
+
+  if (!features.hasPastPerfectContinuous && /\b(had been|past perfect continuous)\b/.test(suggestion)) {
+    return false
+  }
+
+  return true
+}
+
+function v2CorrectionDisplayIsSafe(correction) {
+  return v2DisplayTextIsSafe(correction?.suggestion) && v2DisplayTextIsSafe(correction?.reason)
+}
+
+function v2DisplayTextIsSafe(value) {
+  const text = String(value ?? '').trim()
+
+  if (!text) {
+    return false
+  }
+
+  return !hasObviousRewriteArtifacts(text) && !/[.!?,;:]{2,}/.test(text) && !/,\./.test(text)
+}
+
+function normalizeV2Rewrite(value, answer, challenge) {
+  const rewrite = cleanFeedbackText(value).trim()
+  const answerIsMostlyClean = getClarityScore(answer) === 2 && !detectMajorErrors(answer)
+
+  if (!rewrite || !hasMeaningfulRewriteChange(rewrite, answer)) {
+    return ''
+  }
+
+  if (!v2DisplayTextIsSafe(rewrite)) {
+    return ''
+  }
+
+  if (!v2CorrectionRespectsLevelRules({ suggestion: rewrite, grammarFocus: 'narrative coherence' }, answer, challenge)) {
+    return ''
+  }
+
+  if (answerIsMostlyClean && (
+    turnsBoundedResultIntoPastContinuous(rewrite, answer) ||
+    changesCausalMeaning(rewrite, answer) ||
+    removesSuccessfulNarrativeRelationship(rewrite, answer)
+  )) {
+    return ''
+  }
+
+  return rewrite
+}
+
+function normalizeV2Detected(detected, answer, scene, analysis) {
+  const features = analysis.features
+  const answerConnectors = detectConnectors(answer)
+
+  return {
+    mentionedActions: mergeDetectedValues(
+      arrayOfStrings(detected?.mentionedActions),
+      mergeDetectedValues(analysis.mentionedActions, detectMentionedActions(answer, scene)),
+    ),
+    verbForms: mergeAllowedDetectedValues(
+      arrayOfStrings(detected?.verbForms),
+      deriveDetectedVerbForms(features),
+      ['simple past', 'past continuous', 'past perfect', 'past perfect continuous'],
+    ),
+    connectors: mergeAllowedDetectedValues(
+      arrayOfStrings(detected?.connectors),
+      answerConnectors,
+      ['when', 'while', 'because', 'before', 'after', 'as', 'by the time', 'so'],
+    ),
+    timeRelationships: mergeAllowedDetectedValues(
+      arrayOfStrings(detected?.timeRelationships),
+      deriveDetectedTimeRelationships(features, analysis.semanticTenseFit),
+      ['background + event', 'cause + result', 'earlier past', 'earlier ongoing action', 'sequence', 'simultaneous actions', 'interruption'],
+    ),
+  }
+}
+
+function detectConnectors(answer) {
+  return [...new Set(String(answer ?? '').toLowerCase().match(/\b(when|while|because|before|after|as|by the time)\b/g) ?? [])]
+}
+
+function mergeAllowedDetectedValues(primary = [], secondary = [], allowed = []) {
+  const allowedSet = new Set(allowed)
+  return mergeDetectedValues(primary, secondary).filter((item) => allowedSet.has(item))
 }
 
 function normalizeFeedback(feedback, scene, challenge, feedbackLanguage = 'English', answer = '', recentAttemptHistory = []) {
@@ -2090,6 +2727,10 @@ function inferActionSemanticAliases(action) {
 
 function arrayOfStrings(value) {
   return Array.isArray(value) ? value.filter((item) => typeof item === 'string' && item.trim()) : []
+}
+
+function stringOrEmpty(value) {
+  return typeof value === 'string' ? value.trim() : ''
 }
 
 function normalizeCorrections(value) {
@@ -6203,6 +6844,11 @@ if (process.env.VERCEL !== '1') {
 
 export {
   generateFeedback,
+  generateV2Feedback,
+  normalizeV2Feedback,
+  normalizeV2Corrections,
+  buildSceneFeedbackBrief,
+  coachV2SystemPrompt,
   normalizeFeedback,
   analyzeAnswer,
   detectAnswerFeatures,

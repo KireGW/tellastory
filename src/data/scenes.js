@@ -879,12 +879,14 @@ export const scenes = [
       'Guests eat cake, someone waters plants, a tablecloth blows away, candles go out, and children chase bubbles.',
     focus: ['while', 'multiple actions', 'simple past result'],
     sample:
-      'While the guests were eating cake, the wind blew the tablecloth away and the candles went out.',
+      'While the children were playing, the tablecloth flew away.',
     palette: ['#43aa8b', '#f9c74f', '#f8961e', '#577590'],
     objects: ['cake', 'plants', 'tablecloth', 'candles', 'bubbles'],
     actions: ['eating', 'watering', 'blowing', 'chasing'],
     sceneScript: sceneScript({
       premise: 'A backyard party is disturbed by wind while guests and children are enjoying themselves.',
+      feedbackGuidance:
+        'For intermediate feedback, if the learner mentions that the children continued playing and the tablecloth flew away, prefer connecting those actions. A natural repair is "While the children were playing, the tablecloth flew away." Do not prefer "While the wind was blowing, the tablecloth flew away" for this scene unless the learner is mainly describing the weather.',
       coreActions: [
         action('guests-eating-cake', 'guests', 'Guests are eating cake.', ['were eating'], 'background ongoing action', ['past continuous']),
         action('person-watering-plants', 'person', 'Someone is watering plants.', ['was watering'], 'simultaneous background action', ['past continuous']),
@@ -893,12 +895,14 @@ export const scenes = [
         action('children-chasing-bubbles', 'children', 'Children are chasing bubbles.', ['were chasing'], 'simultaneous background action', ['past continuous']),
       ],
       relationships: [
+        relation('children-tablecloth', 'simultaneous-background', { actions: ['children-chasing-bubbles', 'tablecloth-blew-away'], usefulConnectors: ['while', 'when'], modelSentence: 'While the children were playing, the tablecloth flew away.' }),
         relation('cake-tablecloth', 'interruption', { backgroundAction: 'guests-eating-cake', interruptingAction: 'tablecloth-blew-away', usefulConnectors: ['while', 'when'], modelSentence: 'While the guests were eating cake, the wind blew the tablecloth away.' }),
         relation('watering-bubbles', 'simultaneous-background', { actions: ['person-watering-plants', 'children-chasing-bubbles'], usefulConnectors: ['while'], modelSentence: 'Someone was watering plants while children were chasing bubbles.' }),
         relation('wind-candles', 'cause-result', { cause: 'wind-grew-stronger', result: 'candles-went-out', usefulConnectors: ['because'], modelSentence: 'The candles went out because the wind had grown stronger.' }),
         relation('bubbles-before-tablecloth', 'earlier-past', { earlierAction: 'children-blew-bubbles', laterAction: 'tablecloth-blew-away', usefulConnectors: ['before', 'already'], modelSentence: 'The children had already blown bubbles before the tablecloth lifted.' }),
       ],
       targetRelationships: [
+        'While the children were playing, the tablecloth flew away.',
         'While the guests were eating cake, the wind blew the tablecloth away.',
         'The candles went out because the wind had grown stronger.',
         'The children had already blown bubbles before the tablecloth lifted.',
@@ -977,9 +981,10 @@ export const scenes = [
   },
 ]
 
-function sceneScript({ premise, coreActions, relationships, targetRelationships }) {
+function sceneScript({ premise, coreActions, relationships, targetRelationships, feedbackGuidance = '' }) {
   return {
     premise,
+    feedbackGuidance,
     visualStyle: 'A modern realistic staged scene, viewed from the audience, with several readable actions happening at once.',
     characters: coreActions
       .filter((item) => !['rain', 'smoke', 'lights', 'luggage', 'alarm', 'kite', 'clouds', 'foam', 'announcement', 'gate', 'glass', 'papers', 'confetti', 'oil', 'bus', 'candles', 'camera', 'fog', 'backpack'].includes(item.actor))
