@@ -9,6 +9,8 @@ const cases = [
   ['market-spill', 'intermediate', 'excellent', "It was a busy day at the market. John rode his bicycle when the boy accidentally dropped a case of oranges, just in front of John's bike."],
   ['market-spill', 'intermediate', 'not-excellent', 'In market we were, but suddenly orange. The dog is bread red.'],
   ['train-platform', 'advanced', 'excellent', 'People were rushing toward the train because the conductor had already blown the whistle. While a man was running along the platform, pigeons scattered around an open suitcase.'],
+  ['train-platform', 'intermediate', 'not-excellent', "When the man ran faster along the train platform while the conductor checked the passenger's ticket, and while several passengers waited the next train"],
+  ['train-platform', 'intermediate', 'not-excellent', "The man was running fast along the train platform while the conductor checked the passenger's ticket, and while several passengers waited the next train"],
   ['train-platform', 'intermediate', 'not-excellent', 'Train station busy. People running. Suitcase open and birds around.'],
   ['kitchen-smoke', 'advanced', 'excellent', 'Dad had been making pancakes for an hour when the smoke alarm started ringing. The cat was standing near the spilled milk while the children looked at the burned pancakes.'],
   ['kitchen-smoke', 'intermediate', 'not-excellent', 'The kitchen smoke. Dad make pancakes and alarm red.'],
@@ -33,6 +35,8 @@ const cases = [
   ['library-whisper', 'intermediate', 'excellent', 'The students were reading quietly when a shelf collapsed, so papers flew across the library while someone was whispering into a phone.'],
   ['library-whisper', 'intermediate', 'not-excellent', 'Library quiet. Book fall and kids whisper now.'],
   ['city-parade', 'intermediate', 'excellent', 'The band was marching down the street when a balloon floated away, and the crowd cheered while a child tried to reach it.'],
+  ['city-parade', 'intermediate', 'excellent', 'The crowd sang when the boy thought his balloon was gone, and his mom caught it.'],
+  ['city-parade', 'intermediate', 'not-excellent', 'It was a lovely day and the yearly town parade was going through the little town. A little boy accidentally dropped his balloon, distracted by everything that was going on, and his mom tried to catch it.'],
   ['city-parade', 'intermediate', 'not-excellent', 'Parade loud. People watch and balloon up.'],
   ['garage-repair', 'advanced', 'excellent', 'The mechanic had been fixing the engine when oil started leaking. While one person was holding a flashlight, another reached for a tool.'],
   ['garage-repair', 'intermediate', 'not-excellent', 'Garage repair. Car broken and oil there.'],
@@ -88,7 +92,8 @@ async function runCase([sceneId, challengeId, expected, text]) {
   }
 
   const feedback = await response.json()
-  const specialRegressionPassed =
+  const strengthsText = (feedback.strengths ?? []).join(' ')
+  const marketRodeRegressionPassed =
     sceneId === 'market-spill' &&
     challengeId === 'intermediate' &&
     text.includes('John rode')
@@ -96,6 +101,41 @@ async function runCase([sceneId, challengeId, expected, text]) {
         feedback.corrections?.[0]?.suggestion !== 'Join them with when, while, because, before, or after.' &&
         String(feedback.levelReadinessHint ?? '').includes('past continuous')
       : true
+  const sceneSettingRegressionPassed =
+    sceneId === 'city-parade' &&
+    challengeId === 'intermediate' &&
+    text.includes('It was a lovely day')
+      ? /\bsimple past \([^)]*\bdropped\b[^)]*\btried\b[^)]*\)/i.test(strengthsText) &&
+        !/\bsimple past \([^)]*\bwas\b/i.test(strengthsText) &&
+        !/\bsimple past \([^)]*\bdistracted\b/i.test(strengthsText)
+      : true
+  const irregularPastRegressionPassed =
+    sceneId === 'city-parade' &&
+    challengeId === 'intermediate' &&
+    text.includes('The crowd sang')
+      ? /\bsimple past \([^)]*\bsang\b[^)]*\bthought\b[^)]*\bcaught\b[^)]*\)/i.test(strengthsText)
+      : true
+  const trainSurfaceRegressionPassed =
+    sceneId === 'train-platform' &&
+    challengeId === 'intermediate' &&
+    text.includes('ran faster along the train platform')
+      ? /\bsimple past \([^)]*\bran\b[^)]*\bchecked\b[^)]*\bwaited\b[^)]*\)/i.test(strengthsText) &&
+        !strengthsText.includes('The sentence is clear and natural.') &&
+        (feedback.corrections ?? []).some((correction) => /waited for the next train/i.test(`${correction?.suggestion ?? ''} ${correction?.reason ?? ''}`)) &&
+        (feedback.corrections ?? []).some((correction) => correction?.suggestion === 'Also add a full stop.') &&
+        !(feedback.corrections ?? []).some((correction) => /capital letter/i.test(String(correction?.suggestion ?? ''))) &&
+        !(feedback.detected?.timeRelationships ?? []).includes('interruption')
+      : true
+  const trainWhileOngoingRegressionPassed =
+    sceneId === 'train-platform' &&
+    challengeId === 'intermediate' &&
+    text.includes('was running fast along the train platform')
+      ? (feedback.corrections ?? []).some((correction) => correction?.suggestion === 'Keep the past continuous you already used. Make the other background actions past continuous too.') &&
+        !strengthsText.includes('The sentence is clear and natural.') &&
+        (feedback.corrections ?? []).some((correction) => /waited for the next train/i.test(`${correction?.suggestion ?? ''} ${correction?.reason ?? ''}`)) &&
+        !(feedback.corrections ?? []).some((correction) => correction?.suggestion === 'Keep the same scene details. Use one ongoing background action and one shorter past event.')
+      : true
+  const specialRegressionPassed = marketRodeRegressionPassed && sceneSettingRegressionPassed && irregularPastRegressionPassed && trainSurfaceRegressionPassed && trainWhileOngoingRegressionPassed
 
   return {
     scene: scene.title,

@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "test:feedback": "VERCEL=1 node scripts/feedback-regression.mjs",
     "qc:feedback": "node scripts/feedback-qc.mjs",
+    "qc:typical-feedback": "node scripts/feedback-typical-qc.mjs",
     "debug:feedback": "node scripts/debug-feedback.mjs"
   },
   "dependencies": {
