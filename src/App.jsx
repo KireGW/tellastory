@@ -306,6 +306,7 @@ function App() {
         body: JSON.stringify({
           answer: checkedAnswer,
           scene: {
+            id: activeScene.id,
             title: activeScene.title,
             setting: activeScene.setting,
             prompt: activeScene.prompt,
@@ -1579,6 +1580,9 @@ function renderChallengePrompt(parts, {
     const opensConnectorHint =
       challengeMode === 'intermediate' &&
       (part.value === 'when' || part.value === 'while')
+    const opensPastPerfectHint =
+      challengeMode === 'advanced' &&
+      (part.value === 'had' || part.value === 'had been')
     return (
       <button
         key={`grammar-${part.value}-${index}`}
@@ -1592,6 +1596,11 @@ function renderChallengePrompt(parts, {
 
           if (opensConnectorHint) {
             openConnectorHint()
+            return
+          }
+
+          if (opensPastPerfectHint) {
+            openPastPerfectHint()
             return
           }
 

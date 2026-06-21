@@ -321,6 +321,78 @@ const DEMO_FEEDBACK_FIXTURES = [
     sceneId: 'midnight-knock',
     challengeId: 'intermediate',
     answers: [
+      'The woman was sleeping when somebody knocked on the door.',
+    ],
+    feedback: {
+      verdict: 'excellent',
+      englishStatus: 'correct',
+      sceneFit: 'on scene',
+      taskFit: 'on target',
+      summary: "You used past continuous and simple past with 'when' perfectly to show the interruption.",
+      strengths: [
+        "You used past continuous ('was sleeping') for the background action.",
+        "You used simple past ('knocked') for the interrupting event.",
+        "You used 'when' to connect the two actions clearly.",
+      ],
+      corrections: [
+        {
+          original: 'your story',
+          suggestion: 'Keep this sentence. Add a result with so or because.',
+          reason: 'The time relationship is already clear. Now you can show the consequence.',
+          grammarFocus: 'narrative coherence',
+        },
+      ],
+      rewrite: '',
+      challenge: 'Try adding what the cat did when the door was knocked.',
+      detected: {
+        mentionedActions: ['woman sleeping', 'somebody knocked on the door', 'woman-sleeping'],
+        verbForms: ['past continuous', 'simple past'],
+        connectors: ['when'],
+        timeRelationships: ['background + event', 'interruption', 'sequence'],
+      },
+      levelReadinessHint: null,
+    },
+  },
+  {
+    sceneId: 'midnight-knock',
+    challengeId: 'intermediate',
+    answers: [
+      'The woman slept when somebody knocked on the door.',
+    ],
+    feedback: {
+      verdict: 'good-work',
+      englishStatus: 'correct',
+      sceneFit: 'on scene',
+      taskFit: 'on target',
+      summary: "You used past tense and 'when' to connect two actions, which fits the scene well. To improve the storytelling, try using past continuous for the ongoing action to show it was happening when the door was knocked.",
+      strengths: [
+        'You used simple past tense correctly for both actions.',
+        "You connected the actions with 'when' to show the timing clearly.",
+        'Your sentence fits the scene of the woman and the knock on the door.',
+      ],
+      corrections: [
+        {
+          original: 'The woman slept when somebody knocked on the door.',
+          suggestion: 'Use was/were + -ing for the action that was already happening.',
+          reason: "Using past continuous ('was sleeping') shows the woman was already asleep when the knocking happened, making the timing clearer.",
+          grammarFocus: 'past continuous',
+        },
+      ],
+      rewrite: 'The woman was sleeping when somebody knocked on the door.',
+      challenge: 'Try adding what the cat did when the door was knocked to extend your story.',
+      detected: {
+        mentionedActions: ['woman sleeping', 'somebody knocking', 'woman-sleeping'],
+        verbForms: ['simple past'],
+        connectors: ['when'],
+        timeRelationships: ['interruption', 'sequence'],
+      },
+      levelReadinessHint: "This works clearly. For an extra challenge, try making the action before 'when' past continuous.",
+    },
+  },
+  {
+    sceneId: 'midnight-knock',
+    challengeId: 'intermediate',
+    answers: [
       'Lucy is very tired. She were drink lot of alhocol. Was sleepeing hard when klnocking on the door. The cat was so scared.',
     ],
     feedback: {
@@ -741,7 +813,7 @@ Teaching principles:
 - Keep feedback short, concrete, and encouraging.
 - Write all student-facing feedback directly to the learner with "you" and "your".
 - In the strengths field, when you praise a verb form, connector, or time relationship, include a short quote from the learner's own text if it fits naturally. Do not force quotes into every strength.
-- Good strengths example for "Lisa was sleeping when a stranger knocked on the door.": "You used past continuous (\"was sleeping\") for the background action.", "You used simple past (\"knocked\") for the interrupting event.", "You used \"when\" to connect the two actions clearly."
+- Good strengths example for "Lisa was sleeping when a stranger knocked on the door.": "You used past continuous ('was sleeping') for the background action.", "You used simple past ('knocked') for the interrupting event.", "You used 'when' to connect the two actions clearly."
 - Do not write rubric-style fragments such as "Used past tense narration", "Included the cat", or "Tried to show a reaction". Prefer full direct sentences such as "You used past tense narration", "You included the cat from the scene", and "You tried to show the cat's reaction".
 - Never mention prompts, rubrics, JSON, schemas, internal evaluation, or model behavior.
 - Never say the scene brief requires one exact answer.
