@@ -850,6 +850,7 @@ Teaching principles:
 - Write all student-facing feedback directly to the learner with "you" and "your".
 - In the strengths field, when you praise a verb form, connector, or time relationship, include a short quote from the learner's own text if it fits naturally. Do not force quotes into every strength.
 - Good strengths example for "Lisa was sleeping when a stranger knocked on the door.": "You used past continuous ('was sleeping') for the background action.", "You used simple past ('knocked') for the interrupting event.", "You used 'when' to connect the two actions clearly."
+- Do not repeat the same verb-form strength twice. If you already praised a tense with a quoted phrase, do not add a generic version of the same praise.
 - Never label a was/were + -ing phrase as simple past. If you mention several verb forms, name each quoted phrase separately with its correct form.
 - In Advanced mode, if the learner already uses had or had been successfully, do not make Try this ask for another earlier-past detail. Use Try this for a reaction, consequence, atmosphere, or what happened next.
 - Do not write rubric-style fragments such as "Used past tense narration", "Included the cat", or "Tried to show a reaction". Prefer full direct sentences such as "You used past tense narration", "You included the cat from the scene", and "You tried to show the cat's reaction".
@@ -1011,16 +1012,19 @@ function normalizeV2Feedback(feedback, scene, challenge, feedbackLanguage = 'Eng
     }),
   }
 
-  const sanitized = sanitizeImpossibleTenseStrengths(
-    sanitizeAdvancedPastPerfectFeedback(
-      applyFeedbackConsistencyCaps(normalized),
+  const sanitized = sanitizeRedundantV2Strengths(
+    sanitizeImpossibleTenseStrengths(
+      sanitizeAdvancedPastPerfectFeedback(
+        applyFeedbackConsistencyCaps(normalized),
+        challenge,
+        features,
+        localCopy,
+      ),
+      answer,
       challenge,
-      features,
       localCopy,
     ),
-    answer,
     challenge,
-    localCopy,
   )
 
   return ensureDistinctRewrite(
@@ -3120,6 +3124,95 @@ function sanitizeImpossibleTenseStrengths(feedback, answer, challenge, localCopy
       ? repairedStrengths.slice(0, strengthLimitForChallenge(challenge))
       : strengths.filter((strength) => !labelsPastContinuousAsSimplePast(strength)),
   }
+}
+
+function sanitizeRedundantV2Strengths(feedback, challenge) {
+  const strengths = arrayOfStrings(feedback?.strengths).map(cleanFeedbackText).filter(Boolean)
+  const dedupedStrengths = dedupeStrengthsByTeachingDimension(strengths)
+
+  if (dedupedStrengths.length === strengths.length) {
+    return feedback
+  }
+
+  return {
+    ...feedback,
+    strengths: dedupedStrengths.slice(0, strengthLimitForChallenge(challenge)),
+  }
+}
+
+function dedupeStrengthsByTeachingDimension(strengths) {
+  const dedupedStrengths = []
+  const dimensionIndexes = new Map()
+
+  for (const strength of strengths) {
+    const comparable = normalizeComparableText(strength)
+
+    if (dedupedStrengths.some((existing) => normalizeComparableText(existing) === comparable)) {
+      continue
+    }
+
+    const dimension = strengthTeachingDimension(strength)
+
+    if (!dimension) {
+      dedupedStrengths.push(strength)
+      continue
+    }
+
+    const existingIndex = dimensionIndexes.get(dimension)
+
+    if (existingIndex === undefined) {
+      dimensionIndexes.set(dimension, dedupedStrengths.length)
+      dedupedStrengths.push(strength)
+      continue
+    }
+
+    if (strengthSpecificityScore(strength) > strengthSpecificityScore(dedupedStrengths[existingIndex])) {
+      dedupedStrengths[existingIndex] = strength
+    }
+  }
+
+  return dedupedStrengths
+}
+
+function strengthTeachingDimension(value) {
+  const text = String(value ?? '').toLowerCase()
+
+  if (text.includes('past perfect continuous')) {
+    return 'past perfect continuous'
+  }
+
+  if (text.includes('past perfect')) {
+    return 'past perfect'
+  }
+
+  if (text.includes('past continuous')) {
+    return 'past continuous'
+  }
+
+  if (text.includes('simple past')) {
+    return 'simple past'
+  }
+
+  if (/\b(?:when|while|because|so|before|after|as|by the time|connector)\b/.test(text)) {
+    return 'connector'
+  }
+
+  return ''
+}
+
+function strengthSpecificityScore(value) {
+  const text = String(value ?? '')
+  let score = Math.min(text.length / 120, 1)
+
+  if (/\([^()]+\)/.test(text)) {
+    score += 3
+  }
+
+  if (/'[^']+'|"[^"]+"|`[^`]+`/.test(text)) {
+    score += 2
+  }
+
+  return score
 }
 
 function buildPastContinuousLabelRepairStrength(answer, localCopy) {

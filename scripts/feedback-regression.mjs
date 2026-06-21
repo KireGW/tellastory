@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   normalizeFeedback,
+  normalizeV2Feedback,
   turnsBoundedResultIntoPastContinuous,
 } from '../server/index.js'
 
@@ -697,6 +698,57 @@ function assertNoText(feedback, pattern, message) {
 
   assert.equal(feedback.sceneFit, 'on scene')
   assertNoText(feedback, /not visible|landing itself/, 'Plausible actions involving present scene elements should not be nitpicked.')
+}
+
+{
+  const answer =
+    "Lisa had stayed out late with her friends and was sleeping so heavily that she didn't notice when somebody knocked on the door."
+  const feedback = normalizeV2Feedback(
+    baseFeedback({
+      verdict: 'excellent',
+      englishStatus: 'correct',
+      sceneFit: 'on scene',
+      taskFit: 'on target',
+      summary: 'You used past perfect, past continuous, and simple past to make the timeline clear.',
+      strengths: [
+        "You used past perfect ('had stayed') to show an earlier past event.",
+        "You used past continuous ('was sleeping') for the background action.",
+        "You used past perfect to show an earlier event.",
+      ],
+      detected: {
+        verbForms: ['past perfect', 'past continuous', 'simple past'],
+        connectors: ['when'],
+        timeRelationships: ['earlier past', 'background + event'],
+      },
+    }),
+    {
+      id: 'midnight-knock',
+      title: 'The midnight knock',
+      sceneScript: {
+        coreActions: [
+          {
+            id: 'woman-sleeping',
+            actor: 'woman',
+            visibleAs: 'A woman is sleeping in bed.',
+          },
+          {
+            id: 'somebody-knocking',
+            actor: 'somebody',
+            visibleAs: 'Somebody is knocking on the door.',
+          },
+        ],
+      },
+    },
+    advanced,
+    english,
+    answer,
+  )
+
+  assert.deepEqual(
+    feedback.strengths.filter((strength) => /\bpast perfect\b/i.test(strength)),
+    ["You used past perfect ('had stayed') to show an earlier past event."],
+    'V2 strengths should keep the specific past perfect praise and remove the redundant generic version.',
+  )
 }
 
 console.log('Feedback regression checks passed.')
