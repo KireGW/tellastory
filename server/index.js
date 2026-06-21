@@ -1028,6 +1028,7 @@ function normalizeV2Corrections(value, answer, challenge, localCopy, features) {
       grammarFocus: allowedFocus.has(correction.grammarFocus) ? correction.grammarFocus : 'narrative coherence',
     }))
     .filter((correction) => correction.suggestion && correction.reason)
+    .filter((correction) => !sameText(correction.suggestion, answer))
     .filter((correction) => v2CorrectionDisplayIsSafe(correction))
     .filter((correction) => v2CorrectionRespectsLevelRules(correction, answer, challenge))
     .slice(0, features.hasAnyPastVerb ? 3 : 2)
