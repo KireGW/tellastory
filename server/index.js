@@ -391,6 +391,42 @@ const DEMO_FEEDBACK_FIXTURES = [
   },
   {
     sceneId: 'midnight-knock',
+    challengeId: 'advanced',
+    answers: [
+      "Lisa had stayed out late with her friends and was sleeping so heavily that she didn't notice when somebody knocked on the door.",
+    ],
+    feedback: {
+      verdict: 'excellent',
+      englishStatus: 'correct',
+      sceneFit: 'on scene',
+      taskFit: 'on target',
+      summary: "You used past perfect, past continuous, and simple past to make the story's timeline clear.",
+      strengths: [
+        "You used past perfect ('had stayed') to show an earlier past event.",
+        "You used past continuous ('was sleeping') for the ongoing background action.",
+        "You used simple past ('knocked') for the interrupting event.",
+      ],
+      corrections: [
+        {
+          original: 'your story',
+          suggestion: 'Keep this sentence. Add one short sentence about what happened next.',
+          reason: 'The timeline already works well. The next step is to continue the narration.',
+          grammarFocus: 'narrative coherence',
+        },
+      ],
+      rewrite: '',
+      challenge: 'Try adding a sentence about how Lisa reacted to the knock to continue the story.',
+      detected: {
+        mentionedActions: ['Lisa stayed out late', 'Lisa was sleeping', 'somebody knocked on the door'],
+        verbForms: ['past perfect', 'past continuous', 'simple past'],
+        connectors: ['when'],
+        timeRelationships: ['earlier past', 'background + event', 'interruption', 'sequence'],
+      },
+      levelReadinessHint: null,
+    },
+  },
+  {
+    sceneId: 'midnight-knock',
     challengeId: 'intermediate',
     answers: [
       'Lucy is very tired. She were drink lot of alhocol. Was sleepeing hard when klnocking on the door. The cat was so scared.',
