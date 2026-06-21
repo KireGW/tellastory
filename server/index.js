@@ -427,6 +427,54 @@ const DEMO_FEEDBACK_FIXTURES = [
   },
   {
     sceneId: 'midnight-knock',
+    challengeId: 'advanced',
+    answers: [
+      "Lisa had stay out late with her friends and sleeping so heavily that she didn't noticed when somebody knocked on the door.",
+    ],
+    feedback: {
+      verdict: 'good-work',
+      englishStatus: 'mostly correct',
+      sceneFit: 'on scene',
+      taskFit: 'on target',
+      summary: 'Your story has a clear advanced timeline: an earlier night out, deep sleep, and the knock. A few verb forms need correcting.',
+      strengths: [
+        'You used had to try to show an earlier past event.',
+        "You connected the sleeping and the knock with 'when'.",
+        'The cause-and-result idea is clear: she was sleeping heavily, so she did not notice the knock.',
+      ],
+      corrections: [
+        {
+          original: 'Lisa had stay out late',
+          suggestion: 'Lisa had stayed out late',
+          reason: "After had, use the past participle stayed to show an earlier past event.",
+          grammarFocus: 'past perfect',
+        },
+        {
+          original: 'and sleeping so heavily',
+          suggestion: 'and was sleeping so heavily',
+          reason: 'Past continuous shows the background action that was already in progress when the knock happened.',
+          grammarFocus: 'past continuous',
+        },
+        {
+          original: "didn't noticed",
+          suggestion: "didn't notice",
+          reason: "After didn't, use the base verb notice.",
+          grammarFocus: 'simple past',
+        },
+      ],
+      rewrite: "Lisa had stayed out late with her friends and was sleeping so heavily that she didn't notice when somebody knocked on the door.",
+      challenge: 'Keep this timeline. Now add one short sentence about what Lisa did when the knocking continued.',
+      detected: {
+        mentionedActions: ['Lisa stayed out late', 'Lisa was sleeping', 'somebody knocked on the door'],
+        verbForms: ['past perfect', 'past continuous', 'simple past'],
+        connectors: ['when', 'so that'],
+        timeRelationships: ['earlier past', 'background + event', 'cause + result', 'interruption'],
+      },
+      levelReadinessHint: null,
+    },
+  },
+  {
+    sceneId: 'midnight-knock',
     challengeId: 'intermediate',
     answers: [
       'Lucy is very tired. She were drink lot of alhocol. Was sleepeing hard when klnocking on the door. The cat was so scared.',
