@@ -355,6 +355,42 @@ const DEMO_FEEDBACK_FIXTURES = [
   },
   {
     sceneId: 'midnight-knock',
+    challengeId: 'beginner',
+    answers: [
+      'The woman was sleeping. Somebody knocked on the door.',
+    ],
+    feedback: {
+      verdict: 'excellent',
+      englishStatus: 'correct',
+      sceneFit: 'on scene',
+      taskFit: 'on target',
+      summary: 'You wrote a clear two-sentence story about the scene in the past.',
+      strengths: [
+        "You used past continuous ('was sleeping') to show what was happening.",
+        "You used simple past ('knocked') for the next event.",
+        'Your story is easy to understand and fits the picture.',
+      ],
+      corrections: [
+        {
+          original: 'your story',
+          suggestion: 'Keep these sentences. Add one more past-tense sentence about the cat.',
+          reason: 'Your beginner story already works well. The next step is to continue it.',
+          grammarFocus: 'narrative coherence',
+        },
+      ],
+      rewrite: '',
+      challenge: 'Add one more past-tense sentence about what the cat did.',
+      detected: {
+        mentionedActions: ['woman sleeping', 'somebody knocked on the door'],
+        verbForms: ['past continuous', 'simple past'],
+        connectors: [],
+        timeRelationships: ['sequence'],
+      },
+      levelReadinessHint: "You're telling the scene clearly in the past. Now try connecting the actions with when.",
+    },
+  },
+  {
+    sceneId: 'midnight-knock',
     challengeId: 'intermediate',
     answers: [
       'The woman slept when somebody knocked on the door.',
