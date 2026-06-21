@@ -814,6 +814,8 @@ Teaching principles:
 - Write all student-facing feedback directly to the learner with "you" and "your".
 - In the strengths field, when you praise a verb form, connector, or time relationship, include a short quote from the learner's own text if it fits naturally. Do not force quotes into every strength.
 - Good strengths example for "Lisa was sleeping when a stranger knocked on the door.": "You used past continuous ('was sleeping') for the background action.", "You used simple past ('knocked') for the interrupting event.", "You used 'when' to connect the two actions clearly."
+- Never label a was/were + -ing phrase as simple past. If you mention several verb forms, name each quoted phrase separately with its correct form.
+- In Advanced mode, if the learner already uses had or had been successfully, do not make Try this ask for another earlier-past detail. Use Try this for a reaction, consequence, atmosphere, or what happened next.
 - Do not write rubric-style fragments such as "Used past tense narration", "Included the cat", or "Tried to show a reaction". Prefer full direct sentences such as "You used past tense narration", "You included the cat from the scene", and "You tried to show the cat's reaction".
 - Never mention prompts, rubrics, JSON, schemas, internal evaluation, or model behavior.
 - Never say the scene brief requires one exact answer.
@@ -973,8 +975,20 @@ function normalizeV2Feedback(feedback, scene, challenge, feedbackLanguage = 'Eng
     }),
   }
 
+  const sanitized = sanitizeImpossibleTenseStrengths(
+    sanitizeAdvancedPastPerfectFeedback(
+      applyFeedbackConsistencyCaps(normalized),
+      challenge,
+      features,
+      localCopy,
+    ),
+    answer,
+    challenge,
+    localCopy,
+  )
+
   return ensureDistinctRewrite(
-    applyFeedbackConsistencyCaps(normalized),
+    sanitized,
     answer,
     challenge,
     localCopy,
@@ -3001,7 +3015,8 @@ function sanitizeAdvancedPastPerfectFeedback(feedback, challenge, features, loca
   const sanitizedCorrections = feedback.corrections.filter(
     (correction) =>
       !mentionsPastPerfectContinuousForm(correction.suggestion, correction.reason) &&
-      !isPastPerfectContinuousNitpick(correction.suggestion, correction.reason),
+      !isPastPerfectContinuousNitpick(correction.suggestion, correction.reason) &&
+      !asksForAlreadyPresentEarlierPast(correction.suggestion, correction.reason),
   )
 
   const sanitizedDetectedVerbForms = features.hasPastPerfectContinuous
@@ -3029,11 +3044,65 @@ function sanitizeAdvancedPastPerfectFeedback(feedback, challenge, features, loca
     rewrite: mentionsPastPerfectContinuousForm(feedback.rewrite) || isPastPerfectContinuousNitpick(feedback.rewrite)
       ? ''
       : feedback.rewrite,
+    challenge: asksForAlreadyPresentEarlierPast(feedback.challenge)
+      ? localCopy.nextBasicNext
+      : feedback.challenge,
     detected: {
       ...feedback.detected,
       verbForms: sanitizedDetectedVerbForms,
     },
   }
+}
+
+function sanitizeImpossibleTenseStrengths(feedback, answer, challenge, localCopy) {
+  const strengths = arrayOfStrings(feedback?.strengths).map(cleanFeedbackText).filter(Boolean)
+
+  if (!strengths.some(labelsPastContinuousAsSimplePast)) {
+    return feedback
+  }
+
+  const repairedTenseStrength = buildPastContinuousLabelRepairStrength(answer, localCopy)
+  const repairedStrengths = []
+
+  for (const strength of strengths) {
+    const nextStrength = labelsPastContinuousAsSimplePast(strength)
+      ? repairedTenseStrength
+      : strength
+
+    if (
+      nextStrength &&
+      !repairedStrengths.some((existing) => normalizeComparableText(existing) === normalizeComparableText(nextStrength))
+    ) {
+      repairedStrengths.push(nextStrength)
+    }
+  }
+
+  return {
+    ...feedback,
+    strengths: repairedStrengths.length
+      ? repairedStrengths.slice(0, strengthLimitForChallenge(challenge))
+      : strengths.filter((strength) => !labelsPastContinuousAsSimplePast(strength)),
+  }
+}
+
+function buildPastContinuousLabelRepairStrength(answer, localCopy) {
+  const examples = extractNarrativeExamples(answer)
+
+  if (examples.pastContinuous && examples.simplePast) {
+    return localCopy.describeContrast(examples.pastContinuous, examples.simplePast)
+  }
+
+  if (examples.pastContinuous) {
+    return localCopy.describeBackground(examples.pastContinuous)
+  }
+
+  return localCopy.strengthPastContinuous
+}
+
+function labelsPastContinuousAsSimplePast(value) {
+  const text = String(value ?? '')
+
+  return /\bsimple past\b/i.test(text) && /\b(?:was|were)\s+(?:not\s+)?\w+ing\b/i.test(text)
 }
 
 function ensureStrength(strengths, strength, limit = 3) {
